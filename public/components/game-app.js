@@ -69,6 +69,14 @@ template.innerHTML = `
       gap: 0.55rem;
     }
 
+    .hud .bottom-right {
+      justify-self: end;
+      align-self: end;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
     .identity-tools {
       display: flex;
       flex-wrap: wrap;
@@ -260,6 +268,110 @@ template.innerHTML = `
     .chat-entry input::placeholder {
       color: rgba(148, 163, 184, 0.7);
     }
+
+    .resource-panel {
+      min-width: 220px;
+      max-width: 360px;
+      background: rgba(15, 23, 42, 0.82);
+      border-radius: 0.85rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      padding: 0.75rem 1rem;
+      color: #e2e8f0;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      box-shadow: 0 0.85rem 2.4rem rgba(8, 15, 31, 0.45);
+      backdrop-filter: blur(6px);
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .resource-panel.flash {
+      animation: resourceFlash 480ms ease;
+    }
+
+    .resource-panel h4 {
+      margin: 0;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.85);
+    }
+
+    .resource-panel .totals {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+      font-size: 0.78rem;
+      color: #f8fafc;
+    }
+
+    .resource-panel ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.35rem;
+      max-height: 9rem;
+      overflow-y: auto;
+    }
+
+    .resource-panel ul li {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.45rem;
+      padding: 0.25rem 0.35rem;
+      background: rgba(30, 41, 59, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 0.5rem;
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+      font-size: 0.74rem;
+    }
+
+    .resource-panel ul li.empty {
+      justify-content: center;
+      color: rgba(148, 163, 184, 0.6);
+      border-style: dashed;
+      font-style: italic;
+    }
+
+    .resource-panel ul li span:first-child {
+      color: rgba(226, 232, 240, 0.85);
+    }
+
+    .resource-panel ul li span:last-child {
+      color: rgba(148, 163, 184, 0.85);
+    }
+
+    .resource-panel .status {
+      padding: 0.35rem 0.5rem;
+      border-radius: 0.5rem;
+      background: rgba(30, 41, 59, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .resource-panel .status span {
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+      color: #f8fafc;
+    }
+
+    @keyframes resourceFlash {
+      0% {
+        box-shadow: 0 0 0 rgba(56, 189, 248, 0.5);
+      }
+      40% {
+        box-shadow: 0 0 1.5rem rgba(56, 189, 248, 0.55);
+      }
+      100% {
+        box-shadow: 0 0 0 rgba(56, 189, 248, 0.0);
+      }
+    }
   </style>
   <canvas></canvas>
   <div class="hud">
@@ -272,7 +384,7 @@ template.innerHTML = `
       <div>
         <strong>Explore &amp; grow:</strong><br />
         WASD to move. Left click to swing. Right click to shoot. Press both to cast. Hold to charge every action.<br />
-        Press Enter to chat with nearby heroes.
+        Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.
         Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div>
@@ -283,6 +395,24 @@ template.innerHTML = `
         <button type="button" data-copy-id>Copy ID</button>
         <button type="button" data-new-hero>Start New Hero</button>
         <button type="button" data-use-id>Use Hero ID</button>
+      </div>
+    </div>
+    <div class="bottom-right">
+      <div class="resource-panel" data-inventory-panel>
+        <div>
+          <h4>Inventory</h4>
+          <div class="totals"><span>Currency</span><span data-inventory-currency>0</span></div>
+          <ul data-inventory-items></ul>
+        </div>
+        <div>
+          <h4>Bank</h4>
+          <div class="totals"><span>Vault</span><span data-bank-currency>0</span></div>
+          <ul data-bank-items></ul>
+        </div>
+        <div class="status" data-safe-zone-status>
+          <span>Safe Zone</span>
+          <span data-safe-zone-indicator>Unknown</span>
+        </div>
       </div>
     </div>
     <div class="message" hidden data-message>Connecting...</div>
@@ -337,6 +467,17 @@ const CHAT_LIFETIME_MS = 6000;
 const CHAT_MAX_LENGTH = 140;
 const CHAT_MAX_WIDTH = 240;
 const CHAT_LINE_HEIGHT = 16;
+const ORE_COLOR = {
+  copper: '#b87333',
+  iron: '#d1d5db',
+  silver: '#c0c0c0',
+  gold: '#facc15',
+};
+const LOOT_COLOR = '#f97316';
+const SAFE_ZONE_STYLE = {
+  stroke: 'rgba(56, 189, 248, 0.55)',
+  fill: 'rgba(14, 165, 233, 0.12)',
+};
 
 function wrapChatLines(ctx, text, maxWidth) {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -397,6 +538,13 @@ class GameApp extends HTMLElement {
   this.identityCancelButton = this.shadowRoot.querySelector('[data-identity-cancel]');
   this.chatEntry = this.shadowRoot.querySelector('[data-chat-entry]');
   this.chatInput = this.shadowRoot.querySelector('[data-chat-input]');
+    this.inventoryPanel = this.shadowRoot.querySelector('[data-inventory-panel]');
+    this.inventoryCurrencyEl = this.shadowRoot.querySelector('[data-inventory-currency]');
+    this.inventoryItemsEl = this.shadowRoot.querySelector('[data-inventory-items]');
+    this.bankCurrencyEl = this.shadowRoot.querySelector('[data-bank-currency]');
+    this.bankItemsEl = this.shadowRoot.querySelector('[data-bank-items]');
+    this.safeZoneStatusEl = this.shadowRoot.querySelector('[data-safe-zone-status]');
+    this.safeZoneIndicatorEl = this.shadowRoot.querySelector('[data-safe-zone-indicator]');
     this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
     this._submitChatMessage = this._submitChatMessage.bind(this);
     this._exitChatMode = this._exitChatMode.bind(this);
@@ -406,13 +554,19 @@ class GameApp extends HTMLElement {
     this.effects = [];
   this.enemies = new Map();
   this.chats = new Map();
+    this.oreNodes = new Map();
+    this.lootDrops = new Map();
     this.youId = null;
     this.localStats = null;
     this.localBonuses = null;
     this.localHealth = { health: 0, maxHealth: 0 };
+    this.inventory = { currency: 0, items: {} };
+    this.bankInventory = { currency: 0, items: {} };
+    this.bankInfo = null;
     this.keys = new Set();
     this.pointerAim = { x: 1, y: 0 };
     this.lastInputSent = 0;
+  this.lastInteractSent = 0;
     this.tileSize = 36;
     this.activeAction = null;
     this.actionStart = 0;
@@ -421,6 +575,8 @@ class GameApp extends HTMLElement {
   this.profileId = null;
   this.pendingProfileId = undefined;
     this.chatActive = false;
+
+  this.lastSafeZoneState = null;
 
     this.audio = new AudioEngine();
 
@@ -441,6 +597,7 @@ class GameApp extends HTMLElement {
   this._handleIdentityCancel = this._handleIdentityCancel.bind(this);
   this._handleIdentityInputKeydown = this._handleIdentityInputKeydown.bind(this);
     this._resizeCanvas = this._resizeCanvas.bind(this);
+    this._updateInventoryPanel();
   }
 
   connectedCallback() {
@@ -555,6 +712,10 @@ class GameApp extends HTMLElement {
           }
         }
         this._replaceChats(data.chats);
+        this._ingestOreNodes(data.oreNodes);
+        this._ingestLootDrops(data.loot);
+  this.bankInfo = this._normalizeBankInfo(data.bank);
+        this._updateInventoryPanel();
         this.localStats = data.you.stats;
         this.localBonuses = data.you.bonuses;
         this.localHealth = { health: data.you.health ?? 100, maxHealth: data.you.maxHealth ?? 100 };
@@ -585,6 +746,9 @@ class GameApp extends HTMLElement {
         this.enemies = enemyMap;
   this._processEffects(this.effects);
     this._replaceChats(data.chats);
+        this._ingestOreNodes(data.oreNodes);
+        this._ingestLootDrops(data.loot);
+    this.bankInfo = this._normalizeBankInfo(data.bank);
         if (me) {
           this.localStats = me.stats;
           this.localBonuses = me.bonuses;
@@ -609,6 +773,37 @@ class GameApp extends HTMLElement {
         }
       } else if (data.type === 'chat') {
         this._addChatBubble(data.chat);
+      } else if (data.type === 'inventory') {
+        if (data.inventory) {
+          this.inventory = {
+            currency: Number(data.inventory.currency) || 0,
+            items: { ...(data.inventory.items || {}) },
+          };
+        }
+        if (data.bank) {
+          this.bankInventory = {
+            currency: Number(data.bank.currency) || 0,
+            items: { ...(data.bank.items || {}) },
+          };
+        }
+        this._updateInventoryPanel();
+        this._flashInventoryPanel();
+      } else if (data.type === 'ore-update') {
+        if (data.node) {
+          this._applyOreNodeUpdate(data.node);
+        }
+      } else if (data.type === 'loot-spawn') {
+        if (data.drop) {
+          this._applyLootUpdate(data.drop, Boolean(data.removed));
+        }
+      } else if (data.type === 'loot-update') {
+        if (data.drop) {
+          this._applyLootUpdate(data.drop, Boolean(data.removed));
+        }
+      } else if (data.type === 'gathered') {
+        this._flashInventoryPanel();
+      } else if (data.type === 'loot-collected') {
+        this._flashInventoryPanel();
       } else if (data.type === 'disconnect') {
         this.players.delete(data.id);
       }
@@ -672,6 +867,7 @@ class GameApp extends HTMLElement {
     const local = this.players.get(this.youId);
     const cameraX = local?.x ?? this.world.width / 2;
     const cameraY = local?.y ?? this.world.height / 2;
+    this._updateSafeZoneIndicator(this._isPlayerInSafeZone(local));
 
     const halfTilesX = width / (2 * this.tileSize);
     const halfTilesY = height / (2 * this.tileSize);
@@ -693,6 +889,79 @@ class GameApp extends HTMLElement {
 
     ctx.save();
     ctx.translate(width / 2, height / 2);
+
+    if (this.bankInfo) {
+      ctx.save();
+      const offsetX = (this.bankInfo.x - cameraX) * this.tileSize;
+      const offsetY = (this.bankInfo.y - cameraY) * this.tileSize;
+      const radiusPx = (this.bankInfo.radius || 0) * this.tileSize;
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.fillStyle = SAFE_ZONE_STYLE.fill;
+      ctx.strokeStyle = SAFE_ZONE_STYLE.stroke;
+      ctx.lineWidth = 2.5;
+      ctx.arc(offsetX, offsetY, radiusPx, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    for (const node of this.oreNodes.values()) {
+      if (!node) continue;
+      ctx.save();
+      const offsetX = (node.x - cameraX) * this.tileSize;
+      const offsetY = (node.y - cameraY) * this.tileSize;
+      const radiusPx = this.tileSize * 0.45;
+      const color = ORE_COLOR[node.type] || '#f8fafc';
+      const ratio = node.maxAmount ? Math.max(0, Math.min(1, node.amount / node.maxAmount)) : 0;
+      ctx.globalAlpha = 0.35 + ratio * 0.5;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(offsetX, offsetY, radiusPx, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = Math.max(0.2, 0.45 + ratio * 0.35);
+      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      if (node.amount <= 0 && node.respawnIn != null) {
+        const dashRatio = Math.max(0, Math.min(1, node.respawnIn / 120000));
+        const dash = Math.max(3, 8 - dashRatio * 4);
+        ctx.setLineDash([dash, dash + 4]);
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(offsetX, offsetY, radiusPx + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    for (const drop of this.lootDrops.values()) {
+      if (!drop) continue;
+      const empty = (drop.currency || 0) <= 0 && Object.keys(drop.items || {}).length === 0;
+      if (empty) continue;
+      ctx.save();
+      const offsetX = (drop.x - cameraX) * this.tileSize;
+      const offsetY = (drop.y - cameraY) * this.tileSize;
+      const size = this.tileSize * 0.28;
+      ctx.translate(offsetX, offsetY);
+      const pulse = Math.sin((time / 220) % (Math.PI * 2)) * 0.08 + 0.4;
+      const alpha = 0.5 + pulse * 0.45;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = LOOT_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      ctx.lineTo(size, 0);
+      ctx.lineTo(0, size);
+      ctx.lineTo(-size, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = '#fde68a';
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Effects
     for (const effect of this.effects) {
@@ -980,6 +1249,15 @@ class GameApp extends HTMLElement {
     this._exitChatMode();
   }
 
+  _requestGatherLoot() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    const now = Date.now();
+    if (now - this.lastInteractSent < 220) return;
+    this.lastInteractSent = now;
+    this.socket.send(JSON.stringify({ type: 'gather' }));
+    this.socket.send(JSON.stringify({ type: 'loot' }));
+  }
+
   _handleChatInputKeydown(event) {
     if (!this.chatActive) return;
     if (event.code === 'Enter' && !event.shiftKey) {
@@ -1026,6 +1304,11 @@ class GameApp extends HTMLElement {
     }
     this.audio.ensureContext();
     if (this.identityOverlay && !this.identityOverlay.hidden) {
+      return;
+    }
+    if (event.code === 'KeyE') {
+      event.preventDefault();
+      this._requestGatherLoot();
       return;
     }
     this.keys.add(event.code);
@@ -1162,6 +1445,168 @@ class GameApp extends HTMLElement {
     });
   }
 
+  _normalizeOreNode(node) {
+    if (!node || !node.id) return null;
+    const amount = Math.max(0, Number(node.amount) || 0);
+    const maxAmount = Math.max(1, Number(node.maxAmount) || 1);
+    return {
+      id: node.id,
+      type: node.type || 'copper',
+      label: node.label || node.type || 'Ore',
+      x: Number(node.x) || 0,
+      y: Number(node.y) || 0,
+      amount,
+      maxAmount,
+      respawnIn: node.respawnIn != null ? Math.max(0, Number(node.respawnIn) || 0) : null,
+    };
+  }
+
+  _ingestOreNodes(nodes) {
+    if (!Array.isArray(nodes)) return;
+    const next = new Map();
+    for (const raw of nodes) {
+      const normalized = this._normalizeOreNode(raw);
+      if (normalized) {
+        next.set(normalized.id, normalized);
+      }
+    }
+    this.oreNodes = next;
+  }
+
+  _applyOreNodeUpdate(node) {
+    const normalized = this._normalizeOreNode(node);
+    if (!normalized) return;
+    const next = new Map(this.oreNodes);
+    next.set(normalized.id, normalized);
+    this.oreNodes = next;
+  }
+
+  _normalizeLootDrop(drop) {
+    if (!drop || !drop.id) return null;
+    const items = {};
+    if (drop.items && typeof drop.items === 'object') {
+      for (const [key, value] of Object.entries(drop.items)) {
+        const qty = Math.max(0, Number(value) || 0);
+        if (qty > 0) {
+          items[key] = qty;
+        }
+      }
+    }
+    return {
+      id: drop.id,
+      x: Number(drop.x) || 0,
+      y: Number(drop.y) || 0,
+      currency: Math.max(0, Number(drop.currency) || 0),
+      items,
+      owner: drop.owner ?? null,
+      ttl: Math.max(0, Number(drop.ttl) || 0),
+    };
+  }
+
+  _ingestLootDrops(drops) {
+    if (!Array.isArray(drops)) return;
+    const next = new Map();
+    for (const raw of drops) {
+      const normalized = this._normalizeLootDrop(raw);
+      if (!normalized) continue;
+      if (normalized.currency <= 0 && Object.keys(normalized.items).length === 0) continue;
+      next.set(normalized.id, normalized);
+    }
+    this.lootDrops = next;
+  }
+
+  _applyLootUpdate(drop, removed = false) {
+    const normalized = this._normalizeLootDrop(drop);
+    if (!normalized) return;
+    const next = new Map(this.lootDrops);
+    const empty = normalized.currency <= 0 && Object.keys(normalized.items || {}).length === 0;
+    if (removed || empty) {
+      next.delete(normalized.id);
+    } else {
+      next.set(normalized.id, normalized);
+    }
+    this.lootDrops = next;
+  }
+
+  _normalizeBankInfo(bank) {
+    if (!bank) return null;
+    return {
+      x: Number(bank.x) || 0,
+      y: Number(bank.y) || 0,
+      radius: Math.max(0, Number(bank.radius) || 0),
+    };
+  }
+
+  _populateItemsList(container, items) {
+    if (!container) return;
+    container.innerHTML = '';
+    const entries = Object.entries(items || {})
+      .map(([key, value]) => [key, Math.max(0, Number(value) || 0)])
+      .filter(([, value]) => value > 0)
+      .sort((a, b) => a[0].localeCompare(b[0]));
+    if (!entries.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'Empty';
+      container.appendChild(li);
+      return;
+    }
+    for (const [key, value] of entries) {
+      const li = document.createElement('li');
+      const label = document.createElement('span');
+      label.textContent = key;
+      const qty = document.createElement('span');
+      qty.textContent = value.toLocaleString();
+      li.append(label, qty);
+      container.appendChild(li);
+    }
+  }
+
+  _updateInventoryPanel() {
+    if (this.inventoryCurrencyEl) {
+      this.inventoryCurrencyEl.textContent = Math.max(0, Number(this.inventory.currency) || 0).toLocaleString();
+    }
+    if (this.bankCurrencyEl) {
+      this.bankCurrencyEl.textContent = Math.max(0, Number(this.bankInventory.currency) || 0).toLocaleString();
+    }
+    this._populateItemsList(this.inventoryItemsEl, this.inventory.items);
+    this._populateItemsList(this.bankItemsEl, this.bankInventory.items);
+  }
+
+  _flashInventoryPanel() {
+    if (!this.inventoryPanel) return;
+    this.inventoryPanel.classList.remove('flash');
+    // Force reflow to restart animation
+    void this.inventoryPanel.offsetWidth;
+    this.inventoryPanel.classList.add('flash');
+  }
+
+  _isPlayerInSafeZone(player) {
+    if (!player || !this.bankInfo) return false;
+    const dx = player.x - this.bankInfo.x;
+    const dy = player.y - this.bankInfo.y;
+    return dx * dx + dy * dy <= Math.pow(this.bankInfo.radius || 0, 2);
+  }
+
+  _updateSafeZoneIndicator(isInside) {
+    if (!this.safeZoneIndicatorEl) return;
+    if (!this.bankInfo) {
+      this.safeZoneIndicatorEl.textContent = 'Unknown';
+      this.safeZoneIndicatorEl.style.color = 'rgba(148, 163, 184, 0.65)';
+      this.lastSafeZoneState = null;
+      return;
+    }
+    if (this.lastSafeZoneState === isInside) return;
+    this.lastSafeZoneState = isInside;
+    if (isInside) {
+      this.safeZoneIndicatorEl.textContent = 'Inside';
+      this.safeZoneIndicatorEl.style.color = '#38bdf8';
+    } else {
+      this.safeZoneIndicatorEl.textContent = 'Outside';
+      this.safeZoneIndicatorEl.style.color = 'rgba(248, 250, 252, 0.75)';
+    }
+  }
+
   _determineAction(buttonMask) {
     if (!buttonMask) return null;
     const left = (buttonMask & 1) !== 0;
@@ -1253,11 +1698,19 @@ class GameApp extends HTMLElement {
     this.effects = [];
     this.knownEffects.clear();
   this.enemies = new Map();
+    this.oreNodes = new Map();
+    this.lootDrops = new Map();
     this.world = null;
     this.youId = null;
     this.localStats = null;
     this.localBonuses = null;
     this.localHealth = { health: 0, maxHealth: 0 };
+    this.inventory = { currency: 0, items: {} };
+    this.bankInventory = { currency: 0, items: {} };
+    this.bankInfo = null;
+  this.lastSafeZoneState = null;
+  this._updateInventoryPanel();
+  this._updateSafeZoneIndicator(false);
     if (this.statPanel) {
       this.statPanel.data = {
         stats: { strength: 0, dexterity: 0, intellect: 0 },
