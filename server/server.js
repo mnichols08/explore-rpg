@@ -22,6 +22,10 @@ const ENEMY_VARIANTS = [
   { type: 'wolf', health: 85, speed: 2.4, xp: { melee: 10, ranged: 8, spell: 9 }, radius: 0.55 },
   { type: 'wisp', health: 60, speed: 2.1, xp: { melee: 6, ranged: 8, spell: 12 }, radius: 0.45 },
 ];
+const PLAYER_HIT_RADIUS = 0.45;
+const MELEE_CONE_HALF_ANGLE = Math.PI / 3; // 60° frontal swing
+const PROJECTILE_HALF_WIDTH = 0.35;
+const CHARGE_TIME_BONUS = 0.75;
 
 const clients = new Map();
 let nextPlayerId = 1;
@@ -309,6 +313,15 @@ function awardKillXP(player, actionType, enemy) {
   syncProfile(player);
 }
 
+function grantSkillXP(player, actionType, amount) {
+  if (!amount || amount <= 0) return false;
+  if (actionType === 'melee') player.xp.melee += amount;
+  else if (actionType === 'ranged') player.xp.ranged += amount;
+  else if (actionType === 'spell') player.xp.magic += amount;
+  else return false;
+  return true;
+}
+
 function baseStats() {
   return {
     strength: 5,
@@ -328,7 +341,7 @@ function computeStatsFromXP(player) {
 
 function computeBonuses(stats) {
   return {
-    maxCharge: 0.9 + stats.intellect * 0.08,
+    maxCharge: 1.2 + stats.intellect * 0.1,
     hitChance: 0.5 + stats.dexterity * 0.025,
     range: 2.5 + stats.strength * 0.18,
   };
@@ -352,6 +365,28 @@ function normalizeVector(vec) {
 function randomDirection() {
   const angle = Math.random() * Math.PI * 2;
   return { x: Math.cos(angle), y: Math.sin(angle) };
+}
+
+function isWithinCone(origin, aim, target, length, cosHalfAngle, targetRadius = 0) {
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance <= targetRadius) return true;
+  if (distance - targetRadius > length) return false;
+  const normalizedDistance = distance || 1;
+  const dot = (dx * aim.x + dy * aim.y) / normalizedDistance;
+  return dot >= cosHalfAngle;
+}
+
+function projectileTravel(origin, aim, target, targetRadius, maxDistance, halfWidth) {
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  const forward = dx * aim.x + dy * aim.y;
+  if (forward <= 0) return null;
+  if (forward - targetRadius > maxDistance) return null;
+  const lateral = Math.abs(dx * aim.y - dy * aim.x);
+  if (lateral > halfWidth + targetRadius) return null;
+  return forward;
 }
 
 function walkable(x, y) {
@@ -391,8 +426,18 @@ function damagePlayer(target, amount) {
 
 function resolveAction(player, actionType, aimVector, chargeSeconds) {
   const bonuses = player.bonuses;
-  const charge = clamp(chargeSeconds, 0.1, bonuses.maxCharge);
-  const potency = charge; // base scaling
+  const baseChargeCap = clamp(bonuses.maxCharge, 0.5, 5);
+  const maxChargeTime = baseChargeCap + CHARGE_TIME_BONUS;
+  const charge = clamp(chargeSeconds, 0.1, maxChargeTime);
+  const potency = charge;
+
+  let aim = aimVector && typeof aimVector.x === 'number' && typeof aimVector.y === 'number'
+    ? normalizeVector(aimVector)
+    : normalizeVector(player.aim);
+  if (aim.x === 0 && aim.y === 0) {
+    aim = { x: 1, y: 0 };
+  }
+
   let xpGain = 0;
   let damageBase = 12;
   let range = bonuses.range;
@@ -413,56 +458,114 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     return;
   }
 
-  if (actionType === 'melee') player.xp.melee += xpGain;
-  else if (actionType === 'ranged') player.xp.ranged += xpGain;
-  else if (actionType === 'spell') player.xp.magic += xpGain;
-
-  applyStats(player);
-  syncProfile(player);
-
   const effect = {
     id: `fx${effectCounter++}`,
     type: actionType,
     owner: player.id,
     x: player.x,
     y: player.y,
-    aim: aimVector,
+    aim,
     range,
+    length: range,
+    angle: actionType === 'melee' ? MELEE_CONE_HALF_ANGLE * 2 : null,
+    width: actionType === 'ranged' ? (PROJECTILE_HALF_WIDTH + potency * 0.2) * 2 : null,
+    shape: actionType === 'melee' ? 'cone' : actionType === 'ranged' ? 'beam' : 'burst',
     expiresAt: Date.now() + EFFECT_LIFETIME,
   };
   world.effects.push(effect);
 
   const hitChance = clamp(player.bonuses.hitChance, 0.1, 0.95);
+  const coneCosHalfAngle = Math.cos(MELEE_CONE_HALF_ANGLE);
+  const projectileHalfWidth = PROJECTILE_HALF_WIDTH + potency * 0.2;
 
-  for (const target of clients.values()) {
-    if (target.id === player.id) continue;
-    const distance = Math.hypot(target.x - player.x, target.y - player.y);
-    if (distance > range) continue;
-    if (Math.random() <= hitChance) {
-      damagePlayer(target, damageBase);
+  if (actionType === 'ranged') {
+    let candidatePlayer = null;
+    let candidateDistance = Infinity;
+    for (const target of clients.values()) {
+      if (target.id === player.id) continue;
+      const travel = projectileTravel(player, aim, target, PLAYER_HIT_RADIUS, range, projectileHalfWidth);
+      if (travel !== null && travel < candidateDistance) {
+        candidateDistance = travel;
+        candidatePlayer = target;
+      }
+    }
+    if (candidatePlayer && Math.random() <= hitChance) {
+      damagePlayer(candidatePlayer, damageBase);
+    }
+  } else {
+    for (const target of clients.values()) {
+      if (target.id === player.id) continue;
+      let within = false;
+      if (actionType === 'melee') {
+        within = isWithinCone(player, aim, target, range + PLAYER_HIT_RADIUS, coneCosHalfAngle, PLAYER_HIT_RADIUS);
+      } else {
+        const distance = Math.hypot(target.x - player.x, target.y - player.y);
+        within = distance <= range + PLAYER_HIT_RADIUS;
+      }
+      if (!within) continue;
+      if (Math.random() <= hitChance) {
+        damagePlayer(target, damageBase);
+      }
     }
   }
 
   if (world.enemies.length) {
-    const survivors = [];
-    for (const enemy of world.enemies) {
-      const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-      if (distance > range + enemy.radius) {
-        survivors.push(enemy);
-        continue;
+    let xpApplied = false;
+    if (actionType === 'ranged') {
+      let candidateEnemy = null;
+      let bestDistance = Infinity;
+      for (const enemy of world.enemies) {
+        const travel = projectileTravel(player, aim, enemy, enemy.radius ?? 0, range, projectileHalfWidth);
+        if (travel !== null && travel < bestDistance) {
+          bestDistance = travel;
+          candidateEnemy = enemy;
+        }
       }
-      if (Math.random() > hitChance) {
+
+      const survivors = [];
+      for (const enemy of world.enemies) {
+        if (enemy === candidateEnemy && Math.random() <= hitChance) {
+          if (!xpApplied && grantSkillXP(player, actionType, xpGain)) {
+            xpApplied = true;
+          }
+          const killed = damageEnemy(enemy, damageBase);
+          if (killed) {
+            awardKillXP(player, actionType, enemy);
+            continue;
+          }
+        }
         survivors.push(enemy);
-        continue;
       }
-      const killed = damageEnemy(enemy, damageBase);
-      if (killed) {
-        awardKillXP(player, actionType, enemy);
-      } else {
+      world.enemies = survivors;
+    } else {
+      const survivors = [];
+      for (const enemy of world.enemies) {
+        let within = false;
+        if (actionType === 'melee') {
+          within = isWithinCone(player, aim, enemy, range + enemy.radius, coneCosHalfAngle, enemy.radius);
+        } else {
+          const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+          within = distance <= range + enemy.radius;
+        }
+        if (within && Math.random() <= hitChance) {
+          if (!xpApplied && grantSkillXP(player, actionType, xpGain)) {
+            xpApplied = true;
+          }
+          const killed = damageEnemy(enemy, damageBase);
+          if (killed) {
+            awardKillXP(player, actionType, enemy);
+            continue;
+          }
+        }
         survivors.push(enemy);
       }
+      world.enemies = survivors;
     }
-    world.enemies = survivors;
+
+    if (xpApplied) {
+      applyStats(player);
+      syncProfile(player);
+    }
   }
 }
 
@@ -504,7 +607,7 @@ function gameTick(now, dt) {
       charging: player.action ? true : false,
       actionKind: player.action?.kind ?? null,
       chargeRatio: player.action
-        ? clamp((now - player.action.startedAt) / (player.bonuses.maxCharge * 1000), 0, 1)
+        ? clamp((now - player.action.startedAt) / ((player.bonuses.maxCharge + CHARGE_TIME_BONUS) * 1000), 0, 1)
         : 0,
     })),
     effects: world.effects.map((effect) => ({
@@ -513,6 +616,11 @@ function gameTick(now, dt) {
       x: effect.x,
       y: effect.y,
       range: effect.range,
+      length: effect.length ?? effect.range,
+      angle: effect.angle ?? null,
+      width: effect.width ?? null,
+      shape: effect.shape ?? null,
+      aim: effect.aim ?? { x: 1, y: 0 },
       owner: effect.owner,
       ttl: Math.max(0, effect.expiresAt - now),
     })),

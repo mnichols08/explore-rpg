@@ -594,13 +594,59 @@ class GameApp extends HTMLElement {
     for (const effect of this.effects) {
       const offsetX = (effect.x - cameraX) * this.tileSize;
       const offsetY = (effect.y - cameraY) * this.tileSize;
-      const radius = effect.range * this.tileSize;
-      const alpha = Math.max(0, effect.ttl / 600);
-      ctx.beginPath();
-      ctx.strokeStyle = effect.type === 'spell' ? `rgba(14, 165, 233, ${alpha})` : effect.type === 'ranged' ? `rgba(249, 115, 22, ${alpha})` : `rgba(220, 38, 38, ${alpha})`;
-      ctx.lineWidth = 2.5;
-      ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
-      ctx.stroke();
+      const alpha = Math.max(0, Math.min(1, effect.ttl / 600));
+      const color = effect.type === 'spell' ? '#2563eb' : effect.type === 'ranged' ? '#f97316' : '#ef4444';
+      const aim = effect.aim ?? { x: 1, y: 0 };
+      const aimAngle = Math.atan2(aim.y || 0, aim.x || 1);
+      const shape = effect.shape || (effect.type === 'spell' ? 'burst' : effect.type === 'ranged' ? 'beam' : 'cone');
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.globalAlpha = alpha;
+
+      if (shape === 'cone') {
+        const lengthPx = (effect.length ?? effect.range ?? 0) * this.tileSize;
+        const totalAngle = effect.angle ?? Math.PI;
+        const halfAngle = totalAngle / 2;
+        const start = aimAngle - halfAngle;
+        const end = aimAngle + halfAngle;
+        if (lengthPx > 0) {
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.arc(0, 0, lengthPx, start, end);
+          ctx.closePath();
+          ctx.fillStyle = color;
+          ctx.globalAlpha = alpha * 0.35;
+          ctx.fill();
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = 1.8;
+          ctx.strokeStyle = color;
+          ctx.stroke();
+        }
+      } else if (shape === 'beam') {
+        const lengthPx = (effect.length ?? effect.range ?? 0) * this.tileSize;
+        const widthPx = (effect.width ?? 0.6) * this.tileSize;
+        if (lengthPx > 0 && widthPx > 0) {
+          ctx.rotate(aimAngle);
+          ctx.fillStyle = color;
+          ctx.globalAlpha = alpha * 0.4;
+          ctx.fillRect(0, -widthPx / 2, lengthPx, widthPx);
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = color;
+          ctx.strokeRect(0, -widthPx / 2, lengthPx, widthPx);
+        }
+      } else {
+        const radius = (effect.range ?? effect.length ?? 0) * this.tileSize;
+        if (radius > 0) {
+          ctx.beginPath();
+          ctx.lineWidth = 2.4;
+          ctx.strokeStyle = color;
+          ctx.arc(0, 0, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
     }
 
     // Enemies
