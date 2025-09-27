@@ -52,10 +52,13 @@ const CHARGE_RANGE_SCALE = {
   ranged: 0.5,
   spell: 0.7,
 };
+const CHAT_LIFETIME_MS = 6000;
+const CHAT_MAX_LENGTH = 140;
 
 const clients = new Map();
 let nextPlayerId = 1;
 let effectCounter = 1;
+let chatCounter = 1;
 
 const profileSource = loadProfiles();
 const profiles = profileSource.map;
@@ -68,6 +71,7 @@ const world = {
   tiles: generateTerrain(WORLD_WIDTH, WORLD_HEIGHT, WORLD_SEED),
   effects: [],
   enemies: [],
+  chats: [],
 };
 
 let profileSaveTimer = null;
@@ -761,6 +765,14 @@ function gameTick(now, dt) {
   }
   world.effects = activeEffects;
 
+  const activeChats = [];
+  for (const chat of world.chats) {
+    if (chat.expiresAt > now) {
+      activeChats.push(chat);
+    }
+  }
+  world.chats = activeChats;
+
   const snapshot = {
     type: 'state',
     players: Array.from(clients.values()).map((player) => ({
@@ -800,6 +812,12 @@ function gameTick(now, dt) {
       maxHealth: enemy.maxHealth,
       radius: enemy.radius,
     })),
+    chats: world.chats.map((chat) => ({
+      id: chat.id,
+      owner: chat.owner,
+      text: chat.text,
+      ttl: Math.max(0, chat.expiresAt - now),
+    })),
   };
 
   broadcast(snapshot);
@@ -836,6 +854,32 @@ function handleMessage(player, message) {
       resolveAction(player, player.action.kind, player.action.aim, duration);
       player.action = null;
     }
+  } else if (payload.type === 'chat') {
+    if (typeof payload.message !== 'string') return;
+    let message = payload.message.trim();
+    if (!message) return;
+    if (message.length > CHAT_MAX_LENGTH) {
+      message = message.slice(0, CHAT_MAX_LENGTH);
+    }
+    const chat = {
+      id: `chat${chatCounter++}`,
+      owner: player.id,
+      text: message,
+      expiresAt: Date.now() + CHAT_LIFETIME_MS,
+    };
+    world.chats.push(chat);
+    if (world.chats.length > 40) {
+      world.chats.splice(0, world.chats.length - 40);
+    }
+    broadcast({
+      type: 'chat',
+      chat: {
+        id: chat.id,
+        owner: chat.owner,
+        text: chat.text,
+        ttl: CHAT_LIFETIME_MS,
+      },
+    });
   }
 }
 
@@ -1196,6 +1240,12 @@ function startServer() {
         health: enemy.health,
         maxHealth: enemy.maxHealth,
         radius: enemy.radius,
+      })),
+      chats: world.chats.map((chat) => ({
+        id: chat.id,
+        owner: chat.owner,
+        text: chat.text,
+        ttl: Math.max(0, chat.expiresAt - Date.now()),
       })),
       you: {
         x: player.x,

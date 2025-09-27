@@ -225,6 +225,41 @@ template.innerHTML = `
       box-shadow: 0 1rem 3rem rgba(15, 23, 42, 0.6);
       pointer-events: none;
     }
+
+    .chat-entry {
+      position: absolute;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      min-width: 260px;
+      max-width: min(420px, 80vw);
+      pointer-events: auto;
+      background: rgba(15, 23, 42, 0.9);
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 1rem 2rem rgba(15, 23, 42, 0.35);
+      backdrop-filter: blur(6px);
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .chat-entry[hidden] {
+      display: none;
+    }
+
+    .chat-entry input {
+      all: unset;
+      width: 100%;
+      font-size: 0.9rem;
+      color: #f8fafc;
+      font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    }
+
+    .chat-entry input::placeholder {
+      color: rgba(148, 163, 184, 0.7);
+    }
   </style>
   <canvas></canvas>
   <div class="hud">
@@ -237,6 +272,7 @@ template.innerHTML = `
       <div>
         <strong>Explore &amp; grow:</strong><br />
         WASD to move. Left click to swing. Right click to shoot. Press both to cast. Hold to charge every action.<br />
+        Press Enter to chat with nearby heroes.
         Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div>
@@ -250,6 +286,9 @@ template.innerHTML = `
       </div>
     </div>
     <div class="message" hidden data-message>Connecting...</div>
+  </div>
+  <div class="chat-entry" hidden data-chat-entry>
+    <input type="text" maxlength="140" placeholder="Type a message" data-chat-input />
   </div>
   <div class="identity-overlay" hidden data-identity-overlay>
     <div class="identity-card">
@@ -294,6 +333,47 @@ const CHARGE_GLOW_STYLE = {
   spell: { fill: 'rgba(59, 130, 246, 0.35)', stroke: 'rgba(96, 165, 250, 0.95)' },
   default: { fill: 'rgba(148, 163, 184, 0.28)', stroke: 'rgba(226, 232, 240, 0.85)' },
 };
+const CHAT_LIFETIME_MS = 6000;
+const CHAT_MAX_LENGTH = 140;
+const CHAT_MAX_WIDTH = 240;
+const CHAT_LINE_HEIGHT = 16;
+
+function wrapChatLines(ctx, text, maxWidth) {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+  const words = normalized.split(' ');
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+    if (current) {
+      lines.push(current);
+      current = '';
+    }
+    if (ctx.measureText(word).width <= maxWidth) {
+      current = word;
+    } else {
+      let remainder = word;
+      while (remainder.length) {
+        let sliceLength = remainder.length;
+        while (sliceLength > 1 && ctx.measureText(remainder.slice(0, sliceLength)).width > maxWidth) {
+          sliceLength -= 1;
+        }
+        const segment = remainder.slice(0, sliceLength) + (sliceLength < remainder.length ? '-' : '');
+        lines.push(segment);
+        remainder = remainder.slice(sliceLength);
+      }
+    }
+  }
+  if (current) {
+    lines.push(current);
+  }
+  return lines.slice(0, 4);
+}
 
 class GameApp extends HTMLElement {
   constructor() {
@@ -315,11 +395,17 @@ class GameApp extends HTMLElement {
   this.identityLoadButton = this.shadowRoot.querySelector('[data-identity-load]');
   this.identityNewButton = this.shadowRoot.querySelector('[data-identity-new]');
   this.identityCancelButton = this.shadowRoot.querySelector('[data-identity-cancel]');
+  this.chatEntry = this.shadowRoot.querySelector('[data-chat-entry]');
+  this.chatInput = this.shadowRoot.querySelector('[data-chat-input]');
+    this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
+    this._submitChatMessage = this._submitChatMessage.bind(this);
+    this._exitChatMode = this._exitChatMode.bind(this);
 
     this.world = null;
     this.players = new Map();
     this.effects = [];
   this.enemies = new Map();
+  this.chats = new Map();
     this.youId = null;
     this.localStats = null;
     this.localBonuses = null;
@@ -334,6 +420,7 @@ class GameApp extends HTMLElement {
     this.knownEffects = new Set();
   this.profileId = null;
   this.pendingProfileId = undefined;
+    this.chatActive = false;
 
     this.audio = new AudioEngine();
 
@@ -379,6 +466,7 @@ class GameApp extends HTMLElement {
     this.identityNewButton?.addEventListener('click', this._handleIdentityNew);
     this.identityCancelButton?.addEventListener('click', this._handleIdentityCancel);
     this.identityInput?.addEventListener('keydown', this._handleIdentityInputKeydown);
+    this.chatInput?.addEventListener('keydown', this._handleChatInputKeydown);
     this._resizeCanvas();
     this._initializeIdentity();
     requestAnimationFrame(this._loop);
@@ -402,6 +490,7 @@ class GameApp extends HTMLElement {
   this.identityNewButton?.removeEventListener('click', this._handleIdentityNew);
   this.identityCancelButton?.removeEventListener('click', this._handleIdentityCancel);
   this.identityInput?.removeEventListener('keydown', this._handleIdentityInputKeydown);
+  this.chatInput?.removeEventListener('keydown', this._handleChatInputKeydown);
     this.audio.setMusicEnabled(false);
     if (this.socket) {
       this.socket.close();
@@ -465,6 +554,7 @@ class GameApp extends HTMLElement {
             this.enemies.set(enemy.id, enemy);
           }
         }
+        this._replaceChats(data.chats);
         this.localStats = data.you.stats;
         this.localBonuses = data.you.bonuses;
         this.localHealth = { health: data.you.health ?? 100, maxHealth: data.you.maxHealth ?? 100 };
@@ -494,6 +584,7 @@ class GameApp extends HTMLElement {
         }
         this.enemies = enemyMap;
   this._processEffects(this.effects);
+    this._replaceChats(data.chats);
         if (me) {
           this.localStats = me.stats;
           this.localBonuses = me.bonuses;
@@ -516,6 +607,8 @@ class GameApp extends HTMLElement {
             }
           }
         }
+      } else if (data.type === 'chat') {
+        this._addChatBubble(data.chat);
       } else if (data.type === 'disconnect') {
         this.players.delete(data.id);
       }
@@ -534,6 +627,8 @@ class GameApp extends HTMLElement {
         this.chargeMeter.actionName = 'Idle';
         this.chargeMeter.value = 0;
       }
+      this._exitChatMode();
+      this.chats.clear();
       if (nextProfile !== undefined) {
         this.profileId = nextProfile;
         this.pendingProfileId = undefined;
@@ -732,6 +827,75 @@ class GameApp extends HTMLElement {
       ctx.fillRect(offsetX - radius, offsetY + radius + 4, radius * 2 * Math.max(0, Math.min(1, hpRatio)), 5);
     }
 
+    const expiredChats = [];
+    const chatFont = '600 13px "Segoe UI"';
+    ctx.font = chatFont;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const chat of this.chats.values()) {
+      const owner = this.players.get(chat.owner);
+      if (!owner) continue;
+      const remaining = Math.max(0, chat.ttl - (time - chat.receivedAt));
+      if (remaining <= 0) {
+        expiredChats.push(chat.id);
+        continue;
+      }
+      const alpha = Math.max(0.2, Math.min(1, remaining / CHAT_LIFETIME_MS));
+      const offsetX = (owner.x - cameraX) * this.tileSize;
+      const offsetY = (owner.y - cameraY) * this.tileSize;
+      const radius = this.tileSize * 0.35;
+      const lines = wrapChatLines(ctx, chat.text, CHAT_MAX_WIDTH);
+      if (!lines.length) continue;
+      let maxLineWidth = 0;
+      for (const line of lines) {
+        const widthMeasure = ctx.measureText(line).width;
+        if (widthMeasure > maxLineWidth) {
+          maxLineWidth = widthMeasure;
+        }
+      }
+      const paddingX = 12;
+      const paddingY = 10;
+      const bubbleWidth = Math.min(CHAT_MAX_WIDTH, maxLineWidth) + paddingX * 2;
+      const bubbleHeight = lines.length * CHAT_LINE_HEIGHT + paddingY * 2;
+      const bubbleTop = offsetY - radius - bubbleHeight - 18;
+      const bubbleLeft = offsetX - bubbleWidth / 2;
+      const bubbleRight = bubbleLeft + bubbleWidth;
+      const bubbleBottom = bubbleTop + bubbleHeight;
+      ctx.save();
+      ctx.globalAlpha = 0.75 + alpha * 0.2;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.beginPath();
+      const corner = 12;
+      ctx.moveTo(bubbleLeft + corner, bubbleTop);
+      ctx.lineTo(bubbleRight - corner, bubbleTop);
+      ctx.quadraticCurveTo(bubbleRight, bubbleTop, bubbleRight, bubbleTop + corner);
+      ctx.lineTo(bubbleRight, bubbleBottom - corner);
+      ctx.quadraticCurveTo(bubbleRight, bubbleBottom, bubbleRight - corner, bubbleBottom);
+      ctx.lineTo(offsetX + 12, bubbleBottom);
+      ctx.lineTo(offsetX, offsetY - radius - 4);
+      ctx.lineTo(offsetX - 12, bubbleBottom);
+      ctx.lineTo(bubbleLeft + corner, bubbleBottom);
+      ctx.quadraticCurveTo(bubbleLeft, bubbleBottom, bubbleLeft, bubbleBottom - corner);
+      ctx.lineTo(bubbleLeft, bubbleTop + corner);
+      ctx.quadraticCurveTo(bubbleLeft, bubbleTop, bubbleLeft + corner, bubbleTop);
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+      ctx.stroke();
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = '#f8fafc';
+      for (let i = 0; i < lines.length; i += 1) {
+        const textY = bubbleTop + paddingY + CHAT_LINE_HEIGHT / 2 + i * CHAT_LINE_HEIGHT;
+        ctx.fillText(lines[i], offsetX, textY);
+      }
+      ctx.restore();
+    }
+
+    for (const id of expiredChats) {
+      this.chats.delete(id);
+    }
+
     ctx.restore();
 
     if (this.activeAction && this.localBonuses) {
@@ -746,6 +910,7 @@ class GameApp extends HTMLElement {
   }
 
   _sendInput(timestamp) {
+    if (this.chatActive) return;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
     if (!this.world) return;
     if (timestamp - this.lastInputSent < 50) return;
@@ -765,8 +930,85 @@ class GameApp extends HTMLElement {
     this.lastInputSent = timestamp;
   }
 
+  _enterChatMode() {
+    if (this.chatActive) return;
+    if (this.identityOverlay && !this.identityOverlay.hidden) return;
+    this.chatActive = true;
+    this.keys.clear();
+    this.pointerButtons = 0;
+    if (this.activeAction) {
+      this._cancelAction();
+    }
+    if (this.chatEntry) {
+      this.chatEntry.hidden = false;
+    }
+    if (this.chatInput) {
+      this.chatInput.value = '';
+      this.chatInput.focus({ preventScroll: true });
+    }
+  }
+
+  _exitChatMode() {
+    if (!this.chatActive) return;
+    this.chatActive = false;
+    this.pointerButtons = 0;
+    if (this.chatInput) {
+      this.chatInput.blur();
+      this.chatInput.value = '';
+    }
+    if (this.chatEntry) {
+      this.chatEntry.hidden = true;
+    }
+  }
+
+  _submitChatMessage() {
+    if (!this.chatInput) {
+      this._exitChatMode();
+      return;
+    }
+    const message = (this.chatInput.value ?? '').trim();
+    const truncated = message.slice(0, CHAT_MAX_LENGTH);
+    if (truncated && this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(
+        JSON.stringify({
+          type: 'chat',
+          message: truncated,
+        })
+      );
+    }
+    this.chatInput.value = '';
+    this._exitChatMode();
+  }
+
+  _handleChatInputKeydown(event) {
+    if (!this.chatActive) return;
+    if (event.code === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      this._submitChatMessage();
+    } else if (event.code === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this._exitChatMode();
+    } else {
+      event.stopPropagation();
+    }
+  }
+
   _handleKeyDown(event) {
     if (event.repeat) return;
+    if (this.chatActive) {
+      if (event.code === 'Escape') {
+        event.preventDefault();
+        this._exitChatMode();
+      }
+      return;
+    }
+    if (event.code === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      this._enterChatMode();
+      return;
+    }
     if (event.code === 'KeyN' && event.shiftKey) {
       event.preventDefault();
       this._startNewHero(false);
@@ -790,10 +1032,15 @@ class GameApp extends HTMLElement {
   }
 
   _handleKeyUp(event) {
+    if (this.chatActive) return;
     this.keys.delete(event.code);
   }
 
   _handlePointerDown(event) {
+    if (this.chatActive) {
+      this._exitChatMode();
+      return;
+    }
     this.canvas.setPointerCapture(event.pointerId);
     event.preventDefault();
     this.audio.ensureContext();
@@ -812,6 +1059,7 @@ class GameApp extends HTMLElement {
   }
 
   _handlePointerUp(event) {
+    if (this.chatActive) return;
     if (typeof event.buttons === 'number') {
       this.pointerButtons = event.buttons;
     } else {
@@ -833,10 +1081,15 @@ class GameApp extends HTMLElement {
   }
 
   _handlePointerMove(event) {
+    if (this.chatActive) return;
     this._updatePointerAim(event);
   }
 
   _handlePointerLeave() {
+    if (this.chatActive) {
+      this._exitChatMode();
+      return;
+    }
     if (this.activeAction) {
       this._releaseAction();
     }
@@ -844,6 +1097,10 @@ class GameApp extends HTMLElement {
   }
 
   _handlePointerCancel() {
+    if (this.chatActive) {
+      this._exitChatMode();
+      return;
+    }
     this.pointerButtons = 0;
     if (this.activeAction) {
       this._cancelAction();
@@ -871,6 +1128,38 @@ class GameApp extends HTMLElement {
       }
     }
     this.knownEffects = nextIds;
+  }
+
+  _replaceChats(chats) {
+    const now = performance.now();
+    const map = new Map();
+    if (Array.isArray(chats)) {
+      for (const chat of chats) {
+        if (!chat || typeof chat.text !== 'string' || !chat.owner) continue;
+        const id = chat.id || `chat-${chat.owner}-${now}-${map.size}`;
+        map.set(id, {
+          id,
+          owner: chat.owner,
+          text: chat.text,
+          ttl: Math.max(0, Number(chat.ttl) || 0),
+          receivedAt: now,
+        });
+      }
+    }
+    this.chats = map;
+  }
+
+  _addChatBubble(chat) {
+    if (!chat || typeof chat.text !== 'string' || !chat.owner) return;
+    const now = performance.now();
+    const id = chat.id || `chat-${chat.owner}-${now}-${Math.random().toString(16).slice(2)}`;
+    this.chats.set(id, {
+      id,
+      owner: chat.owner,
+      text: chat.text,
+      ttl: Math.max(0, Number(chat.ttl) || CHAT_LIFETIME_MS),
+      receivedAt: now,
+    });
   }
 
   _determineAction(buttonMask) {
