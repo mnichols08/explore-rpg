@@ -1200,6 +1200,16 @@ function gameTick(now, dt) {
       const healAmount = healRatePerMs * dt * 1000;
       player.health = clamp(player.health + healAmount, 0, player.maxHealth);
     }
+  if (player.action && player.action.startedAt && player.action.kind) {
+      const baseChargeCap = clamp(player.bonuses?.maxCharge ?? 0.5, 0.5, 5);
+      const maxChargeTime = baseChargeCap + CHARGE_TIME_BONUS;
+      const elapsedMs = now - player.action.startedAt;
+      if (elapsedMs >= maxChargeTime * 1000) {
+        const elapsedSeconds = Math.min(elapsedMs / 1000, maxChargeTime);
+        resolveAction(player, player.action.kind, player.action.aim, elapsedSeconds);
+        player.action = null;
+      }
+    }
     if (player.profileId) {
       const profile = profiles.get(player.profileId);
       if (profile) {

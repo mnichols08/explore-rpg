@@ -1246,14 +1246,17 @@ class GameApp extends HTMLElement {
 
     ctx.restore();
 
-    if (this.activeAction && this.localBonuses) {
-      const maxChargeWindow = (this.localBonuses.maxCharge ?? 0) + CHARGE_TIME_BONUS;
-      const ratio = Math.max(
-        0,
-        Math.min(1, (Date.now() - this.actionStart) / (Math.max(0.1, maxChargeWindow) * 1000))
-      );
+    if (this.activeAction) {
+      const baseCharge = this.localBonuses?.maxCharge ?? 0.5;
+      const clampedBase = Math.max(0.5, Math.min(5, baseCharge));
+      const maxChargeWindow = clampedBase + CHARGE_TIME_BONUS;
+      const elapsed = Date.now() - this.actionStart;
+      const ratio = Math.max(0, Math.min(1, elapsed / (Math.max(0.1, maxChargeWindow) * 1000)));
       this.chargeMeter.value = ratio;
       this.audio.onChargeProgress(this.activeAction, ratio);
+      if (ratio >= 0.999) {
+        this._releaseAction();
+      }
     }
   }
 
@@ -1772,11 +1775,10 @@ class GameApp extends HTMLElement {
     if (!this.activeAction) return;
     const kind = this.activeAction;
     const now = Date.now();
-    let ratio = 0;
-    if (this.localBonuses) {
-      const maxDuration = Math.max(0.01, this.localBonuses.maxCharge * 1000);
-      ratio = Math.max(0, Math.min(1, (now - this.actionStart) / maxDuration));
-    }
+    const baseCharge = this.localBonuses?.maxCharge ?? 0.5;
+    const clampedBase = Math.max(0.5, Math.min(5, baseCharge));
+    const maxDuration = Math.max(0.1, (clampedBase + CHARGE_TIME_BONUS) * 1000);
+    const ratio = Math.max(0, Math.min(1, (now - this.actionStart) / maxDuration));
     this.audio.onActionRelease(kind, ratio);
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       this.activeAction = null;
