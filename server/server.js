@@ -26,6 +26,11 @@ const PLAYER_HIT_RADIUS = 0.45;
 const MELEE_CONE_HALF_ANGLE = Math.PI / 3; // 60° frontal swing
 const PROJECTILE_HALF_WIDTH = 0.35;
 const CHARGE_TIME_BONUS = 0.75;
+const CHARGE_RANGE_SCALE = {
+  melee: 0.35,
+  ranged: 0.5,
+  spell: 0.7,
+};
 
 const clients = new Map();
 let nextPlayerId = 1;
@@ -482,6 +487,10 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   } else {
     return;
   }
+
+  const rangeBonusFactor = CHARGE_RANGE_SCALE[actionType] ?? 0.4;
+  const normalizedCharge = Math.max(0, charge - 0.1);
+  range *= 1 + normalizedCharge * rangeBonusFactor;
 
   const effect = {
     id: `fx${effectCounter++}`,

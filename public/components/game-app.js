@@ -287,6 +287,14 @@ const ENEMY_STYLE = {
   default: { inner: '#f87171', outer: '#dc2626' },
 };
 
+const CHARGE_TIME_BONUS = 0.75;
+const CHARGE_GLOW_STYLE = {
+  melee: { fill: 'rgba(239, 68, 68, 0.35)', stroke: 'rgba(248, 113, 113, 0.9)' },
+  ranged: { fill: 'rgba(249, 115, 22, 0.32)', stroke: 'rgba(251, 191, 36, 0.95)' },
+  spell: { fill: 'rgba(59, 130, 246, 0.35)', stroke: 'rgba(96, 165, 250, 0.95)' },
+  default: { fill: 'rgba(148, 163, 184, 0.28)', stroke: 'rgba(226, 232, 240, 0.85)' },
+};
+
 class GameApp extends HTMLElement {
   constructor() {
     super();
@@ -556,6 +564,7 @@ class GameApp extends HTMLElement {
     if (!ctx) return;
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
+    const time = performance.now();
 
     ctx.clearRect(0, 0, width, height);
 
@@ -676,6 +685,27 @@ class GameApp extends HTMLElement {
       const offsetX = (player.x - cameraX) * this.tileSize;
       const offsetY = (player.y - cameraY) * this.tileSize;
       const radius = this.tileSize * 0.35;
+      if (player.charging) {
+        const chargeRatio = Math.max(0, Math.min(1, player.chargeRatio ?? 0));
+        const kind = player.actionKind || 'default';
+  const glow = CHARGE_GLOW_STYLE[kind] || CHARGE_GLOW_STYLE.default;
+  const pulse = Math.sin((time / 160) % (Math.PI * 2)) * 0.08 + 0.08;
+        const rangeBoost = kind === 'spell' ? 2.4 : kind === 'ranged' ? 1.8 : 1.4;
+        const outerRadius = radius + this.tileSize * (0.45 + chargeRatio * rangeBoost + pulse);
+        ctx.save();
+        ctx.globalAlpha = 0.25 + chargeRatio * 0.45;
+        ctx.fillStyle = glow.fill;
+        ctx.beginPath();
+        ctx.arc(offsetX, offsetY, outerRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.4 + chargeRatio * 0.5;
+        ctx.lineWidth = 2 + chargeRatio * 3;
+        ctx.strokeStyle = glow.stroke;
+        ctx.beginPath();
+        ctx.arc(offsetX, offsetY, outerRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.beginPath();
       const gradient = ctx.createRadialGradient(offsetX, offsetY, radius * 0.2, offsetX, offsetY, radius);
       if (player.id === this.youId) {
@@ -705,9 +735,10 @@ class GameApp extends HTMLElement {
     ctx.restore();
 
     if (this.activeAction && this.localBonuses) {
+      const maxChargeWindow = (this.localBonuses.maxCharge ?? 0) + CHARGE_TIME_BONUS;
       const ratio = Math.max(
         0,
-        Math.min(1, (Date.now() - this.actionStart) / (this.localBonuses.maxCharge * 1000))
+        Math.min(1, (Date.now() - this.actionStart) / (Math.max(0.1, maxChargeWindow) * 1000))
       );
       this.chargeMeter.value = ratio;
       this.audio.onChargeProgress(this.activeAction, ratio);
