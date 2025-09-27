@@ -175,6 +175,7 @@ function createPlayer(connection, requestedProfileId) {
       maxHealth: 100,
       lastSeen: timestamp,
       alias: allocateAlias(),
+      position: null,
     };
   } else if (!profileData.alias) {
     profileData.alias = allocateAlias();
@@ -196,7 +197,17 @@ function createPlayer(connection, requestedProfileId) {
 
   profiles.set(profileId, profileData);
 
-  const spawn = findSpawn();
+  let spawn;
+  if (profileData.position) {
+    const px = clamp(Number(profileData.position.x) || 0.5, 0.5, WORLD_WIDTH - 0.5);
+    const py = clamp(Number(profileData.position.y) || 0.5, 0.5, WORLD_HEIGHT - 0.5);
+    if (walkable(px, py)) {
+      spawn = { x: px, y: py };
+    }
+  }
+  if (!spawn) {
+    spawn = findSpawn();
+  }
   const xp = cloneXP(profileData?.xp);
   const maxHealth = Number(profileData?.maxHealth) || 100;
   const player = {
@@ -421,6 +432,10 @@ function damagePlayer(target, amount) {
     target.x = spawn.x;
     target.y = spawn.y;
     target.health = target.maxHealth;
+    const profile = target.profileId ? profiles.get(target.profileId) : null;
+    if (profile) {
+      profile.position = { x: target.x, y: target.y };
+    }
   }
 }
 
@@ -584,6 +599,15 @@ function gameTick(now, dt) {
   updateEnemies(dt);
   for (const player of clients.values()) {
     resolveMovement(player, dt);
+    if (player.profileId) {
+      const profile = profiles.get(player.profileId);
+      if (profile) {
+        profile.position = {
+          x: clamp(player.x, 0.5, world.width - 0.5),
+          y: clamp(player.y, 0.5, world.height - 0.5),
+        };
+      }
+    }
   }
 
   const activeEffects = [];
@@ -855,6 +879,10 @@ function syncProfile(player) {
     maxHealth: Number(player.maxHealth) || 100,
     lastSeen: Date.now(),
     alias: player.id,
+    position: {
+      x: clamp(player.x, 0.5, world.width - 0.5),
+      y: clamp(player.y, 0.5, world.height - 0.5),
+    },
   });
   queueSaveProfiles();
 }
@@ -875,11 +903,19 @@ function loadProfiles() {
           maxAliasIndex = Math.max(maxAliasIndex, Number(match[1]));
         }
       }
+      const pos = value?.position;
+      let position = null;
+      if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
+        const px = clamp(pos.x, 0.5, WORLD_WIDTH - 0.5);
+        const py = clamp(pos.y, 0.5, WORLD_HEIGHT - 0.5);
+        position = { x: px, y: py };
+      }
       map.set(normalized, {
         xp: cloneXP(value?.xp),
         maxHealth: Number(value?.maxHealth) || 100,
         lastSeen: Number(value?.lastSeen) || Date.now(),
         alias,
+        position,
       });
     }
     return { map, nextPlayerId: maxAliasIndex + 1 };
@@ -896,6 +932,10 @@ function serializeProfiles() {
       maxHealth: Number(value?.maxHealth) || 100,
       lastSeen: Number(value?.lastSeen) || Date.now(),
       alias: typeof value?.alias === 'string' ? value.alias : undefined,
+      position:
+        value?.position && typeof value.position.x === 'number' && typeof value.position.y === 'number'
+          ? { x: Number(value.position.x), y: Number(value.position.y) }
+          : undefined,
     };
   }
   return JSON.stringify(output, null, 2);
@@ -1053,6 +1093,30 @@ function runSelfTest() {
   if (!diversity) {
     console.error('Different seeds should produce different maps');
     process.exit(1);
+  }
+
+  const stubConnection = { send() {} };
+  const firstPlayer = createPlayer(stubConnection, null);
+  const profileId = firstPlayer.profileId;
+  const { x: expectedX, y: expectedY } = findSpawn();
+  firstPlayer.x = expectedX;
+  firstPlayer.y = expectedY;
+  const profileRecord = profiles.get(profileId);
+  if (profileRecord) {
+    profileRecord.position = { x: expectedX, y: expectedY };
+  }
+  const secondPlayer = createPlayer(stubConnection, profileId);
+  const distance = Math.hypot(secondPlayer.x - expectedX, secondPlayer.y - expectedY);
+  if (distance > 0.01) {
+    console.error('Profile position was not restored on reconnect');
+    process.exit(1);
+  }
+  profiles.delete(profileId);
+  clients.delete(firstPlayer.id);
+  clients.delete(secondPlayer.id);
+  if (profileSaveTimer) {
+    clearTimeout(profileSaveTimer);
+    profileSaveTimer = null;
   }
 
   console.log('Self-test passed.');
