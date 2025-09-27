@@ -176,6 +176,7 @@ function createPlayer(connection, requestedProfileId) {
       lastSeen: timestamp,
       alias: allocateAlias(),
       position: null,
+      health: 100,
     };
   } else if (!profileData.alias) {
     profileData.alias = allocateAlias();
@@ -210,6 +211,10 @@ function createPlayer(connection, requestedProfileId) {
   }
   const xp = cloneXP(profileData?.xp);
   const maxHealth = Number(profileData?.maxHealth) || 100;
+  let savedHealth = Number(profileData?.health);
+  if (!Number.isFinite(savedHealth) || savedHealth <= 0) {
+    savedHealth = maxHealth;
+  }
   const player = {
     id: alias,
     profileId,
@@ -218,7 +223,7 @@ function createPlayer(connection, requestedProfileId) {
     y: spawn.y,
     move: { x: 0, y: 0 },
     aim: { x: 1, y: 0 },
-    health: maxHealth,
+    health: clamp(savedHealth, 1, maxHealth),
     maxHealth,
     lastUpdate: timestamp,
     action: null,
@@ -227,7 +232,8 @@ function createPlayer(connection, requestedProfileId) {
     bonuses: computeBonuses(baseStats()),
   };
   applyStats(player);
-  player.health = player.maxHealth;
+  player.health = clamp(savedHealth, 1, player.maxHealth);
+  profileData.health = player.health;
   syncProfile(player);
   return player;
 }
@@ -427,14 +433,18 @@ function resolveMovement(player, dt) {
 
 function damagePlayer(target, amount) {
   target.health = clamp(target.health - amount, 0, target.maxHealth);
+  const profile = target.profileId ? profiles.get(target.profileId) : null;
+  if (profile) {
+    profile.health = clamp(target.health, 0, target.maxHealth);
+  }
   if (target.health <= 0) {
     const spawn = findSpawn();
     target.x = spawn.x;
     target.y = spawn.y;
     target.health = target.maxHealth;
-    const profile = target.profileId ? profiles.get(target.profileId) : null;
     if (profile) {
       profile.position = { x: target.x, y: target.y };
+      profile.health = target.health;
     }
   }
 }
@@ -606,6 +616,7 @@ function gameTick(now, dt) {
           x: clamp(player.x, 0.5, world.width - 0.5),
           y: clamp(player.y, 0.5, world.height - 0.5),
         };
+        profile.health = clamp(player.health, 0, player.maxHealth);
       }
     }
   }
@@ -883,6 +894,7 @@ function syncProfile(player) {
       x: clamp(player.x, 0.5, world.width - 0.5),
       y: clamp(player.y, 0.5, world.height - 0.5),
     },
+    health: clamp(player.health, 0, player.maxHealth),
   });
   queueSaveProfiles();
 }
@@ -910,12 +922,20 @@ function loadProfiles() {
         const py = clamp(pos.y, 0.5, WORLD_HEIGHT - 0.5);
         position = { x: px, y: py };
       }
+      const maxHealth = Number(value?.maxHealth) || 100;
+      let health = Number(value?.health);
+      if (!Number.isFinite(health) || health <= 0) {
+        health = maxHealth;
+      } else {
+        health = clamp(health, 1, maxHealth);
+      }
       map.set(normalized, {
         xp: cloneXP(value?.xp),
-        maxHealth: Number(value?.maxHealth) || 100,
+        maxHealth,
         lastSeen: Number(value?.lastSeen) || Date.now(),
         alias,
         position,
+        health,
       });
     }
     return { map, nextPlayerId: maxAliasIndex + 1 };
@@ -935,6 +955,10 @@ function serializeProfiles() {
       position:
         value?.position && typeof value.position.x === 'number' && typeof value.position.y === 'number'
           ? { x: Number(value.position.x), y: Number(value.position.y) }
+          : undefined,
+      health:
+        typeof value?.health === 'number'
+          ? clamp(Number(value.health), 0, Number(value?.maxHealth) || 100)
           : undefined,
     };
   }
@@ -1104,11 +1128,16 @@ function runSelfTest() {
   const profileRecord = profiles.get(profileId);
   if (profileRecord) {
     profileRecord.position = { x: expectedX, y: expectedY };
+    profileRecord.health = 42;
   }
   const secondPlayer = createPlayer(stubConnection, profileId);
   const distance = Math.hypot(secondPlayer.x - expectedX, secondPlayer.y - expectedY);
   if (distance > 0.01) {
     console.error('Profile position was not restored on reconnect');
+    process.exit(1);
+  }
+  if (Math.abs(secondPlayer.health - 42) > 0.01) {
+    console.error('Profile health was not restored on reconnect');
     process.exit(1);
   }
   profiles.delete(profileId);
