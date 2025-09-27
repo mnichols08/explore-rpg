@@ -27,6 +27,10 @@ const clients = new Map();
 let nextPlayerId = 1;
 let effectCounter = 1;
 
+const profileSource = loadProfiles();
+const profiles = profileSource.map;
+nextPlayerId = Math.max(nextPlayerId, profileSource.nextPlayerId);
+
 const world = {
   width: WORLD_WIDTH,
   height: WORLD_HEIGHT,
@@ -36,7 +40,6 @@ const world = {
   enemies: [],
 };
 
-const profiles = loadProfiles();
 let profileSaveTimer = null;
 let nextEnemyId = 1;
 let enemySpawnAccumulator = 0;
@@ -153,17 +156,48 @@ function isTileFarFromPlayers(x, y, minDistance) {
   return true;
 }
 
+function allocateAlias() {
+  return `p${nextPlayerId++}`;
+}
+
 function createPlayer(connection, requestedProfileId) {
-  const id = `p${nextPlayerId++}`;
-  const spawn = findSpawn();
   const timestamp = Date.now();
   const normalizedProfileId = normalizeProfileId(requestedProfileId);
-  const profileData = normalizedProfileId ? profiles.get(normalizedProfileId) : null;
+  const profileId = normalizedProfileId ?? generateProfileId();
+  let profileData = profiles.get(profileId);
+  if (!profileData) {
+    profileData = {
+      xp: cloneXP(),
+      maxHealth: 100,
+      lastSeen: timestamp,
+      alias: allocateAlias(),
+    };
+  } else if (!profileData.alias) {
+    profileData.alias = allocateAlias();
+  }
+
+  const alias = profileData.alias;
+
+  const existing = alias ? clients.get(alias) : null;
+  if (existing) {
+    syncProfile(existing);
+    try {
+      existing.connection?.socket?.destroy?.();
+    } catch (err) {
+      // ignore cleanup errors
+    }
+    clients.delete(existing.id);
+    broadcast({ type: 'disconnect', id: existing.id });
+  }
+
+  profiles.set(profileId, profileData);
+
+  const spawn = findSpawn();
   const xp = cloneXP(profileData?.xp);
   const maxHealth = Number(profileData?.maxHealth) || 100;
   const player = {
-    id,
-    profileId: normalizedProfileId ?? generateProfileId(),
+    id: alias,
+    profileId,
     connection,
     x: spawn.x,
     y: spawn.y,
@@ -712,6 +746,7 @@ function syncProfile(player) {
     xp: cloneXP(player.xp),
     maxHealth: Number(player.maxHealth) || 100,
     lastSeen: Date.now(),
+    alias: player.id,
   });
   queueSaveProfiles();
 }
@@ -721,18 +756,27 @@ function loadProfiles() {
     const raw = fs.readFileSync(PROFILE_PATH, 'utf8');
     const parsed = JSON.parse(raw);
     const map = new Map();
+    let maxAliasIndex = 0;
     for (const [key, value] of Object.entries(parsed)) {
       const normalized = normalizeProfileId(key);
       if (!normalized) continue;
+      const alias = typeof value?.alias === 'string' ? value.alias : null;
+      if (alias) {
+        const match = /^p(\d+)$/.exec(alias);
+        if (match) {
+          maxAliasIndex = Math.max(maxAliasIndex, Number(match[1]));
+        }
+      }
       map.set(normalized, {
         xp: cloneXP(value?.xp),
         maxHealth: Number(value?.maxHealth) || 100,
         lastSeen: Number(value?.lastSeen) || Date.now(),
+        alias,
       });
     }
-    return map;
+    return { map, nextPlayerId: maxAliasIndex + 1 };
   } catch (err) {
-    return new Map();
+    return { map: new Map(), nextPlayerId: 1 };
   }
 }
 
@@ -743,6 +787,7 @@ function serializeProfiles() {
       xp: cloneXP(value?.xp),
       maxHealth: Number(value?.maxHealth) || 100,
       lastSeen: Number(value?.lastSeen) || Date.now(),
+      alias: typeof value?.alias === 'string' ? value.alias : undefined,
     };
   }
   return JSON.stringify(output, null, 2);

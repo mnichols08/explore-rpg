@@ -413,7 +413,9 @@ class GameApp extends HTMLElement {
       this._updateHeroIdDisplay();
       this._connect();
     } else {
-      this._showIdentityOverlay('');
+      this.profileId = null;
+      this._updateHeroIdDisplay();
+      this._connect();
     }
   }
 
