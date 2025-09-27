@@ -54,11 +54,27 @@ const CHARGE_RANGE_SCALE = {
 };
 const CHAT_LIFETIME_MS = 6000;
 const CHAT_MAX_LENGTH = 140;
+const ORE_TYPES = [
+  { id: 'copper', label: 'Copper', color: '#b87333', yield: 6, value: 4 },
+  { id: 'iron', label: 'Iron', color: '#d1d5db', yield: 5, value: 6 },
+  { id: 'silver', label: 'Silver', color: '#c0c0c0', yield: 4, value: 9 },
+  { id: 'gold', label: 'Gold', color: '#facc15', yield: 3, value: 15 },
+];
+const ORE_NODE_COUNT = 55;
+const ORE_RESPAWN_MS = 120000;
+const ORE_NODE_MIN_DISTANCE = 4;
+const ORE_NODE_RADIUS = 0.65;
+const LOOT_LIFETIME_MS = 90000;
+const BANK_POSITION = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+const SAFE_ZONE_RADIUS = 8.5;
+const BANK_TRADE_BATCH = 5;
 
 const clients = new Map();
 let nextPlayerId = 1;
 let effectCounter = 1;
 let chatCounter = 1;
+let oreNodeCounter = 1;
+let lootCounter = 1;
 
 const profileSource = loadProfiles();
 const profiles = profileSource.map;
@@ -72,7 +88,11 @@ const world = {
   effects: [],
   enemies: [],
   chats: [],
+  oreNodes: [],
+  loot: [],
 };
+
+let bankLocation = null;
 
 let profileSaveTimer = null;
 let nextEnemyId = 1;
@@ -207,10 +227,15 @@ function createPlayer(connection, requestedProfileId) {
       alias: allocateAlias(),
       position: null,
       health: 100,
+      inventory: ensureInventoryData(),
+      bank: ensureBankData(),
     };
   } else if (!profileData.alias) {
     profileData.alias = allocateAlias();
   }
+
+  profileData.inventory = ensureInventoryData(profileData.inventory);
+  profileData.bank = ensureBankData(profileData.bank);
 
   const alias = profileData.alias;
 
@@ -245,6 +270,8 @@ function createPlayer(connection, requestedProfileId) {
   if (!Number.isFinite(savedHealth) || savedHealth <= 0) {
     savedHealth = maxHealth;
   }
+  const inventory = ensureInventoryData(profileData?.inventory);
+  const bank = ensureBankData(profileData?.bank);
   const player = {
     id: alias,
     profileId,
@@ -260,6 +287,8 @@ function createPlayer(connection, requestedProfileId) {
     xp,
     stats: baseStats(),
     bonuses: computeBonuses(baseStats()),
+    inventory,
+    bank,
   };
   applyStats(player);
   player.health = clamp(savedHealth, 1, player.maxHealth);
@@ -365,6 +394,193 @@ function updateEnemies(dt) {
     updated.push(enemy);
   }
   world.enemies = updated;
+}
+
+function randomOreType() {
+  return ORE_TYPES[Math.floor(Math.random() * ORE_TYPES.length)] ?? ORE_TYPES[0];
+}
+
+function getOreType(id) {
+  return ORE_TYPES.find((ore) => ore.id === id) ?? ORE_TYPES[0];
+}
+
+function findOreSpawn() {
+  const rand = seededRandom(Date.now() ^ (WORLD_SEED >>> 2));
+  for (let attempts = 0; attempts < 500; attempts += 1) {
+    const x = Math.floor(rand() * WORLD_WIDTH) + 0.5;
+    const y = Math.floor(rand() * WORLD_HEIGHT) + 0.5;
+    if (!walkable(x, y)) continue;
+    if (isInSafeZone(x, y)) continue;
+    let tooClose = false;
+    for (const node of world.oreNodes) {
+      if (Math.hypot(node.x - x, node.y - y) < ORE_NODE_MIN_DISTANCE) {
+        tooClose = true;
+        break;
+      }
+    }
+    if (tooClose) continue;
+    return { x, y };
+  }
+  return findSpawn();
+}
+
+function createOreNode() {
+  const ore = randomOreType();
+  const spawn = findOreSpawn();
+  return {
+    id: `ore${oreNodeCounter++}`,
+    type: ore.id,
+    label: ore.label,
+    x: spawn.x,
+    y: spawn.y,
+    amount: ore.yield,
+    maxAmount: ore.yield,
+    respawnAt: null,
+  };
+}
+
+function initializeOreNodes() {
+  world.oreNodes = [];
+  for (let i = 0; i < ORE_NODE_COUNT; i += 1) {
+    world.oreNodes.push(createOreNode());
+  }
+}
+
+function updateOreNodes(now) {
+  for (const node of world.oreNodes) {
+    if (node.amount > 0) continue;
+    if (!node.respawnAt) {
+      node.respawnAt = now + ORE_RESPAWN_MS;
+      continue;
+    }
+    if (now >= node.respawnAt) {
+      const next = createOreNode();
+      node.type = next.type;
+      node.label = next.label;
+      node.x = next.x;
+      node.y = next.y;
+      node.amount = next.amount;
+      node.maxAmount = next.maxAmount;
+      node.respawnAt = null;
+    }
+  }
+}
+
+function gatherNearestOre(player) {
+  let target = null;
+  let bestDist = 999;
+  for (const node of world.oreNodes) {
+    if (node.amount <= 0) continue;
+    const dist = Math.hypot(player.x - node.x, player.y - node.y);
+    if (dist <= 1.6 && dist < bestDist) {
+      target = node;
+      bestDist = dist;
+    }
+  }
+  if (!target) return null;
+  const ore = getOreType(target.type);
+  target.amount = Math.max(0, (target.amount || 0) - 1);
+  if (target.amount <= 0) {
+    target.respawnAt = Date.now() + ORE_RESPAWN_MS;
+  }
+  addInventoryItem(player.inventory, target.type, 1);
+  return {
+    node: target,
+    ore,
+    amount: 1,
+  };
+}
+
+function createLootDrop(x, y, { currency = 0, items = {}, owner = null } = {}) {
+  const normalizedItems = {};
+  for (const [key, value] of Object.entries(items || {})) {
+    if (value > 0) normalizedItems[key] = Math.floor(value);
+  }
+  const totalCurrency = Math.max(0, Math.floor(currency || 0));
+  if (!totalCurrency && !Object.keys(normalizedItems).length) return null;
+  const drop = {
+    id: `loot${lootCounter++}`,
+    x,
+    y,
+    currency: totalCurrency,
+    items: normalizedItems,
+    owner,
+    expiresAt: Date.now() + LOOT_LIFETIME_MS,
+  };
+  world.loot.push(drop);
+  const now = Date.now();
+  broadcast({
+    type: 'loot-spawn',
+    drop: {
+      id: drop.id,
+      x: drop.x,
+      y: drop.y,
+      currency: drop.currency,
+      items: normalizeItemMap(drop.items),
+      owner: drop.owner,
+      ttl: Math.max(0, drop.expiresAt - now),
+    },
+    removed: false,
+  });
+  return drop;
+}
+
+function updateLoot(now) {
+  const remaining = [];
+  for (const drop of world.loot) {
+    if (drop.expiresAt <= now) continue;
+    if (drop.currency <= 0 && (!drop.items || Object.keys(drop.items).length === 0)) {
+      continue;
+    }
+    remaining.push(drop);
+  }
+  world.loot = remaining;
+}
+
+function lootNearestDrop(player) {
+  let best = null;
+  let bestDist = 999;
+  for (const drop of world.loot) {
+    const dist = Math.hypot(player.x - drop.x, player.y - drop.y);
+    if (dist <= 1.6 && dist < bestDist) {
+      best = drop;
+      bestDist = dist;
+    }
+  }
+  if (!best) return null;
+  const collectedItems = {};
+  let collectedCurrency = 0;
+  if (best.currency > 0) {
+    collectedCurrency = best.currency;
+    player.inventory.currency = Math.max(0, Math.floor(player.inventory.currency || 0)) + best.currency;
+    best.currency = 0;
+  }
+  for (const [key, qty] of Object.entries(best.items || {})) {
+    const amount = Math.max(0, Math.floor(Number(qty) || 0));
+    if (amount <= 0) continue;
+    addInventoryItem(player.inventory, key, amount);
+    collectedItems[key] = (collectedItems[key] || 0) + amount;
+  }
+  best.items = {};
+  best.expiresAt = Date.now() + 1000;
+  return {
+    drop: best,
+    pickup: {
+      currency: collectedCurrency,
+      items: collectedItems,
+    },
+  };
+}
+
+function dropPlayerInventory(player) {
+  const payload = {
+    currency: player.inventory.currency,
+    items: { ...player.inventory.items },
+  };
+  if (payload.currency <= 0 && Object.keys(payload.items).length === 0) return;
+  createLootDrop(player.x, player.y, payload);
+  player.inventory.currency = 0;
+  player.inventory.items = {};
 }
 
 function damageEnemy(enemy, amount) {
@@ -516,6 +732,90 @@ function randomDirection() {
   return { x: Math.cos(angle), y: Math.sin(angle) };
 }
 
+function resolveBankPosition() {
+  const preferX = clamp(BANK_POSITION.x, 2, world.width - 2);
+  const preferY = clamp(BANK_POSITION.y, 2, world.height - 2);
+  const attempts = 120;
+  let best = { x: preferX, y: preferY };
+  let bestDist = Infinity;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const angle = (attempt / attempts) * Math.PI * 2;
+    const radius = attempt / attempts * 8;
+    const x = clamp(Math.round(preferX + Math.cos(angle) * radius), 1, world.width - 2);
+    const y = clamp(Math.round(preferY + Math.sin(angle) * radius), 1, world.height - 2);
+    if (!walkable(x + 0.5, y + 0.5)) continue;
+    const dist = Math.hypot(x + 0.5 - preferX, y + 0.5 - preferY);
+    if (dist < bestDist) {
+      best = { x: x + 0.5, y: y + 0.5 };
+      bestDist = dist;
+      if (dist < 1) break;
+    }
+  }
+  return best;
+}
+
+function isInSafeZone(x, y) {
+  if (!bankLocation) return false;
+  const dx = x - bankLocation.x;
+  const dy = y - bankLocation.y;
+  return dx * dx + dy * dy <= SAFE_ZONE_RADIUS * SAFE_ZONE_RADIUS;
+}
+
+function ensureInventoryData(source) {
+  const items = {};
+  for (const ore of ORE_TYPES) {
+    const value = Number(source?.items?.[ore.id]) || 0;
+    if (value > 0) items[ore.id] = Math.floor(value);
+  }
+  return {
+    items,
+    currency: Math.max(0, Math.floor(Number(source?.currency) || 0)),
+  };
+}
+
+function ensureBankData(source) {
+  const base = ensureInventoryData(source);
+  return {
+    items: base.items,
+    currency: base.currency,
+  };
+}
+
+function addInventoryItem(inventory, itemId, amount) {
+  if (!inventory.items[itemId]) inventory.items[itemId] = 0;
+  inventory.items[itemId] += amount;
+  if (inventory.items[itemId] <= 0) {
+    delete inventory.items[itemId];
+  }
+}
+
+function normalizeItemMap(source) {
+  const items = {};
+  for (const [key, value] of Object.entries(source || {})) {
+    const qty = Math.max(0, Math.floor(Number(value) || 0));
+    if (qty > 0) {
+      items[key] = qty;
+    }
+  }
+  return items;
+}
+
+function serializeInventory(inventory) {
+  return {
+    currency: Math.max(0, Math.floor(Number(inventory.currency) || 0)),
+    items: normalizeItemMap(inventory.items),
+  };
+}
+
+function sendInventoryUpdate(player) {
+  sendTo(player, {
+    type: 'inventory',
+    inventory: serializeInventory(player.inventory),
+    bank: serializeInventory(player.bank),
+  });
+  syncProfile(player);
+}
+
 function isWithinCone(origin, aim, target, length, cosHalfAngle, targetRadius = 0) {
   const dx = target.x - origin.x;
   const dy = target.y - origin.y;
@@ -547,6 +847,12 @@ function walkable(x, y) {
   return TILE_WALKABLE.has(world.tiles[ty][tx]);
 }
 
+if (!bankLocation) {
+  bankLocation = resolveBankPosition();
+}
+
+initializeOreNodes();
+
 function resolveMovement(player, dt) {
   const direction = normalizeVector(player.move);
   const speed = 4 + player.stats.dexterity * 0.12;
@@ -570,6 +876,8 @@ function damagePlayer(target, amount) {
     profile.health = clamp(target.health, 0, target.maxHealth);
   }
   if (target.health <= 0) {
+    dropPlayerInventory(target);
+    sendInventoryUpdate(target);
     const spawn = findSpawn();
     target.x = spawn.x;
     target.y = spawn.y;
@@ -743,6 +1051,8 @@ function sendTo(player, message) {
 
 function gameTick(now, dt) {
   updateEnemies(dt);
+  updateOreNodes(now);
+  updateLoot(now);
   for (const player of clients.values()) {
     resolveMovement(player, dt);
     if (player.profileId) {
@@ -818,6 +1128,32 @@ function gameTick(now, dt) {
       text: chat.text,
       ttl: Math.max(0, chat.expiresAt - now),
     })),
+    oreNodes: world.oreNodes.map((node) => ({
+      id: node.id,
+      type: node.type,
+      label: node.label,
+      x: node.x,
+      y: node.y,
+      amount: node.amount,
+      maxAmount: node.maxAmount,
+      respawnIn: node.respawnAt ? Math.max(0, node.respawnAt - now) : null,
+    })),
+    loot: world.loot.map((drop) => ({
+      id: drop.id,
+      x: drop.x,
+      y: drop.y,
+      currency: drop.currency,
+      items: normalizeItemMap(drop.items),
+      owner: drop.owner,
+      ttl: Math.max(0, drop.expiresAt - now),
+    })),
+    bank: bankLocation
+      ? {
+          x: bankLocation.x,
+          y: bankLocation.y,
+          radius: SAFE_ZONE_RADIUS,
+        }
+      : null,
   };
 
   broadcast(snapshot);
@@ -879,6 +1215,61 @@ function handleMessage(player, message) {
         text: chat.text,
         ttl: CHAT_LIFETIME_MS,
       },
+    });
+  } else if (payload.type === 'gather') {
+    const result = gatherNearestOre(player);
+    if (!result) return;
+    const now = Date.now();
+    sendInventoryUpdate(player);
+    broadcast({
+      type: 'ore-update',
+      node: {
+        id: result.node.id,
+        type: result.node.type,
+        label: result.node.label,
+        x: result.node.x,
+        y: result.node.y,
+        amount: result.node.amount,
+        maxAmount: result.node.maxAmount,
+        respawnIn: result.node.respawnAt ? Math.max(0, result.node.respawnAt - now) : null,
+      },
+      gatheredBy: player.id,
+      ore: {
+        id: result.ore.id,
+        label: result.ore.label,
+        amount: result.amount,
+      },
+    });
+    sendTo(player, {
+      type: 'gathered',
+      ore: {
+        id: result.ore.id,
+        label: result.ore.label,
+        amount: result.amount,
+      },
+    });
+  } else if (payload.type === 'loot') {
+    const result = lootNearestDrop(player);
+    if (!result) return;
+    sendInventoryUpdate(player);
+    const now = Date.now();
+    broadcast({
+      type: 'loot-update',
+      drop: {
+        id: result.drop.id,
+        x: result.drop.x,
+        y: result.drop.y,
+        currency: result.drop.currency,
+        items: normalizeItemMap(result.drop.items),
+        ttl: Math.max(0, result.drop.expiresAt - now),
+      },
+      collectedBy: player.id,
+      pickup: result.pickup,
+      removed: result.drop.currency <= 0 && Object.keys(result.drop.items).length === 0,
+    });
+    sendTo(player, {
+      type: 'loot-collected',
+      pickup: result.pickup,
     });
   }
 }
@@ -1071,6 +1462,18 @@ function syncProfile(player) {
       y: clamp(player.y, 0.5, world.height - 0.5),
     },
     health: clamp(player.health, 0, player.maxHealth),
+    inventory: {
+      currency: Math.max(0, Math.floor(player.inventory.currency || 0)),
+      items: Object.fromEntries(
+        Object.entries(player.inventory.items || {}).filter(([, value]) => value > 0).map(([key, value]) => [key, Math.floor(value)])
+      ),
+    },
+    bank: {
+      currency: Math.max(0, Math.floor(player.bank.currency || 0)),
+      items: Object.fromEntries(
+        Object.entries(player.bank.items || {}).filter(([, value]) => value > 0).map(([key, value]) => [key, Math.floor(value)])
+      ),
+    },
   });
   queueSaveProfiles();
 }
@@ -1105,6 +1508,8 @@ function loadProfiles() {
       } else {
         health = clamp(health, 1, maxHealth);
       }
+      const inventory = ensureInventoryData(value?.inventory);
+      const bank = ensureBankData(value?.bank);
       map.set(normalized, {
         xp: cloneXP(value?.xp),
         maxHealth,
@@ -1112,6 +1517,8 @@ function loadProfiles() {
         alias,
         position,
         health,
+        inventory,
+        bank,
       });
     }
     return { map, nextPlayerId: maxAliasIndex + 1 };
@@ -1136,6 +1543,26 @@ function serializeProfiles() {
         typeof value?.health === 'number'
           ? clamp(Number(value.health), 0, Number(value?.maxHealth) || 100)
           : undefined,
+      inventory: value?.inventory
+        ? {
+            currency: Math.max(0, Math.floor(Number(value.inventory.currency) || 0)),
+            items: Object.fromEntries(
+              Object.entries(value.inventory.items || {})
+                .filter(([, qty]) => Number(qty) > 0)
+                .map(([key, qty]) => [key, Math.floor(Number(qty))])
+            ),
+          }
+        : undefined,
+      bank: value?.bank
+        ? {
+            currency: Math.max(0, Math.floor(Number(value.bank.currency) || 0)),
+            items: Object.fromEntries(
+              Object.entries(value.bank.items || {})
+                .filter(([, qty]) => Number(qty) > 0)
+                .map(([key, qty]) => [key, Math.floor(Number(qty))])
+            ),
+          }
+        : undefined,
     };
   }
   return JSON.stringify(output, null, 2);
@@ -1247,6 +1674,32 @@ function startServer() {
         text: chat.text,
         ttl: Math.max(0, chat.expiresAt - Date.now()),
       })),
+      oreNodes: world.oreNodes.map((node) => ({
+        id: node.id,
+        type: node.type,
+        label: node.label,
+        x: node.x,
+        y: node.y,
+        amount: node.amount,
+        maxAmount: node.maxAmount,
+        respawnIn: node.respawnAt ? Math.max(0, node.respawnAt - Date.now()) : null,
+      })),
+      loot: world.loot.map((drop) => ({
+        id: drop.id,
+        x: drop.x,
+        y: drop.y,
+        currency: drop.currency,
+        items: normalizeItemMap(drop.items),
+        owner: drop.owner,
+        ttl: Math.max(0, drop.expiresAt - Date.now()),
+      })),
+      bank: bankLocation
+        ? {
+            x: bankLocation.x,
+            y: bankLocation.y,
+            radius: SAFE_ZONE_RADIUS,
+          }
+        : null,
       you: {
         x: player.x,
         y: player.y,
@@ -1256,6 +1709,7 @@ function startServer() {
         maxHealth: player.maxHealth,
       },
     });
+    sendInventoryUpdate(player);
 
     broadcast({
       type: 'join',
