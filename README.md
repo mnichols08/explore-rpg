@@ -15,6 +15,7 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Procedurally generated strongholds** &mdash; shimmering gateways whisk heroes into harder, instanced arenas brimming with tougher enemies and richer rewards.
 - **Dynamic dungeon atmospherics** &mdash; animated lava pools, obsidian corridors, and exit sigils add tension without sacrificing performance.
 - **Live minimap HUD** &mdash; a top-right tactical map tracks heroes, portals, and the shimmering safe zone so you always know where to head next.
+- **Ambient recovery with safe haven boosts** &mdash; health slowly returns anywhere in the wild, but stepping into the safe zone accelerates regeneration about a thousand-fold.
 
 ## Getting started
 

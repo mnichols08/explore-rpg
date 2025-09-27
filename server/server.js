@@ -69,6 +69,7 @@ const BANK_POSITION = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
 const SAFE_ZONE_RADIUS = 8.5;
 const BANK_TRADE_BATCH = 5;
 const SAFE_ZONE_HEAL_DURATION_MS = 60000;
+const WILDERNESS_HEAL_SCALE = 1 / 1000;
 
 const PORTAL_DISTANCE_THRESHOLD = 1.6;
 const LEVEL_PORTAL_MIN_DISTANCE = 14;
@@ -1645,10 +1646,13 @@ function gameTick(now, dt) {
   updateLoot(now);
   for (const player of clients.values()) {
     resolveMovement(player, dt);
-    if (playerInSafeZone(player) && player.health < player.maxHealth) {
+    if (player.health < player.maxHealth) {
       const healRatePerMs = player.maxHealth / SAFE_ZONE_HEAL_DURATION_MS;
-      const healAmount = healRatePerMs * dt * 1000;
-      player.health = clamp(player.health + healAmount, 0, player.maxHealth);
+      const healMultiplier = playerInSafeZone(player) ? 1 : WILDERNESS_HEAL_SCALE;
+      const healAmount = healRatePerMs * healMultiplier * dt * 1000;
+      if (healAmount > 0) {
+        player.health = clamp(player.health + healAmount, 0, player.maxHealth);
+      }
     }
   if (player.action && player.action.startedAt && player.action.kind) {
       const baseChargeCap = clamp(player.bonuses?.maxCharge ?? 0.5, 0.5, 5);
