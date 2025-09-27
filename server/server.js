@@ -195,6 +195,7 @@ function findEnemySpawn() {
     const y = Math.floor(rand() * WORLD_HEIGHT);
     if (!TILE_WALKABLE.has(world.tiles[y][x])) continue;
     if (!isTileFarFromPlayers(x + 0.5, y + 0.5, 6)) continue;
+    if (isInSafeZone(x + 0.5, y + 0.5)) continue;
     return { x: x + 0.5, y: y + 0.5 };
   }
   return findSpawn();
@@ -340,6 +341,7 @@ function updateEnemies(dt) {
     let targetPlayer = null;
     let targetDistance = Infinity;
     for (const player of clients.values()) {
+      if (playerInSafeZone(player)) continue;
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist < targetDistance) {
         targetDistance = dist;
@@ -360,12 +362,12 @@ function updateEnemies(dt) {
 
     const candidateX = enemy.x + dx;
     const candidateY = enemy.y + dy;
-    if (walkable(candidateX, enemy.y)) {
+    if (walkable(candidateX, enemy.y) && !isInSafeZone(candidateX, enemy.y)) {
       enemy.x = clamp(candidateX, 0.5, world.width - 0.5);
     } else {
       enemy.wanderTarget = randomDirection();
     }
-    if (walkable(enemy.x, candidateY)) {
+    if (walkable(enemy.x, candidateY) && !isInSafeZone(enemy.x, candidateY)) {
       enemy.y = clamp(candidateY, 0.5, world.height - 0.5);
     } else {
       enemy.wanderTarget = randomDirection();
@@ -609,6 +611,7 @@ function grantSkillXP(player, actionType, amount) {
 
 function performEnemyAttack(enemy, attack, targetPlayer) {
   if (!attack || !targetPlayer) return;
+  if (playerInSafeZone(targetPlayer)) return;
   const now = Date.now();
   let aim = normalizeVector({ x: targetPlayer.x - enemy.x, y: targetPlayer.y - enemy.y });
   if (aim.x === 0 && aim.y === 0) {
@@ -657,6 +660,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
 
   if (attack.type === 'melee') {
     for (const player of clients.values()) {
+      if (playerInSafeZone(player)) continue;
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist <= attack.range + PLAYER_HIT_RADIUS + enemy.radius && Math.random() <= hitChance) {
         damagePlayer(player, attack.damage);
@@ -667,18 +671,20 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     let victim = null;
     let bestTravel = Infinity;
     for (const player of clients.values()) {
+      if (playerInSafeZone(player)) continue;
       const travel = projectileTravel(enemy, aim, player, PLAYER_HIT_RADIUS, attack.range, halfWidth);
       if (travel !== null && travel < bestTravel) {
         bestTravel = travel;
         victim = player;
       }
     }
-    if (victim && Math.random() <= hitChance) {
+    if (victim && !playerInSafeZone(victim) && Math.random() <= hitChance) {
       damagePlayer(victim, attack.damage);
     }
   } else if (attack.type === 'spell') {
     const splash = attack.splash ?? 1.2;
     for (const player of clients.values()) {
+      if (playerInSafeZone(player)) continue;
       const dist = Math.hypot(player.x - effectX, player.y - effectY);
       if (dist <= splash + PLAYER_HIT_RADIUS && Math.random() <= hitChance) {
         damagePlayer(player, attack.damage);
@@ -761,6 +767,11 @@ function isInSafeZone(x, y) {
   return dx * dx + dy * dy <= SAFE_ZONE_RADIUS * SAFE_ZONE_RADIUS;
 }
 
+function playerInSafeZone(player) {
+  if (!player) return false;
+  return isInSafeZone(player.x, player.y);
+}
+
 function ensureInventoryData(source) {
   const items = {};
   for (const ore of ORE_TYPES) {
@@ -804,6 +815,129 @@ function serializeInventory(inventory) {
   return {
     currency: Math.max(0, Math.floor(Number(inventory.currency) || 0)),
     items: normalizeItemMap(inventory.items),
+  };
+}
+
+function transferItems(source, target) {
+  const moved = {};
+  if (!source?.items || !target?.items) return moved;
+  for (const [key, value] of Object.entries(source.items)) {
+    const amount = Math.max(0, Math.floor(Number(value) || 0));
+    if (!amount) continue;
+    addInventoryItem(target, key, amount);
+    moved[key] = (moved[key] || 0) + amount;
+    delete source.items[key];
+  }
+  return moved;
+}
+
+function depositAllToBank(player) {
+  const movedItems = transferItems(player.inventory, player.bank);
+  const currency = Math.max(0, Math.floor(Number(player.inventory.currency) || 0));
+  if (currency > 0) {
+    player.bank.currency = Math.max(0, Math.floor(Number(player.bank.currency) || 0)) + currency;
+    player.inventory.currency = 0;
+  }
+  return {
+    items: movedItems,
+    currency,
+    action: 'deposit',
+  };
+}
+
+function withdrawAllFromBank(player) {
+  const movedItems = transferItems(player.bank, player.inventory);
+  const currency = Math.max(0, Math.floor(Number(player.bank.currency) || 0));
+  if (currency > 0) {
+    player.inventory.currency = Math.max(0, Math.floor(Number(player.inventory.currency) || 0)) + currency;
+    player.bank.currency = 0;
+  }
+  return {
+    items: movedItems,
+    currency,
+    action: 'withdraw',
+  };
+}
+
+function sellInventoryOres(player) {
+  const soldItems = {};
+  let totalCurrency = 0;
+  for (const [key, value] of Object.entries(player.inventory.items || {})) {
+    const ore = getOreType(key);
+    if (!ore?.value) continue;
+    const amount = Math.max(0, Math.floor(Number(value) || 0));
+    if (!amount) continue;
+    totalCurrency += amount * ore.value;
+    soldItems[key] = (soldItems[key] || 0) + amount;
+    delete player.inventory.items[key];
+  }
+  if (totalCurrency > 0) {
+    player.inventory.currency = Math.max(0, Math.floor(Number(player.inventory.currency) || 0)) + totalCurrency;
+  }
+  return {
+    items: soldItems,
+    currency: totalCurrency,
+    action: 'sell',
+  };
+}
+
+function summarizeItemsCount(items) {
+  let total = 0;
+  for (const value of Object.values(items || {})) {
+    total += Math.max(0, Number(value) || 0);
+  }
+  return total;
+}
+
+function handleBankOperation(player, action) {
+  if (!player?.bank || !player?.inventory) {
+    return { ok: false, action, message: 'Bank unavailable.' };
+  }
+  const normalizedAction = action === 'deposit' || action === 'withdraw' || action === 'sell' ? action : null;
+  if (!normalizedAction) {
+    return { ok: false, action, message: 'Unknown bank action.' };
+  }
+  if (!playerInSafeZone(player)) {
+    return { ok: false, action, message: 'You must stand in the bank safe zone.' };
+  }
+
+  let result;
+  if (normalizedAction === 'deposit') {
+    result = depositAllToBank(player);
+  } else if (normalizedAction === 'withdraw') {
+    result = withdrawAllFromBank(player);
+  } else if (normalizedAction === 'sell') {
+    result = sellInventoryOres(player);
+  }
+
+  const movedCurrency = Math.max(0, Number(result?.currency) || 0);
+  const movedItems = result?.items || {};
+  const totalItems = summarizeItemsCount(movedItems);
+  const changed = movedCurrency > 0 || totalItems > 0;
+
+  let message;
+  if (!changed) {
+    if (normalizedAction === 'sell') message = 'No ores available to sell.';
+    else if (normalizedAction === 'withdraw') message = 'Your bank is empty.';
+    else message = 'Nothing to deposit.';
+  } else if (normalizedAction === 'sell') {
+    message = `Sold ${totalItems.toLocaleString()} ore for ${movedCurrency.toLocaleString()} coins.`;
+  } else if (normalizedAction === 'deposit') {
+    message = `Deposited ${totalItems.toLocaleString()} items and ${movedCurrency.toLocaleString()} coins.`;
+  } else if (normalizedAction === 'withdraw') {
+    message = `Withdrew ${totalItems.toLocaleString()} items and ${movedCurrency.toLocaleString()} coins.`;
+  } else {
+    message = 'Transaction complete.';
+  }
+
+  sendInventoryUpdate(player);
+
+  return {
+    ok: changed,
+    action: normalizedAction,
+    message,
+    currency: movedCurrency,
+    items: movedItems,
   };
 }
 
@@ -870,6 +1004,7 @@ function resolveMovement(player, dt) {
 }
 
 function damagePlayer(target, amount) {
+  if (playerInSafeZone(target)) return;
   target.health = clamp(target.health - amount, 0, target.maxHealth);
   const profile = target.profileId ? profiles.get(target.profileId) : null;
   if (profile) {
@@ -952,6 +1087,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     let candidateDistance = Infinity;
     for (const target of clients.values()) {
       if (target.id === player.id) continue;
+      if (playerInSafeZone(target)) continue;
       const travel = projectileTravel(player, aim, target, PLAYER_HIT_RADIUS, range, projectileHalfWidth);
       if (travel !== null && travel < candidateDistance) {
         candidateDistance = travel;
@@ -959,11 +1095,14 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
       }
     }
     if (candidatePlayer && Math.random() <= hitChance) {
-      damagePlayer(candidatePlayer, damageBase);
+      if (!playerInSafeZone(candidatePlayer)) {
+        damagePlayer(candidatePlayer, damageBase);
+      }
     }
   } else {
     for (const target of clients.values()) {
       if (target.id === player.id) continue;
+      if (playerInSafeZone(target)) continue;
       let within = false;
       if (actionType === 'melee') {
         within = isWithinCone(player, aim, target, range + PLAYER_HIT_RADIUS, coneCosHalfAngle, PLAYER_HIT_RADIUS);
@@ -1271,6 +1410,12 @@ function handleMessage(player, message) {
       type: 'loot-collected',
       pickup: result.pickup,
     });
+  } else if (payload.type === 'bank') {
+    const action = typeof payload.action === 'string' ? payload.action.toLowerCase() : '';
+    const result = handleBankOperation(player, action);
+    if (result) {
+      sendTo(player, { type: 'bank-result', ...result });
+    }
   }
 }
 

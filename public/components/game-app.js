@@ -372,6 +372,50 @@ template.innerHTML = `
         box-shadow: 0 0 0 rgba(56, 189, 248, 0.0);
       }
     }
+
+    .bank-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .bank-actions button {
+      all: unset;
+      cursor: pointer;
+      padding: 0.4rem 0.75rem;
+      border-radius: 0.55rem;
+      background: rgba(56, 189, 248, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      color: #e0f2fe;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: background 150ms ease, border 150ms ease, transform 150ms ease, color 150ms ease;
+    }
+
+    .bank-actions button:hover:not([disabled]) {
+      background: rgba(56, 189, 248, 0.3);
+      border-color: rgba(125, 211, 252, 0.65);
+    }
+
+    .bank-actions button:active:not([disabled]) {
+      transform: translateY(1px);
+    }
+
+    .bank-actions button[disabled] {
+      cursor: default;
+      background: rgba(71, 85, 105, 0.35);
+      border-color: rgba(100, 116, 139, 0.35);
+      color: rgba(148, 163, 184, 0.6);
+    }
+
+    .bank-feedback {
+      font-size: 0.72rem;
+      color: rgba(148, 163, 184, 0.85);
+      min-height: 1.1rem;
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+    }
   </style>
   <canvas></canvas>
   <div class="hud">
@@ -384,7 +428,8 @@ template.innerHTML = `
       <div>
         <strong>Explore &amp; grow:</strong><br />
         WASD to move. Left click to swing. Right click to shoot. Press both to cast. Hold to charge every action.<br />
-        Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.
+  Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.<br />
+  Inside the glowing safe zone, use the bank panel to deposit or sell your haul.
         Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div>
@@ -413,6 +458,12 @@ template.innerHTML = `
           <span>Safe Zone</span>
           <span data-safe-zone-indicator>Unknown</span>
         </div>
+        <div class="bank-actions" data-bank-actions>
+          <button type="button" data-bank-deposit disabled>Deposit All</button>
+          <button type="button" data-bank-withdraw disabled>Withdraw All</button>
+          <button type="button" data-bank-sell disabled>Sell Ores</button>
+        </div>
+        <div class="bank-feedback" data-bank-feedback></div>
       </div>
     </div>
     <div class="message" hidden data-message>Connecting...</div>
@@ -545,6 +596,11 @@ class GameApp extends HTMLElement {
     this.bankItemsEl = this.shadowRoot.querySelector('[data-bank-items]');
     this.safeZoneStatusEl = this.shadowRoot.querySelector('[data-safe-zone-status]');
     this.safeZoneIndicatorEl = this.shadowRoot.querySelector('[data-safe-zone-indicator]');
+  this.bankActionsEl = this.shadowRoot.querySelector('[data-bank-actions]');
+  this.bankDepositButton = this.shadowRoot.querySelector('[data-bank-deposit]');
+  this.bankWithdrawButton = this.shadowRoot.querySelector('[data-bank-withdraw]');
+  this.bankSellButton = this.shadowRoot.querySelector('[data-bank-sell]');
+  this.bankFeedbackEl = this.shadowRoot.querySelector('[data-bank-feedback]');
     this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
     this._submitChatMessage = this._submitChatMessage.bind(this);
     this._exitChatMode = this._exitChatMode.bind(this);
@@ -597,6 +653,12 @@ class GameApp extends HTMLElement {
   this._handleIdentityCancel = this._handleIdentityCancel.bind(this);
   this._handleIdentityInputKeydown = this._handleIdentityInputKeydown.bind(this);
     this._resizeCanvas = this._resizeCanvas.bind(this);
+    this._handleBankDeposit = this._handleBankDeposit.bind(this);
+    this._handleBankWithdraw = this._handleBankWithdraw.bind(this);
+    this._handleBankSell = this._handleBankSell.bind(this);
+    this.bankFeedbackTimer = null;
+    this._updateBankButtons(false);
+    this._showBankFeedback('');
     this._updateInventoryPanel();
   }
 
@@ -624,6 +686,9 @@ class GameApp extends HTMLElement {
     this.identityCancelButton?.addEventListener('click', this._handleIdentityCancel);
     this.identityInput?.addEventListener('keydown', this._handleIdentityInputKeydown);
     this.chatInput?.addEventListener('keydown', this._handleChatInputKeydown);
+  this.bankDepositButton?.addEventListener('click', this._handleBankDeposit);
+  this.bankWithdrawButton?.addEventListener('click', this._handleBankWithdraw);
+  this.bankSellButton?.addEventListener('click', this._handleBankSell);
     this._resizeCanvas();
     this._initializeIdentity();
     requestAnimationFrame(this._loop);
@@ -648,6 +713,13 @@ class GameApp extends HTMLElement {
   this.identityCancelButton?.removeEventListener('click', this._handleIdentityCancel);
   this.identityInput?.removeEventListener('keydown', this._handleIdentityInputKeydown);
   this.chatInput?.removeEventListener('keydown', this._handleChatInputKeydown);
+  this.bankDepositButton?.removeEventListener('click', this._handleBankDeposit);
+  this.bankWithdrawButton?.removeEventListener('click', this._handleBankWithdraw);
+  this.bankSellButton?.removeEventListener('click', this._handleBankSell);
+  if (this.bankFeedbackTimer) {
+    clearTimeout(this.bankFeedbackTimer);
+    this.bankFeedbackTimer = null;
+  }
     this.audio.setMusicEnabled(false);
     if (this.socket) {
       this.socket.close();
@@ -804,6 +876,13 @@ class GameApp extends HTMLElement {
         this._flashInventoryPanel();
       } else if (data.type === 'loot-collected') {
         this._flashInventoryPanel();
+      } else if (data.type === 'bank-result') {
+        const ok = data.ok !== false;
+        const message = typeof data.message === 'string' ? data.message : ok ? 'Bank transaction complete.' : 'Bank action failed.';
+        this._showBankFeedback(message, ok);
+        if (ok) {
+          this._flashInventoryPanel();
+        }
       } else if (data.type === 'disconnect') {
         this.players.delete(data.id);
       }
@@ -1258,6 +1337,29 @@ class GameApp extends HTMLElement {
     this.socket.send(JSON.stringify({ type: 'loot' }));
   }
 
+  _handleBankDeposit() {
+    this._sendBankRequest('deposit');
+  }
+
+  _handleBankWithdraw() {
+    this._sendBankRequest('withdraw');
+  }
+
+  _handleBankSell() {
+    this._sendBankRequest('sell');
+  }
+
+  _sendBankRequest(action) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    if (!action) return;
+    this.socket.send(
+      JSON.stringify({
+        type: 'bank',
+        action,
+      })
+    );
+  }
+
   _handleChatInputKeydown(event) {
     if (!this.chatActive) return;
     if (event.code === 'Enter' && !event.shiftKey) {
@@ -1581,6 +1683,32 @@ class GameApp extends HTMLElement {
     this.inventoryPanel.classList.add('flash');
   }
 
+  _updateBankButtons(enabled) {
+    const allow = Boolean(enabled) && this.socket && this.socket.readyState === WebSocket.OPEN;
+    const buttons = [this.bankDepositButton, this.bankWithdrawButton, this.bankSellButton];
+    for (const button of buttons) {
+      if (!button) continue;
+      button.disabled = !allow;
+    }
+  }
+
+  _showBankFeedback(message, ok = true) {
+    if (!this.bankFeedbackEl) return;
+    this.bankFeedbackEl.textContent = message || '';
+    this.bankFeedbackEl.style.color = ok ? '#bbf7d0' : '#fca5a5';
+    if (this.bankFeedbackTimer) {
+      clearTimeout(this.bankFeedbackTimer);
+    }
+    if (message) {
+      this.bankFeedbackTimer = setTimeout(() => {
+        this.bankFeedbackEl.textContent = '';
+        this.bankFeedbackTimer = null;
+      }, 3200);
+    } else {
+      this.bankFeedbackTimer = null;
+    }
+  }
+
   _isPlayerInSafeZone(player) {
     if (!player || !this.bankInfo) return false;
     const dx = player.x - this.bankInfo.x;
@@ -1594,9 +1722,13 @@ class GameApp extends HTMLElement {
       this.safeZoneIndicatorEl.textContent = 'Unknown';
       this.safeZoneIndicatorEl.style.color = 'rgba(148, 163, 184, 0.65)';
       this.lastSafeZoneState = null;
+      this._updateBankButtons(false);
       return;
     }
-    if (this.lastSafeZoneState === isInside) return;
+    if (this.lastSafeZoneState === isInside) {
+      this._updateBankButtons(isInside);
+      return;
+    }
     this.lastSafeZoneState = isInside;
     if (isInside) {
       this.safeZoneIndicatorEl.textContent = 'Inside';
@@ -1605,6 +1737,7 @@ class GameApp extends HTMLElement {
       this.safeZoneIndicatorEl.textContent = 'Outside';
       this.safeZoneIndicatorEl.style.color = 'rgba(248, 250, 252, 0.75)';
     }
+    this._updateBankButtons(isInside);
   }
 
   _determineAction(buttonMask) {
@@ -1711,6 +1844,7 @@ class GameApp extends HTMLElement {
   this.lastSafeZoneState = null;
   this._updateInventoryPanel();
   this._updateSafeZoneIndicator(false);
+  this._showBankFeedback('');
     if (this.statPanel) {
       this.statPanel.data = {
         stats: { strength: 0, dexterity: 0, intellect: 0 },
