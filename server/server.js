@@ -68,6 +68,7 @@ const LOOT_LIFETIME_MS = 90000;
 const BANK_POSITION = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
 const SAFE_ZONE_RADIUS = 8.5;
 const BANK_TRADE_BATCH = 5;
+const SAFE_ZONE_HEAL_DURATION_MS = 60000;
 
 const clients = new Map();
 let nextPlayerId = 1;
@@ -1194,6 +1195,11 @@ function gameTick(now, dt) {
   updateLoot(now);
   for (const player of clients.values()) {
     resolveMovement(player, dt);
+    if (playerInSafeZone(player) && player.health < player.maxHealth) {
+      const healRatePerMs = player.maxHealth / SAFE_ZONE_HEAL_DURATION_MS;
+      const healAmount = healRatePerMs * dt * 1000;
+      player.health = clamp(player.health + healAmount, 0, player.maxHealth);
+    }
     if (player.profileId) {
       const profile = profiles.get(player.profileId);
       if (profile) {
