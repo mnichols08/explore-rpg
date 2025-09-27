@@ -18,9 +18,30 @@ const ENEMY_SPAWN_INTERVAL = 8000;
 const ENEMY_MAX_COUNT = 24;
 const ENEMY_WANDER_INTERVAL = 1800;
 const ENEMY_VARIANTS = [
-  { type: 'slime', health: 55, speed: 1.4, xp: { melee: 8, ranged: 6, spell: 7 }, radius: 0.5 },
-  { type: 'wolf', health: 85, speed: 2.4, xp: { melee: 10, ranged: 8, spell: 9 }, radius: 0.55 },
-  { type: 'wisp', health: 60, speed: 2.1, xp: { melee: 6, ranged: 8, spell: 12 }, radius: 0.45 },
+  {
+    type: 'slime',
+    health: 55,
+    speed: 1.4,
+    xp: { melee: 8, ranged: 6, spell: 7 },
+    radius: 0.5,
+    attack: { type: 'melee', damage: 14, range: 1.65, cooldown: 1400, hitChance: 0.8 },
+  },
+  {
+    type: 'wolf',
+    health: 85,
+    speed: 2.4,
+    xp: { melee: 10, ranged: 8, spell: 9 },
+    radius: 0.55,
+    attack: { type: 'ranged', damage: 12, range: 6.5, cooldown: 1700, width: 0.55, hitChance: 0.7 },
+  },
+  {
+    type: 'wisp',
+    health: 60,
+    speed: 2.1,
+    xp: { melee: 6, ranged: 8, spell: 12 },
+    radius: 0.45,
+    attack: { type: 'spell', damage: 16, range: 6.2, cooldown: 2100, splash: 1.45, hitChance: 0.75 },
+  },
 ];
 const PLAYER_HIT_RADIUS = 0.45;
 const MELEE_CONE_HALF_ANGLE = Math.PI / 3; // 60° frontal swing
@@ -260,6 +281,8 @@ function createEnemy() {
     maxHealth: variant.health,
     xpReward: variant.xp,
     radius: variant.radius,
+    attack: variant.attack ? { ...variant.attack } : null,
+    attackCooldown: variant.attack ? variant.attack.cooldown * (0.5 + Math.random() * 0.6) : 0,
   };
   return enemy;
 }
@@ -315,6 +338,26 @@ function updateEnemies(dt) {
       enemy.wanderTarget = randomDirection();
     }
 
+    if (enemy.attack) {
+      enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt * 1000);
+      if (targetPlayer) {
+        const attack = enemy.attack;
+        const dxTarget = targetPlayer.x - enemy.x;
+        const dyTarget = targetPlayer.y - enemy.y;
+        const distanceToTarget = Math.hypot(dxTarget, dyTarget);
+        let inRange = false;
+        if (attack.type === 'melee') {
+          inRange = distanceToTarget <= attack.range + PLAYER_HIT_RADIUS + enemy.radius;
+        } else {
+          inRange = distanceToTarget <= attack.range;
+        }
+        if (inRange && enemy.attackCooldown <= 0) {
+          performEnemyAttack(enemy, attack, targetPlayer);
+          enemy.attackCooldown = attack.cooldown * (0.7 + Math.random() * 0.6);
+        }
+      }
+    }
+
     updated.push(enemy);
   }
   world.enemies = updated;
@@ -342,6 +385,86 @@ function grantSkillXP(player, actionType, amount) {
   else if (actionType === 'spell') player.xp.magic += amount;
   else return false;
   return true;
+}
+
+function performEnemyAttack(enemy, attack, targetPlayer) {
+  if (!attack || !targetPlayer) return;
+  const now = Date.now();
+  let aim = normalizeVector({ x: targetPlayer.x - enemy.x, y: targetPlayer.y - enemy.y });
+  if (aim.x === 0 && aim.y === 0) {
+    aim = randomDirection();
+  }
+
+  let effectX = enemy.x;
+  let effectY = enemy.y;
+  let effectRange = attack.range;
+  let effectLength = attack.range;
+  let effectAngle = null;
+  let effectWidth = null;
+  let shape = 'burst';
+
+  if (attack.type === 'melee') {
+    shape = 'cone';
+    effectAngle = MELEE_CONE_HALF_ANGLE * 2;
+  } else if (attack.type === 'ranged') {
+    shape = 'beam';
+    effectWidth = (attack.width ?? (PROJECTILE_HALF_WIDTH + 0.15)) * 2;
+  } else if (attack.type === 'spell') {
+    const splash = attack.splash ?? 1.2;
+    effectRange = splash;
+    effectLength = splash;
+    effectX = targetPlayer.x;
+    effectY = targetPlayer.y;
+  }
+
+  const effect = {
+    id: `fx${effectCounter++}`,
+    type: attack.type,
+    owner: enemy.id,
+    x: effectX,
+    y: effectY,
+    aim,
+    range: effectRange,
+    length: effectLength,
+    angle: effectAngle,
+    width: effectWidth,
+    shape,
+    expiresAt: now + EFFECT_LIFETIME * 0.6,
+  };
+  world.effects.push(effect);
+
+  const hitChance = clamp(attack.hitChance ?? 1, 0.05, 1);
+
+  if (attack.type === 'melee') {
+    for (const player of clients.values()) {
+      const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+      if (dist <= attack.range + PLAYER_HIT_RADIUS + enemy.radius && Math.random() <= hitChance) {
+        damagePlayer(player, attack.damage);
+      }
+    }
+  } else if (attack.type === 'ranged') {
+    const halfWidth = attack.width ?? (PROJECTILE_HALF_WIDTH + 0.15);
+    let victim = null;
+    let bestTravel = Infinity;
+    for (const player of clients.values()) {
+      const travel = projectileTravel(enemy, aim, player, PLAYER_HIT_RADIUS, attack.range, halfWidth);
+      if (travel !== null && travel < bestTravel) {
+        bestTravel = travel;
+        victim = player;
+      }
+    }
+    if (victim && Math.random() <= hitChance) {
+      damagePlayer(victim, attack.damage);
+    }
+  } else if (attack.type === 'spell') {
+    const splash = attack.splash ?? 1.2;
+    for (const player of clients.values()) {
+      const dist = Math.hypot(player.x - effectX, player.y - effectY);
+      if (dist <= splash + PLAYER_HIT_RADIUS && Math.random() <= hitChance) {
+        damagePlayer(player, attack.damage);
+      }
+    }
+  }
 }
 
 function baseStats() {
