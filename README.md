@@ -11,7 +11,10 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Modular UI** &mdash; Web Components power the HUD, stat display, and charge meter.
 - **Procedural soundtrack** &mdash; a native Web Audio score and responsive effects you can toggle on the fly.
 - **Persistent heroes** &mdash; each browser stores a hero ID locally while the server tracks stats and XP for that ID.
-- **Server-spawned foes** &mdash; cooperative enemy waves roam the map so every hero shares the same PvE encounters.
+- **Server-spawned foes** &mdash; cooperative enemy waves (including elite dungeon variants) roam the map so every hero shares the same PvE encounters.
+- **Procedurally generated strongholds** &mdash; shimmering gateways whisk heroes into harder, instanced arenas brimming with tougher enemies and richer rewards.
+- **Dynamic dungeon atmospherics** &mdash; animated lava pools, obsidian corridors, and exit sigils add tension without sacrificing performance.
+- **Live minimap HUD** &mdash; a top-right tactical map tracks heroes, portals, and the shimmering safe zone so you always know where to head next.
 
 ## Getting started
 
@@ -42,9 +45,11 @@ node .\server\server.js --self-test
 - **Right click** for charged arrow shots (dexterity growth)
 - **Left + Right click together** for spellcasting (intellect growth)
 - Hold any action to charge; release to unleash more powerful attacks.
+- **E key** gathers nearby resources/loot or activates portals and exit sigils when you are within their glow.
 - **M key or Music button** toggles the procedural soundtrack.
 - **Shift + N** starts a fresh hero (copy your Hero ID first if you want to return later).
 - Down enemies together to earn bonus XP aligned with the finishing attack type.
+- Keep an eye on the top-right minimap: cyan rings mark the bank's safe zone, gold diamonds mark gateways, and orange dots show nearby allies.
 
 ## Save & Continue
 

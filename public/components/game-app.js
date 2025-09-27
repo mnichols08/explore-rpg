@@ -52,6 +52,91 @@ template.innerHTML = `
       gap: 0.75rem;
     }
 
+    .hud .top-right .minimap-card {
+      width: 190px;
+      max-width: 48vw;
+      display: grid;
+      gap: 0.55rem;
+      padding: 0.75rem;
+      border-radius: 0.85rem;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 1.1rem 2.4rem rgba(8, 15, 31, 0.45);
+      backdrop-filter: blur(6px);
+    }
+
+    .minimap-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.85);
+    }
+
+    .minimap-header span[data-minimap-label] {
+      color: var(--minimap-accent, #38bdf8);
+      font-weight: 600;
+    }
+
+    canvas[data-minimap] {
+      width: 176px;
+      height: 176px;
+      max-width: 100%;
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 0.75rem;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      box-shadow: inset 0 0 1.2rem rgba(8, 15, 31, 0.45);
+    }
+
+    .minimap-legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem 0.65rem;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.75);
+    }
+
+    .minimap-legend li {
+      position: relative;
+      padding-left: 1.2rem;
+      line-height: 1.1;
+    }
+
+    .minimap-legend li::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 999px;
+      transform: translateY(-50%);
+      box-shadow: 0 0 0.45rem rgba(148, 163, 184, 0.4);
+    }
+
+    .minimap-legend li[data-type="you"]::before {
+      background: #38bdf8;
+    }
+
+    .minimap-legend li[data-type="hero"]::before {
+      background: #f97316;
+    }
+
+    .minimap-legend li[data-type="portal"]::before {
+      background: #fbbf24;
+    }
+
+    .minimap-legend li[data-type="safe"]::before {
+      background: #22d3ee;
+    }
+
     .hud .bottom-left {
       justify-self: start;
       align-self: end;
@@ -361,6 +446,44 @@ template.innerHTML = `
       color: #f8fafc;
     }
 
+    .resource-panel .status.zone span:last-child {
+      color: #38bdf8;
+    }
+
+    .resource-panel .status.zone.level span:last-child {
+      color: #f97316;
+    }
+
+    .hud .level-banner {
+      position: absolute;
+      top: 1.2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.55rem 1.1rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      color: #f8fafc;
+      font-size: 0.82rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      box-shadow: 0 1.1rem 2.4rem rgba(15, 23, 42, 0.45);
+      pointer-events: none;
+    }
+
+    .hud .level-banner::before {
+      content: "";
+      display: block;
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 999px;
+      background: var(--level-accent, #38bdf8);
+      box-shadow: 0 0 0.65rem var(--level-accent-shadow, rgba(56, 189, 248, 0.6));
+    }
+
     @keyframes resourceFlash {
       0% {
         box-shadow: 0 0 0 rgba(56, 189, 248, 0.5);
@@ -423,14 +546,27 @@ template.innerHTML = `
     <div class="top-right">
       <charge-meter></charge-meter>
       <audio-toggle></audio-toggle>
+      <div class="minimap-card">
+        <div class="minimap-header" data-minimap-header>
+          <span>Minimap</span>
+          <span data-minimap-label>Overworld</span>
+        </div>
+        <canvas data-minimap></canvas>
+        <ul class="minimap-legend">
+          <li data-type="you">You</li>
+          <li data-type="hero">Allies</li>
+          <li data-type="portal">Portals</li>
+          <li data-type="safe">Safe Zone</li>
+        </ul>
+      </div>
     </div>
     <div class="bottom-left">
       <div>
         <strong>Explore &amp; grow:</strong><br />
-        WASD to move. Left click to swing. Right click to shoot. Press both to cast. Hold to charge every action.<br />
-  Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.<br />
-  Inside the glowing safe zone, use the bank panel to deposit or sell your haul.
-        Music toggle: button or press M. Shift + N to forge a new hero.
+        WASD to move. Left click to swing. Right click to shoot. Press both to cast. Hold to overcharge every action.<br />
+        Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.<br />
+        Seek shimmering gateways across the world—press E while inside their glow to enter a generated stronghold, and press E again atop the exit sigil to return.<br />
+        Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
@@ -458,6 +594,10 @@ template.innerHTML = `
           <span>Safe Zone</span>
           <span data-safe-zone-indicator>Unknown</span>
         </div>
+        <div class="status zone" data-zone-status>
+          <span>Zone</span>
+          <span data-zone-indicator>Overworld</span>
+        </div>
         <div class="bank-actions" data-bank-actions>
           <button type="button" data-bank-deposit disabled>Deposit All</button>
           <button type="button" data-bank-withdraw disabled>Withdraw All</button>
@@ -466,6 +606,7 @@ template.innerHTML = `
         <div class="bank-feedback" data-bank-feedback></div>
       </div>
     </div>
+    <div class="level-banner" hidden data-level-banner></div>
     <div class="message" hidden data-message>Connecting...</div>
   </div>
   <div class="chat-entry" hidden data-chat-entry>
@@ -491,6 +632,11 @@ const TILE_STYLE = {
   grass: '#2dd4bf',
   forest: '#166534',
   rock: '#94a3b8',
+  ember: '#fb923c',
+  glyph: '#818cf8',
+  obsidian: '#111827',
+  lava: '#ef4444',
+  void: '#030712',
 };
 
 const ACTION_LABEL = {
@@ -504,6 +650,10 @@ const ENEMY_STYLE = {
   slime: { inner: '#0ea5e9', outer: '#0369a1' },
   wolf: { inner: '#facc15', outer: '#f97316' },
   wisp: { inner: '#c084fc', outer: '#7c3aed' },
+  emberling: { inner: '#fb923c', outer: '#c2410c' },
+  warden: { inner: '#f97316', outer: '#9a3412' },
+  phantom: { inner: '#38bdf8', outer: '#1e3a8a' },
+  seer: { inner: '#c4b5fd', outer: '#4338ca' },
   default: { inner: '#f87171', outer: '#dc2626' },
 };
 
@@ -529,6 +679,43 @@ const SAFE_ZONE_STYLE = {
   stroke: 'rgba(56, 189, 248, 0.55)',
   fill: 'rgba(14, 165, 233, 0.12)',
 };
+const DEFAULT_PORTAL_COLOR = '#38bdf8';
+const LEVEL_VIGNETTE = {
+  'ember-sanctum': {
+    fill: 'rgba(249, 115, 22, 0.16)',
+    shadow: 'rgba(249, 115, 22, 0.48)',
+    background: '#130d1f',
+  },
+  'astral-vault': {
+    fill: 'rgba(56, 189, 248, 0.18)',
+    shadow: 'rgba(56, 189, 248, 0.42)',
+    background: '#0b1220',
+  },
+};
+const PORTAL_INTERACT_RADIUS = 1.6;
+const MINIMAP_SIZE = 176;
+const MINIMAP_TILE_COLORS = {
+  water: '#0f172a',
+  sand: '#fbbf24',
+  grass: '#2dd4bf',
+  forest: '#166534',
+  rock: '#475569',
+  ember: '#fb923c',
+  glyph: '#6366f1',
+  obsidian: '#111827',
+  lava: '#b91c1c',
+  void: '#1e1b4b',
+};
+const MINIMAP_PLAYER_COLORS = {
+  you: '#38bdf8',
+  ally: '#f97316',
+};
+const MINIMAP_PORTAL_COLOR = '#fbbf24';
+const MINIMAP_SAFE_FILL = 'rgba(56, 189, 248, 0.16)';
+const MINIMAP_SAFE_STROKE = 'rgba(125, 211, 252, 0.75)';
+const MINIMAP_VIEWPORT_STROKE = 'rgba(148, 163, 184, 0.55)';
+const MINIMAP_VIEWPORT_FILL = 'rgba(30, 41, 59, 0.22)';
+const MINIMAP_BACKGROUND = 'rgba(12, 20, 32, 0.95)';
 
 function wrapChatLines(ctx, text, maxWidth) {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -577,6 +764,13 @@ class GameApp extends HTMLElement {
     this.statPanel = this.shadowRoot.querySelector('stat-panel');
     this.chargeMeter = this.shadowRoot.querySelector('charge-meter');
     this.messageEl = this.shadowRoot.querySelector('[data-message]');
+    this.minimapCanvas = this.shadowRoot.querySelector('[data-minimap]');
+    this.minimapCtx = this.minimapCanvas ? this.minimapCanvas.getContext('2d') : null;
+    if (this.minimapCtx) {
+      this.minimapCtx.imageSmoothingEnabled = false;
+    }
+    this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
+    this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
   this.heroIdEl = this.shadowRoot.querySelector('[data-hero-id]');
   this.copyHeroButton = this.shadowRoot.querySelector('[data-copy-id]');
@@ -596,6 +790,9 @@ class GameApp extends HTMLElement {
     this.bankItemsEl = this.shadowRoot.querySelector('[data-bank-items]');
     this.safeZoneStatusEl = this.shadowRoot.querySelector('[data-safe-zone-status]');
     this.safeZoneIndicatorEl = this.shadowRoot.querySelector('[data-safe-zone-indicator]');
+    this.zoneStatusEl = this.shadowRoot.querySelector('[data-zone-status]');
+    this.zoneIndicatorEl = this.shadowRoot.querySelector('[data-zone-indicator]');
+    this.levelBannerEl = this.shadowRoot.querySelector('[data-level-banner]');
   this.bankActionsEl = this.shadowRoot.querySelector('[data-bank-actions]');
   this.bankDepositButton = this.shadowRoot.querySelector('[data-bank-deposit]');
   this.bankWithdrawButton = this.shadowRoot.querySelector('[data-bank-withdraw]');
@@ -608,6 +805,8 @@ class GameApp extends HTMLElement {
     this.world = null;
     this.players = new Map();
     this.effects = [];
+    this.portals = new Map();
+  this.levels = new Map();
   this.enemies = new Map();
   this.chats = new Map();
     this.oreNodes = new Map();
@@ -619,6 +818,14 @@ class GameApp extends HTMLElement {
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
+  this.minimapBase = null;
+  this.minimapScaleX = 1;
+  this.minimapScaleY = 1;
+    this.currentLevelId = null;
+    this.currentLevelExit = null;
+    this.currentLevelInfo = null;
+    this.currentLevelColor = null;
+  this.lastKnownPosition = null;
     this.keys = new Set();
     this.pointerAim = { x: 1, y: 0 };
     this.lastInputSent = 0;
@@ -633,6 +840,7 @@ class GameApp extends HTMLElement {
     this.chatActive = false;
 
   this.lastSafeZoneState = null;
+    this.levelBannerTimer = null;
 
     this.audio = new AudioEngine();
 
@@ -660,6 +868,8 @@ class GameApp extends HTMLElement {
     this._updateBankButtons(false);
     this._showBankFeedback('');
     this._updateInventoryPanel();
+    this._updateLevelStatus(null);
+    this._updateMinimapLabel(null);
   }
 
   connectedCallback() {
@@ -720,6 +930,10 @@ class GameApp extends HTMLElement {
     clearTimeout(this.bankFeedbackTimer);
     this.bankFeedbackTimer = null;
   }
+  if (this.levelBannerTimer) {
+    clearTimeout(this.levelBannerTimer);
+    this.levelBannerTimer = null;
+  }
     this.audio.setMusicEnabled(false);
     if (this.socket) {
       this.socket.close();
@@ -771,6 +985,9 @@ class GameApp extends HTMLElement {
       const data = JSON.parse(event.data);
       if (data.type === 'init') {
         this.world = data.world;
+        this._ingestLevels(data.levels);
+        this._prepareMinimap(true);
+        this._ingestPortals(data.portals);
         this.youId = data.id;
         if (data.profileId) {
           this.profileId = data.profileId;
@@ -791,6 +1008,7 @@ class GameApp extends HTMLElement {
         this.localStats = data.you.stats;
         this.localBonuses = data.you.bonuses;
         this.localHealth = { health: data.you.health ?? 100, maxHealth: data.you.maxHealth ?? 100 };
+        this._applyLevelInfoFromPayload(data.you);
         this.statPanel.data = {
           stats: this.localStats,
           bonuses: this.localBonuses,
@@ -799,6 +1017,9 @@ class GameApp extends HTMLElement {
         };
         this.chargeMeter.actionName = 'Idle';
       } else if (data.type === 'state') {
+        if (Array.isArray(data.levels)) {
+          this._ingestLevels(data.levels);
+        }
         const map = new Map();
         let me = null;
         for (const p of data.players) {
@@ -809,6 +1030,7 @@ class GameApp extends HTMLElement {
         }
         this.players = map;
   this.effects = data.effects || [];
+  this._ingestPortals(data.portals);
         const enemyMap = new Map();
         if (Array.isArray(data.enemies)) {
           for (const enemy of data.enemies) {
@@ -822,6 +1044,7 @@ class GameApp extends HTMLElement {
         this._ingestLootDrops(data.loot);
     this.bankInfo = this._normalizeBankInfo(data.bank);
         if (me) {
+          this._applyLevelInfoFromPayload(me);
           this.localStats = me.stats;
           this.localBonuses = me.bonuses;
           this.localHealth = { health: me.health, maxHealth: me.maxHealth };
@@ -883,6 +1106,8 @@ class GameApp extends HTMLElement {
         if (ok) {
           this._flashInventoryPanel();
         }
+      } else if (data.type === 'portal-event') {
+        this._handlePortalEvent(data);
       } else if (data.type === 'disconnect') {
         this.players.delete(data.id);
       }
@@ -944,6 +1169,12 @@ class GameApp extends HTMLElement {
     }
 
     const local = this.players.get(this.youId);
+    const currentLevelId = local?.levelId ?? this.currentLevelId;
+    const levelTheme = this._getLevelTheme(currentLevelId, this.currentLevelColor);
+
+    ctx.fillStyle = levelTheme?.background || '#0f172a';
+    ctx.fillRect(0, 0, width, height);
+
     const cameraX = local?.x ?? this.world.width / 2;
     const cameraY = local?.y ?? this.world.height / 2;
     this._updateSafeZoneIndicator(this._isPlayerInSafeZone(local));
@@ -959,12 +1190,46 @@ class GameApp extends HTMLElement {
     for (let y = startY; y < endY; y += 1) {
       for (let x = startX; x < endX; x += 1) {
         const tile = this.world.tiles[y][x];
-        ctx.fillStyle = TILE_STYLE[tile] || '#1e293b';
         const screenX = (x - cameraX) * this.tileSize + width / 2;
         const screenY = (y - cameraY) * this.tileSize + height / 2;
+        if (tile === 'lava') {
+          ctx.fillStyle = '#7c2d12';
+          ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+          const gradient = ctx.createRadialGradient(
+            screenX + this.tileSize / 2,
+            screenY + this.tileSize / 2,
+            this.tileSize * 0.15,
+            screenX + this.tileSize / 2,
+            screenY + this.tileSize / 2,
+            this.tileSize * 0.6
+          );
+          const pulse = Math.sin((time / 170) + x * 0.5 + y * 0.5) * 0.15 + 0.75;
+          gradient.addColorStop(0, `rgba(249, 115, 22, ${Math.min(0.85, 0.55 + pulse * 0.25)})`);
+          gradient.addColorStop(1, 'rgba(185, 28, 28, 0.12)');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+          continue;
+        }
+        if (tile === 'void') {
+          ctx.fillStyle = '#020617';
+          ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+          const shimmer = Math.sin((time / 320) + x * 0.4 + y * 0.4) * 0.1 + 0.12;
+          ctx.fillStyle = `rgba(129, 140, 248, ${0.05 + shimmer})`;
+          ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+          continue;
+        }
+        ctx.fillStyle = TILE_STYLE[tile] || '#1e293b';
         ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+        if (tile === 'obsidian') {
+          ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
+          ctx.globalAlpha = 0.45;
+          ctx.strokeRect(screenX, screenY, this.tileSize, this.tileSize);
+          ctx.globalAlpha = 1;
+        }
       }
     }
+
+    this._renderPortals(ctx, cameraX, cameraY, width, height, time, local, currentLevelId);
 
     ctx.save();
     ctx.translate(width / 2, height / 2);
@@ -985,39 +1250,67 @@ class GameApp extends HTMLElement {
       ctx.restore();
     }
 
-    for (const node of this.oreNodes.values()) {
-      if (!node) continue;
+    if (currentLevelId && this.currentLevelExit) {
       ctx.save();
-      const offsetX = (node.x - cameraX) * this.tileSize;
-      const offsetY = (node.y - cameraY) * this.tileSize;
-      const radiusPx = this.tileSize * 0.45;
-      const color = ORE_COLOR[node.type] || '#f8fafc';
-      const ratio = node.maxAmount ? Math.max(0, Math.min(1, node.amount / node.maxAmount)) : 0;
-      ctx.globalAlpha = 0.35 + ratio * 0.5;
-      ctx.fillStyle = color;
+      const exitOffsetX = (this.currentLevelExit.x - cameraX) * this.tileSize;
+      const exitOffsetY = (this.currentLevelExit.y - cameraY) * this.tileSize;
+      const exitColor = this.currentLevelColor || DEFAULT_PORTAL_COLOR;
+      const pulse = Math.sin(time / 200) * 0.12 + 0.68;
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = exitColor;
+      ctx.lineWidth = 2.3;
       ctx.beginPath();
-      ctx.arc(offsetX, offsetY, radiusPx, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = Math.max(0.2, 0.45 + ratio * 0.35);
-      ctx.lineWidth = 1.8;
-      ctx.strokeStyle = color;
+      ctx.arc(exitOffsetX, exitOffsetY, this.tileSize * (0.65 + pulse * 0.1), 0, Math.PI * 2);
       ctx.stroke();
-      if (node.amount <= 0 && node.respawnIn != null) {
-        const dashRatio = Math.max(0, Math.min(1, node.respawnIn / 120000));
-        const dash = Math.max(3, 8 - dashRatio * 4);
-        ctx.setLineDash([dash, dash + 4]);
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
-        ctx.globalAlpha = 0.6;
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.arc(offsetX, offsetY, radiusPx + 4, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+      ctx.globalAlpha = 0.32;
+      ctx.fillStyle = this._withAlpha(exitColor, 0.35);
+      ctx.beginPath();
+      ctx.arc(exitOffsetX, exitOffsetY, this.tileSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.88)';
+      ctx.font = '600 12px "Segoe UI"';
+      ctx.textAlign = 'center';
+      ctx.fillText('EXIT', exitOffsetX, exitOffsetY - this.tileSize * 0.85);
       ctx.restore();
+    }
+
+    if (!currentLevelId) {
+      for (const node of this.oreNodes.values()) {
+        if (!node) continue;
+        ctx.save();
+        const offsetX = (node.x - cameraX) * this.tileSize;
+        const offsetY = (node.y - cameraY) * this.tileSize;
+        const radiusPx = this.tileSize * 0.45;
+        const color = ORE_COLOR[node.type] || '#f8fafc';
+        const ratio = node.maxAmount ? Math.max(0, Math.min(1, node.amount / node.maxAmount)) : 0;
+        ctx.globalAlpha = 0.35 + ratio * 0.5;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(offsetX, offsetY, radiusPx, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = Math.max(0.2, 0.45 + ratio * 0.35);
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+        if (node.amount <= 0 && node.respawnIn != null) {
+          const dashRatio = Math.max(0, Math.min(1, node.respawnIn / 120000));
+          const dash = Math.max(3, 8 - dashRatio * 4);
+          ctx.setLineDash([dash, dash + 4]);
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
+          ctx.globalAlpha = 0.6;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(offsetX, offsetY, radiusPx + 4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
     }
 
     for (const drop of this.lootDrops.values()) {
       if (!drop) continue;
+      if ((drop.levelId || null) !== (currentLevelId || null)) continue;
       const empty = (drop.currency || 0) <= 0 && Object.keys(drop.items || {}).length === 0;
       if (empty) continue;
       ctx.save();
@@ -1044,6 +1337,7 @@ class GameApp extends HTMLElement {
 
     // Effects
     for (const effect of this.effects) {
+      if ((effect.levelId || null) !== (currentLevelId || null)) continue;
       const offsetX = (effect.x - cameraX) * this.tileSize;
       const offsetY = (effect.y - cameraY) * this.tileSize;
       const alpha = Math.max(0, Math.min(1, effect.ttl / 600));
@@ -1103,6 +1397,7 @@ class GameApp extends HTMLElement {
 
     // Enemies
     for (const enemy of this.enemies.values()) {
+      if ((enemy.levelId || null) !== (currentLevelId || null)) continue;
       const offsetX = (enemy.x - cameraX) * this.tileSize;
       const offsetY = (enemy.y - cameraY) * this.tileSize;
       const style = ENEMY_STYLE[enemy.type] || ENEMY_STYLE.default;
@@ -1125,6 +1420,7 @@ class GameApp extends HTMLElement {
 
     // Players
     for (const player of this.players.values()) {
+      if ((player.levelId || null) !== (currentLevelId || null)) continue;
       const offsetX = (player.x - cameraX) * this.tileSize;
       const offsetY = (player.y - cameraY) * this.tileSize;
       const radius = this.tileSize * 0.35;
@@ -1183,6 +1479,7 @@ class GameApp extends HTMLElement {
     for (const chat of this.chats.values()) {
       const owner = this.players.get(chat.owner);
       if (!owner) continue;
+      if ((owner.levelId || null) !== (currentLevelId || null)) continue;
       const remaining = Math.max(0, chat.ttl - (time - chat.receivedAt));
       if (remaining <= 0) {
         expiredChats.push(chat.id);
@@ -1245,6 +1542,26 @@ class GameApp extends HTMLElement {
     }
 
     ctx.restore();
+
+    this._renderMinimap(local, currentLevelId);
+
+    if (currentLevelId) {
+      const tint = levelTheme?.fill || this._withAlpha(this.currentLevelColor || DEFAULT_PORTAL_COLOR, 0.18);
+      ctx.save();
+      const grad = ctx.createRadialGradient(
+        width / 2,
+        height / 2,
+        this.tileSize * 2,
+        width / 2,
+        height / 2,
+        Math.hypot(width, height) * 0.65
+      );
+      grad.addColorStop(0, 'rgba(15, 23, 42, 0)');
+      grad.addColorStop(1, tint);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
 
     if (this.activeAction) {
       const baseCharge = this.localBonuses?.maxCharge ?? 0.5;
@@ -1413,6 +1730,9 @@ class GameApp extends HTMLElement {
     }
     if (event.code === 'KeyE') {
       event.preventDefault();
+      if (this._attemptPortalInteraction()) {
+        return;
+      }
       this._requestGatherLoot();
       return;
     }
@@ -1605,7 +1925,552 @@ class GameApp extends HTMLElement {
       items,
       owner: drop.owner ?? null,
       ttl: Math.max(0, Number(drop.ttl) || 0),
+      levelId: drop.levelId || null,
     };
+  }
+
+  _normalizePortal(portal) {
+    if (!portal || !portal.id) return null;
+    return {
+      id: portal.id,
+      levelId: portal.levelId || null,
+      name: portal.name || 'Gateway',
+      difficulty: portal.difficulty || '',
+      color: portal.color || DEFAULT_PORTAL_COLOR,
+      x: Number(portal.x) || 0,
+      y: Number(portal.y) || 0,
+    };
+  }
+
+  _ingestPortals(portals) {
+    if (!Array.isArray(portals)) {
+      if (!this.portals) {
+        this.portals = new Map();
+      }
+      return;
+    }
+    const map = new Map();
+    for (const raw of portals) {
+      const normalized = this._normalizePortal(raw);
+      if (normalized) {
+        map.set(normalized.id, normalized);
+      }
+    }
+    this.portals = map;
+  }
+
+  _normalizeLevel(level) {
+    if (!level || !level.id) return null;
+    const toPoint = (point) => {
+      if (!point) return null;
+      const x = Number(point.x);
+      const y = Number(point.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return { x, y };
+    };
+    const toBounds = (bounds) => {
+      if (!bounds) return null;
+      const minX = Number(bounds.minX);
+      const minY = Number(bounds.minY);
+      const maxX = Number(bounds.maxX);
+      const maxY = Number(bounds.maxY);
+      if ([minX, minY, maxX, maxY].some((value) => !Number.isFinite(value))) return null;
+      return { minX, minY, maxX, maxY };
+    };
+    const normalized = {
+      id: level.id,
+      name: level.name || level.id,
+      difficulty: level.difficulty || '',
+      color: level.color || DEFAULT_PORTAL_COLOR,
+      origin: toPoint(level.origin),
+      size: Math.max(0, Number(level.size) || 0),
+      bounds: toBounds(level.bounds),
+      entry: toPoint(level.entry),
+      exit: toPoint(level.exit),
+      entrance: toPoint(level.entrance),
+    };
+    if (!normalized.origin && normalized.bounds) {
+      normalized.origin = {
+        x: Math.max(0, Math.floor(normalized.bounds.minX - 0.5)),
+        y: Math.max(0, Math.floor(normalized.bounds.minY - 0.5)),
+      };
+    }
+    if (!normalized.size && normalized.bounds) {
+      normalized.size = Math.max(0, Math.ceil(normalized.bounds.maxX - normalized.bounds.minX));
+    }
+    return normalized;
+  }
+
+  _ingestLevels(levels) {
+    if (!Array.isArray(levels)) {
+      if (!this.levels) {
+        this.levels = new Map();
+      }
+      return;
+    }
+    const map = new Map();
+    for (const raw of levels) {
+      const normalized = this._normalizeLevel(raw);
+      if (normalized) {
+        map.set(normalized.id, normalized);
+      }
+    }
+    this.levels = map;
+    this.minimapBase = null;
+  }
+
+  _prepareMinimap(force = false) {
+    if (!this.minimapCanvas) return;
+    if (!this.world || !Array.isArray(this.world.tiles)) return;
+    if (this.minimapBase && !force) return;
+    const { width, height, tiles } = this.world;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || !tiles || !tiles.length) return;
+    if (!this.minimapCtx) {
+      this.minimapCtx = this.minimapCanvas.getContext('2d');
+      if (!this.minimapCtx) return;
+      this.minimapCtx.imageSmoothingEnabled = false;
+    }
+    this.minimapCanvas.width = MINIMAP_SIZE;
+    this.minimapCanvas.height = MINIMAP_SIZE;
+    this.minimapCanvas.style.width = `${MINIMAP_SIZE}px`;
+    this.minimapCanvas.style.height = `${MINIMAP_SIZE}px`;
+
+    const base = document.createElement('canvas');
+    base.width = MINIMAP_SIZE;
+    base.height = MINIMAP_SIZE;
+    const ctx = base.getContext('2d');
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = MINIMAP_BACKGROUND;
+    ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+
+    const scaleX = MINIMAP_SIZE / width;
+    const scaleY = MINIMAP_SIZE / height;
+    const tileWidth = Math.max(1, Math.ceil(scaleX));
+    const tileHeight = Math.max(1, Math.ceil(scaleY));
+    for (let y = 0; y < height; y += 1) {
+      const row = tiles[y];
+      if (!row) continue;
+      for (let x = 0; x < width; x += 1) {
+        const tile = row[x];
+        ctx.fillStyle = MINIMAP_TILE_COLORS[tile] || MINIMAP_TILE_COLORS.water;
+        ctx.fillRect(Math.floor(x * scaleX), Math.floor(y * scaleY), tileWidth, tileHeight);
+      }
+    }
+
+    this.minimapBase = base;
+    this.minimapScaleX = scaleX;
+    this.minimapScaleY = scaleY;
+  }
+
+  _renderMinimap(local, currentLevelId) {
+    if (!this.minimapCanvas || !this.world) return;
+    if (!this.minimapBase) {
+      this._prepareMinimap();
+      if (!this.minimapBase) return;
+    }
+    if (!this.minimapCtx) {
+      this.minimapCtx = this.minimapCanvas.getContext('2d');
+      if (!this.minimapCtx) return;
+      this.minimapCtx.imageSmoothingEnabled = false;
+    }
+    const ctx = this.minimapCtx;
+    const width = this.minimapCanvas.width;
+    const height = this.minimapCanvas.height;
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(this.minimapBase, 0, 0, width, height);
+
+    const scaleX = this.minimapScaleX || 1;
+    const scaleY = this.minimapScaleY || 1;
+    const levelKey = currentLevelId || null;
+
+    ctx.save();
+
+    for (const level of this.levels.values()) {
+      const origin = level.origin || { x: 0, y: 0 };
+      const size = Math.max(0, level.size || 0);
+      const rectX = origin.x * scaleX;
+      const rectY = origin.y * scaleY;
+      const rectW = Math.max(2, size * scaleX);
+      const rectH = Math.max(2, size * scaleY);
+      const color = level.color || DEFAULT_PORTAL_COLOR;
+      const active = level.id === levelKey;
+      ctx.save();
+      ctx.globalAlpha = active ? 0.3 : 0.18;
+      ctx.fillStyle = this._withAlpha(color, active ? 0.3 : 0.18);
+      ctx.fillRect(rectX, rectY, rectW, rectH);
+      ctx.globalAlpha = active ? 0.95 : 0.65;
+      ctx.lineWidth = active ? 1.6 : 1.1;
+      ctx.strokeStyle = this._withAlpha(color, active ? 0.9 : 0.6);
+      ctx.strokeRect(rectX + 0.5, rectY + 0.5, Math.max(1, rectW - 1), Math.max(1, rectH - 1));
+      ctx.restore();
+    }
+
+    if (this.bankInfo && Number.isFinite(this.bankInfo.x) && Number.isFinite(this.bankInfo.y) && Number.isFinite(this.bankInfo.radius)) {
+      const centerX = this.bankInfo.x * scaleX;
+      const centerY = this.bankInfo.y * scaleY;
+      const radiusX = Math.max(2, this.bankInfo.radius * scaleX);
+      const radiusY = Math.max(2, this.bankInfo.radius * scaleY);
+      ctx.save();
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = MINIMAP_SAFE_FILL;
+      ctx.beginPath();
+      ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.78;
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = MINIMAP_SAFE_STROKE;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (!this.levels.size || levelKey === null) {
+      for (const portal of this.portals.values()) {
+        if (!portal) continue;
+        const px = portal.x * scaleX;
+        const py = portal.y * scaleY;
+        const size = Math.max(2.5, (scaleX + scaleY) * 0.9);
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = this._withAlpha(portal.color || MINIMAP_PORTAL_COLOR, 0.95);
+        ctx.beginPath();
+        ctx.moveTo(px, py - size);
+        ctx.lineTo(px + size, py);
+        ctx.lineTo(px, py + size);
+        ctx.lineTo(px - size, py);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    if (levelKey && this.currentLevelExit && Number.isFinite(this.currentLevelExit.x) && Number.isFinite(this.currentLevelExit.y)) {
+      const ex = this.currentLevelExit.x * scaleX;
+      const ey = this.currentLevelExit.y * scaleY;
+      const radius = Math.max(3.6, (scaleX + scaleY) * 1.3);
+      const accent = this.currentLevelColor || DEFAULT_PORTAL_COLOR;
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = this._withAlpha(accent, 0.95);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(ex, ey, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = this._withAlpha(accent, 0.4);
+      ctx.beginPath();
+      ctx.arc(ex, ey, radius * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    let drewSelf = false;
+    for (const player of this.players.values()) {
+      if (!player) continue;
+      if ((player.levelId || null) !== levelKey) continue;
+      const px = player.x * scaleX;
+      const py = player.y * scaleY;
+      const isSelf = player.id === this.youId;
+      const radius = Math.max(isSelf ? 3.4 : 2.4, (scaleX + scaleY) * (isSelf ? 1.1 : 0.8));
+      ctx.save();
+      ctx.globalAlpha = isSelf ? 0.95 : 0.82;
+      ctx.fillStyle = isSelf ? MINIMAP_PLAYER_COLORS.you : MINIMAP_PLAYER_COLORS.ally;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+      if (isSelf) {
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 1.3;
+        ctx.strokeStyle = MINIMAP_PLAYER_COLORS.you;
+        ctx.stroke();
+        drewSelf = true;
+      }
+      ctx.restore();
+    }
+
+    if (!drewSelf && this.lastKnownPosition && (this.lastKnownPosition.levelId || null) === levelKey) {
+      const px = this.lastKnownPosition.x * scaleX;
+      const py = this.lastKnownPosition.y * scaleY;
+      ctx.save();
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = MINIMAP_PLAYER_COLORS.you;
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(3.2, (scaleX + scaleY)), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const anchor = local || this.lastKnownPosition;
+    if (anchor && this.canvas && this.canvas.clientWidth && this.canvas.clientHeight) {
+      const halfX = (this.canvas.clientWidth / this.tileSize) / 2;
+      const halfY = (this.canvas.clientHeight / this.tileSize) / 2;
+      if (halfX > 0 && halfY > 0) {
+        const left = Math.max(0, anchor.x - halfX);
+        const top = Math.max(0, anchor.y - halfY);
+        const right = Math.min(this.world.width, anchor.x + halfX);
+        const bottom = Math.min(this.world.height, anchor.y + halfY);
+        const rectX = left * scaleX;
+        const rectY = top * scaleY;
+        const rectW = Math.max(2, (right - left) * scaleX);
+        const rectH = Math.max(2, (bottom - top) * scaleY);
+        ctx.save();
+        ctx.fillStyle = MINIMAP_VIEWPORT_FILL;
+        ctx.fillRect(rectX, rectY, rectW, rectH);
+        ctx.strokeStyle = MINIMAP_VIEWPORT_STROKE;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(rectX, rectY, rectW, rectH);
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _updateMinimapLabel(info) {
+    if (!this.minimapLabelEl) return;
+    const header = this.minimapHeaderEl;
+    if (info) {
+      const difficulty = info.difficulty ? ` · ${info.difficulty}` : '';
+      this.minimapLabelEl.textContent = info.name ? `${info.name}${difficulty}` : info.id || 'Stronghold';
+      if (info.difficulty) {
+        this.minimapLabelEl.title = `${info.name || info.id} · ${info.difficulty}`;
+      } else {
+        this.minimapLabelEl.removeAttribute('title');
+      }
+      const accent = info.color || DEFAULT_PORTAL_COLOR;
+      header?.style.setProperty('--minimap-accent', accent);
+    } else {
+      this.minimapLabelEl.textContent = 'Overworld';
+      this.minimapLabelEl.removeAttribute('title');
+      header?.style.setProperty('--minimap-accent', '#38bdf8');
+    }
+  }
+
+  _applyLevelInfoFromPayload(you) {
+    const levelId = you?.levelId || null;
+    const x = Number(you?.x);
+    const y = Number(you?.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      this.lastKnownPosition = { x, y, levelId: levelId || null };
+    }
+    if (levelId) {
+      const exit = you?.levelExit;
+      const info = {
+        id: levelId,
+        name: you?.levelName || 'Stronghold',
+        difficulty: you?.levelDifficulty || 'Challenge',
+        color: you?.levelColor || DEFAULT_PORTAL_COLOR,
+      };
+      this.currentLevelId = levelId;
+      this.currentLevelExit = exit && typeof exit === 'object'
+        ? { x: Number(exit.x) || 0, y: Number(exit.y) || 0 }
+        : this.currentLevelExit;
+      this.currentLevelInfo = info;
+      this.currentLevelColor = info.color;
+      this._updateLevelStatus(info);
+    } else {
+      this.currentLevelId = null;
+      this.currentLevelExit = null;
+      this.currentLevelInfo = null;
+      this.currentLevelColor = null;
+      this._updateLevelStatus(null);
+    }
+  }
+
+  _updateLevelStatus(info) {
+    if (!this.zoneIndicatorEl) return;
+    this._updateMinimapLabel(info);
+    if (info) {
+      const detail = info.difficulty ? `${info.name} · ${info.difficulty}` : info.name;
+      this.zoneIndicatorEl.textContent = detail || info.id || 'Stronghold';
+      const accent = info.color || DEFAULT_PORTAL_COLOR;
+      this.zoneIndicatorEl.style.color = accent;
+      this.zoneStatusEl?.classList.add('level');
+    } else {
+      this.zoneIndicatorEl.textContent = 'Overworld';
+      this.zoneIndicatorEl.style.color = '#38bdf8';
+      this.zoneStatusEl?.classList.remove('level');
+    }
+  }
+
+  _withAlpha(color, alpha) {
+    if (!color) return `rgba(56, 189, 248, ${alpha})`;
+    if (color.startsWith('#')) {
+      const hex = color.length === 4
+        ? color
+            .slice(1)
+            .split('')
+            .map((c) => c + c)
+            .join('')
+        : color.slice(1);
+      const value = parseInt(hex, 16);
+      const r = (value >> 16) & 255;
+      const g = (value >> 8) & 255;
+      const b = value & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    if (color.startsWith('rgba(')) {
+      const body = color.slice(5, -1).split(',').map((part) => part.trim());
+      const [r = '56', g = '189', b = '248'] = body;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    if (color.startsWith('rgb(')) {
+      const body = color.slice(4, -1);
+      return `rgba(${body}, ${alpha})`;
+    }
+    return color;
+  }
+
+  _showLevelBanner(message, accent) {
+    if (!this.levelBannerEl) return;
+    const color = accent || DEFAULT_PORTAL_COLOR;
+    this.levelBannerEl.textContent = message || '';
+    this.levelBannerEl.hidden = false;
+    this.levelBannerEl.style.setProperty('--level-accent', color);
+    this.levelBannerEl.style.setProperty('--level-accent-shadow', this._withAlpha(color, 0.55));
+    if (this.levelBannerTimer) {
+      clearTimeout(this.levelBannerTimer);
+    }
+    this.levelBannerTimer = setTimeout(() => {
+      this._hideLevelBanner();
+    }, 3600);
+  }
+
+  _hideLevelBanner() {
+    if (this.levelBannerTimer) {
+      clearTimeout(this.levelBannerTimer);
+      this.levelBannerTimer = null;
+    }
+    if (this.levelBannerEl) {
+      this.levelBannerEl.hidden = true;
+      this.levelBannerEl.textContent = '';
+    }
+  }
+
+  _handlePortalEvent(data) {
+    if (!data) return;
+    const event = data.event;
+    const levelPayload = data.level || {};
+    if (event === 'enter') {
+      const info = {
+        id: levelPayload.id || this.currentLevelId || 'stronghold',
+        name: levelPayload.name || 'Stronghold',
+        difficulty: levelPayload.difficulty || 'Challenge',
+        color: levelPayload.color || DEFAULT_PORTAL_COLOR,
+      };
+      this.currentLevelId = info.id;
+      this.currentLevelExit = levelPayload.exit && typeof levelPayload.exit === 'object'
+        ? { x: Number(levelPayload.exit.x) || 0, y: Number(levelPayload.exit.y) || 0 }
+        : this.currentLevelExit;
+      this.currentLevelInfo = info;
+      this.currentLevelColor = info.color;
+      this._updateLevelStatus(info);
+      this.audio.ensureContext();
+      this.audio.onEffect({ type: 'spell' }, true);
+      this._showLevelBanner(`Entering ${info.name}${info.difficulty ? ` · ${info.difficulty}` : ''}`, info.color);
+    } else if (event === 'exit') {
+      this.currentLevelId = null;
+      this.currentLevelExit = null;
+      this.currentLevelInfo = null;
+      this.currentLevelColor = null;
+      this._updateLevelStatus(null);
+      this.audio.ensureContext();
+      this.audio.onEffect({ type: 'ranged' }, true);
+      this._showLevelBanner('Returned to Overworld', DEFAULT_PORTAL_COLOR);
+    }
+  }
+
+  _attemptPortalInteraction() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    const local = this.players.get(this.youId);
+    if (!local) return false;
+    const currentLevelId = local.levelId || this.currentLevelId;
+    if (currentLevelId) {
+      if (!this.currentLevelExit) return false;
+      const dist = Math.hypot(local.x - this.currentLevelExit.x, local.y - this.currentLevelExit.y);
+      if (dist <= PORTAL_INTERACT_RADIUS) {
+        this.socket.send(
+          JSON.stringify({
+            type: 'portal',
+            action: 'exit',
+          })
+        );
+        return true;
+      }
+      return false;
+    }
+    let closest = null;
+    let bestDist = Infinity;
+    for (const portal of this.portals.values()) {
+      const dist = Math.hypot(local.x - portal.x, local.y - portal.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        closest = portal;
+      }
+    }
+    if (closest && bestDist <= PORTAL_INTERACT_RADIUS) {
+      this.socket.send(
+        JSON.stringify({
+          type: 'portal',
+          action: 'enter',
+          portalId: closest.id,
+        })
+      );
+      return true;
+    }
+    return false;
+  }
+
+  _getLevelTheme(levelId, color) {
+    if (!levelId) return null;
+    const preset = LEVEL_VIGNETTE[levelId];
+    if (preset) return preset;
+    const accent = color || DEFAULT_PORTAL_COLOR;
+    return {
+      fill: this._withAlpha(accent, 0.18),
+      shadow: this._withAlpha(accent, 0.45),
+      background: '#0f172a',
+    };
+  }
+
+  _renderPortals(ctx, cameraX, cameraY, width, height, time, local, currentLevelId) {
+    if (currentLevelId) return;
+    if (!this.portals || !this.portals.size) return;
+    for (const portal of this.portals.values()) {
+      const offsetX = (portal.x - cameraX) * this.tileSize + width / 2;
+      const offsetY = (portal.y - cameraY) * this.tileSize + height / 2;
+      const near = local ? Math.hypot(local.x - portal.x, local.y - portal.y) <= PORTAL_INTERACT_RADIUS : false;
+      const color = portal.color || DEFAULT_PORTAL_COLOR;
+      const pulse = Math.sin((time / 240) + portal.x * 0.4 + portal.y * 0.4) * 0.2 + 0.8;
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.globalAlpha = near ? 0.95 : 0.75;
+      ctx.lineWidth = 2.6;
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.tileSize * (0.58 + pulse * 0.08), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.28 + pulse * 0.12;
+      ctx.fillStyle = this._withAlpha(color, 0.28 + pulse * 0.15);
+      ctx.beginPath();
+      ctx.arc(0, 0, this.tileSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.92)';
+      ctx.font = '600 12px "Segoe UI"';
+      ctx.textAlign = 'center';
+      ctx.fillText(portal.name, offsetX, offsetY - this.tileSize * 0.9);
+      if (portal.difficulty) {
+        ctx.font = '600 10px "Segoe UI"';
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.92)';
+        ctx.fillText(portal.difficulty, offsetX, offsetY - this.tileSize * 0.65);
+      }
+      ctx.restore();
+    }
   }
 
   _ingestLootDrops(drops) {
@@ -1835,6 +2700,7 @@ class GameApp extends HTMLElement {
   this.enemies = new Map();
     this.oreNodes = new Map();
     this.lootDrops = new Map();
+  this.portals = new Map();
     this.world = null;
     this.youId = null;
     this.localStats = null;
@@ -1843,9 +2709,15 @@ class GameApp extends HTMLElement {
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
+  this.currentLevelId = null;
+  this.currentLevelExit = null;
+  this.currentLevelInfo = null;
+  this.currentLevelColor = null;
   this.lastSafeZoneState = null;
   this._updateInventoryPanel();
   this._updateSafeZoneIndicator(false);
+  this._updateLevelStatus(null);
+  this._hideLevelBanner();
   this._showBankFeedback('');
     if (this.statPanel) {
       this.statPanel.data = {

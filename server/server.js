@@ -12,7 +12,7 @@ const WORLD_WIDTH = 160;
 const WORLD_HEIGHT = 160;
 const WORLD_SEED = 9272025;
 const TILE_TYPES = ['water', 'sand', 'grass', 'forest', 'rock'];
-const TILE_WALKABLE = new Set(['sand', 'grass', 'forest']);
+const TILE_WALKABLE = new Set(['sand', 'grass', 'forest', 'ember', 'glyph']);
 const EFFECT_LIFETIME = 600; // ms
 const ENEMY_SPAWN_INTERVAL = 8000;
 const ENEMY_MAX_COUNT = 24;
@@ -70,6 +70,10 @@ const SAFE_ZONE_RADIUS = 8.5;
 const BANK_TRADE_BATCH = 5;
 const SAFE_ZONE_HEAL_DURATION_MS = 60000;
 
+const PORTAL_DISTANCE_THRESHOLD = 1.6;
+const LEVEL_PORTAL_MIN_DISTANCE = 14;
+const LEVEL_SAFEZONE_BUFFER = SAFE_ZONE_RADIUS + 6;
+
 const clients = new Map();
 let nextPlayerId = 1;
 let effectCounter = 1;
@@ -91,7 +95,10 @@ const world = {
   chats: [],
   oreNodes: [],
   loot: [],
+  portals: [],
 };
+
+world.levels = new Map();
 
 let bankLocation = null;
 
@@ -123,6 +130,88 @@ function seededRandom(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+function hashString(value) {
+  if (!value) return 0;
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    hash = (hash << 5) - hash + code;
+    hash |= 0;
+  }
+  return hash >>> 0;
+}
+
+const LEVEL_TEMPLATES = [
+  {
+    id: 'ember-sanctum',
+    name: 'Ember Sanctum',
+    difficulty: 'Hard',
+    color: '#f97316',
+    interior: { x: 10, y: 112, size: 24 },
+    floorTile: 'ember',
+    accentTile: 'glyph',
+    wallTile: 'obsidian',
+    hazardTile: 'lava',
+    hazardDensity: 0.1,
+    entryOffset: { x: 12, y: 3 },
+    exitOffset: { x: 12, y: 20 },
+    spawnInterval: 4200,
+    maxEnemies: 8,
+    enemyVariants: [
+      {
+        type: 'emberling',
+        health: 95,
+        speed: 2.6,
+        xp: { melee: 12, ranged: 12, spell: 14 },
+        radius: 0.52,
+        attack: { type: 'ranged', damage: 22, range: 6.8, cooldown: 1500, width: 0.65, hitChance: 0.78 },
+      },
+      {
+        type: 'warden',
+        health: 180,
+        speed: 1.9,
+        xp: { melee: 18, ranged: 16, spell: 22 },
+        radius: 0.62,
+        attack: { type: 'melee', damage: 32, range: 2.4, cooldown: 1700, hitChance: 0.86 },
+      },
+    ],
+  },
+  {
+    id: 'astral-vault',
+    name: 'Astral Vault',
+    difficulty: 'Extreme',
+    color: '#38bdf8',
+    interior: { x: 118, y: 108, size: 22 },
+    floorTile: 'glyph',
+    accentTile: 'ember',
+    wallTile: 'obsidian',
+    hazardTile: 'void',
+    hazardDensity: 0.08,
+    entryOffset: { x: 10, y: 3 },
+    exitOffset: { x: 10, y: 18 },
+    spawnInterval: 4400,
+    maxEnemies: 7,
+    enemyVariants: [
+      {
+        type: 'phantom',
+        health: 120,
+        speed: 2.9,
+        xp: { melee: 14, ranged: 20, spell: 24 },
+        radius: 0.5,
+        attack: { type: 'ranged', damage: 24, range: 7.5, cooldown: 1400, width: 0.55, hitChance: 0.82 },
+      },
+      {
+        type: 'seer',
+        health: 140,
+        speed: 2.1,
+        xp: { melee: 16, ranged: 18, spell: 26 },
+        radius: 0.52,
+        attack: { type: 'spell', damage: 28, range: 6.9, cooldown: 1900, splash: 1.8, hitChance: 0.85 },
+      },
+    ],
+  },
+];
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
@@ -177,11 +266,212 @@ function generateTerrain(width, height, seed) {
   return tiles;
 }
 
+function carveLevelTemplate(template) {
+  const interior = template.interior;
+  const originX = clamp(Math.floor(interior.x), 0, WORLD_WIDTH - 2);
+  const originY = clamp(Math.floor(interior.y), 0, WORLD_HEIGHT - 2);
+  const size = Math.min(Math.max(10, Math.floor(interior.size)), Math.min(WORLD_WIDTH - originX, WORLD_HEIGHT - originY));
+  const rand = seededRandom((WORLD_SEED ^ hashString(template.id) ^ 0x9e3779b9) >>> 0);
+  const floorTile = template.floorTile || 'ember';
+  const accentTile = template.accentTile || floorTile;
+  const wallTile = template.wallTile || 'rock';
+  const hazardTile = template.hazardTile || null;
+  const hazardDensity = Math.max(0, Math.min(0.45, Number(template.hazardDensity) || 0));
+
+  const entryOffset = {
+    x: clamp(Math.floor(template.entryOffset?.x ?? size / 2), 1, size - 2),
+    y: clamp(Math.floor(template.entryOffset?.y ?? 2), 1, size - 2),
+  };
+  const exitOffset = {
+    x: clamp(Math.floor(template.exitOffset?.x ?? size / 2), 1, size - 2),
+    y: clamp(Math.floor(template.exitOffset?.y ?? size - 3), 1, size - 2),
+  };
+
+  const entry = { x: originX + entryOffset.x + 0.5, y: originY + entryOffset.y + 0.5 };
+  const exit = { x: originX + exitOffset.x + 0.5, y: originY + exitOffset.y + 0.5 };
+  const midX = originX + size / 2;
+  const midY = originY + size / 2;
+
+  for (let y = 0; y < size; y += 1) {
+    const gy = originY + y;
+    if (gy <= 0 || gy >= WORLD_HEIGHT) continue;
+    world.tiles[gy] = world.tiles[gy] || [];
+    for (let x = 0; x < size; x += 1) {
+      const gx = originX + x;
+      if (gx <= 0 || gx >= WORLD_WIDTH) continue;
+      let tile = floorTile;
+      const isBorder = x === 0 || y === 0 || x === size - 1 || y === size - 1;
+      if (isBorder) {
+        world.tiles[gy][gx] = wallTile;
+        continue;
+      }
+
+      const cellCenterX = gx + 0.5;
+      const cellCenterY = gy + 0.5;
+      const radial = Math.hypot(cellCenterX - midX, cellCenterY - midY);
+      const crossHighlight = Math.abs(gx - Math.round(midX)) <= 1 || Math.abs(gy - Math.round(midY)) <= 1;
+      if (crossHighlight && rand() < 0.85) {
+        tile = accentTile;
+      } else if (radial > size * 0.32 && rand() < 0.35) {
+        tile = accentTile;
+      }
+
+      const nearEntry = Math.abs(gx + 0.5 - entry.x) <= 1.5 && Math.abs(gy + 0.5 - entry.y) <= 1.5;
+      const nearExit = Math.abs(gx + 0.5 - exit.x) <= 1.5 && Math.abs(gy + 0.5 - exit.y) <= 1.5;
+
+      if (!nearEntry && !nearExit && hazardTile && rand() < hazardDensity) {
+        tile = hazardTile;
+      }
+
+      world.tiles[gy][gx] = tile;
+    }
+  }
+
+  // ensure entry/exit corridors are clear
+  const entryGX = Math.floor(entry.x);
+  const exitGX = Math.floor(exit.x);
+  const entryGY = Math.floor(entry.y);
+  const exitGY = Math.floor(exit.y);
+  if (world.tiles[entryGY]) {
+    world.tiles[entryGY][entryGX] = floorTile;
+  }
+  if (world.tiles[exitGY]) {
+    world.tiles[exitGY][exitGX] = floorTile;
+  }
+
+  const corridorX = entryGX;
+  const corridorStartY = Math.min(entryGY, exitGY);
+  const corridorEndY = Math.max(entryGY, exitGY);
+  for (let y = corridorStartY; y <= corridorEndY; y += 1) {
+    if (!world.tiles[y]) continue;
+    world.tiles[y][corridorX] = floorTile;
+    const leftX = corridorX - 1;
+    const rightX = corridorX + 1;
+    if (world.tiles[y][leftX] !== wallTile) {
+      world.tiles[y][leftX] = accentTile;
+    }
+    if (world.tiles[y][rightX] !== wallTile) {
+      world.tiles[y][rightX] = accentTile;
+    }
+  }
+
+  const bounds = {
+    minX: originX + 0.5,
+    minY: originY + 0.5,
+    maxX: originX + size - 0.5,
+    maxY: originY + size - 0.5,
+  };
+
+  const spawnMargin = 2;
+  const spawnBox = {
+    minX: originX + spawnMargin + 0.5,
+    minY: originY + spawnMargin + 0.5,
+    maxX: originX + size - spawnMargin - 0.5,
+    maxY: originY + size - spawnMargin - 0.5,
+  };
+
+  return {
+    id: template.id,
+    name: template.name,
+    difficulty: template.difficulty,
+    color: template.color,
+    entry,
+    exit,
+    bounds,
+    spawnBox,
+    enemyVariants: template.enemyVariants.slice(),
+    spawnInterval: template.spawnInterval ?? 4200,
+    maxEnemies: template.maxEnemies ?? 8,
+    spawnTimer: 0,
+    portalId: null,
+    entrance: null,
+    accentTile,
+    floorTile,
+    origin: { x: originX, y: originY },
+    size,
+  };
+}
+
+function levelForCoordinate(x, y) {
+  for (const level of world.levels.values()) {
+    if (x >= level.bounds.minX && x <= level.bounds.maxX && y >= level.bounds.minY && y <= level.bounds.maxY) {
+      return level;
+    }
+  }
+  return null;
+}
+
+function isInsideAnyLevel(x, y) {
+  return Boolean(levelForCoordinate(x, y));
+}
+
+function findPortalLocation(level) {
+  const rand = seededRandom((WORLD_SEED ^ hashString(level.id) ^ 0x51a8d9) >>> 0);
+  let best = null;
+  let bestScore = -Infinity;
+  for (let attempt = 0; attempt < 600; attempt += 1) {
+    const x = Math.floor(rand() * WORLD_WIDTH) + 0.5;
+    const y = Math.floor(rand() * WORLD_HEIGHT) + 0.5;
+    if (!walkable(x, y)) continue;
+    if (isInsideAnyLevel(x, y)) continue;
+    if (bankLocation && Math.hypot(bankLocation.x - x, bankLocation.y - y) < LEVEL_SAFEZONE_BUFFER) continue;
+    if (isInSafeZone(x, y)) continue;
+    let minPortalDist = Infinity;
+    for (const existing of world.portals) {
+      const dist = Math.hypot(existing.x - x, existing.y - y);
+      if (dist < minPortalDist) minPortalDist = dist;
+    }
+    if (minPortalDist < LEVEL_PORTAL_MIN_DISTANCE) continue;
+    const distToLevel = Math.hypot(level.entry.x - x, level.entry.y - y);
+    const score = distToLevel * 0.2 + (bankLocation ? Math.hypot(x - bankLocation.x, y - bankLocation.y) : 0) + rand();
+    if (score > bestScore) {
+      bestScore = score;
+      best = { x, y };
+    }
+  }
+  if (!best) {
+    const fallback = findSpawn();
+    best = { x: fallback.x, y: fallback.y };
+  }
+  return best;
+}
+
+function initializeLevels() {
+  if (typeof world.levels.clear === 'function') {
+    world.levels.clear();
+  }
+  world.portals = [];
+  for (const template of LEVEL_TEMPLATES) {
+    const level = carveLevelTemplate(template);
+    world.levels.set(level.id, level);
+  }
+  for (const level of world.levels.values()) {
+    const portal = findPortalLocation(level);
+    const gx = Math.floor(portal.x);
+    const gy = Math.floor(portal.y);
+    if (world.tiles[gy]?.[gx] != null) {
+      world.tiles[gy][gx] = level.accentTile || level.floorTile || 'glyph';
+    }
+    level.portalId = `portal-${level.id}`;
+    level.entrance = { x: portal.x, y: portal.y };
+    world.portals.push({
+      id: level.portalId,
+      levelId: level.id,
+      name: level.name,
+      difficulty: level.difficulty,
+      color: level.color,
+      x: portal.x,
+      y: portal.y,
+    });
+  }
+}
+
 function findSpawn() {
   const rand = seededRandom(Date.now() ^ WORLD_SEED);
   for (let attempts = 0; attempts < 500; attempts += 1) {
     const x = Math.floor(rand() * WORLD_WIDTH);
     const y = Math.floor(rand() * WORLD_HEIGHT);
+    if (isInsideAnyLevel(x + 0.5, y + 0.5)) continue;
     if (TILE_WALKABLE.has(world.tiles[y][x])) {
       return { x: x + 0.5, y: y + 0.5 };
     }
@@ -195,15 +485,38 @@ function findEnemySpawn() {
     const x = Math.floor(rand() * WORLD_WIDTH);
     const y = Math.floor(rand() * WORLD_HEIGHT);
     if (!TILE_WALKABLE.has(world.tiles[y][x])) continue;
-    if (!isTileFarFromPlayers(x + 0.5, y + 0.5, 6)) continue;
+    if (isInsideAnyLevel(x + 0.5, y + 0.5)) continue;
+    if (!isTileFarFromPlayers(x + 0.5, y + 0.5, 6, null)) continue;
     if (isInSafeZone(x + 0.5, y + 0.5)) continue;
     return { x: x + 0.5, y: y + 0.5 };
   }
   return findSpawn();
 }
 
-function isTileFarFromPlayers(x, y, minDistance) {
+function findLevelSpawn(level) {
+  if (!level) return findEnemySpawn();
+  const seed = Date.now() + nextEnemyId * 7 + hashString(level.id);
+  const rand = seededRandom(seed >>> 0);
+  const minTileX = clamp(Math.floor(level.spawnBox.minX - 0.5), 1, WORLD_WIDTH - 2);
+  const maxTileX = clamp(Math.floor(level.spawnBox.maxX - 0.5), minTileX, WORLD_WIDTH - 2);
+  const minTileY = clamp(Math.floor(level.spawnBox.minY - 0.5), 1, WORLD_HEIGHT - 2);
+  const maxTileY = clamp(Math.floor(level.spawnBox.maxY - 0.5), minTileY, WORLD_HEIGHT - 2);
+
+  for (let attempts = 0; attempts < 400; attempts += 1) {
+    const gx = Math.floor(rand() * (maxTileX - minTileX + 1)) + minTileX;
+    const gy = Math.floor(rand() * (maxTileY - minTileY + 1)) + minTileY;
+    const x = gx + 0.5;
+    const y = gy + 0.5;
+    if (!walkable(x, y)) continue;
+    if (!isTileFarFromPlayers(x, y, 3, level.id)) continue;
+    return { x, y };
+  }
+  return { x: level.entry.x, y: level.entry.y };
+}
+
+function isTileFarFromPlayers(x, y, minDistance, levelId = null) {
   for (const player of clients.values()) {
+    if ((player.levelId || null) !== (levelId || null)) continue;
     const dist = Math.hypot(player.x - x, player.y - y);
     if (dist < minDistance) {
       return false;
@@ -291,7 +604,14 @@ function createPlayer(connection, requestedProfileId) {
     bonuses: computeBonuses(baseStats()),
     inventory,
     bank,
+    levelId: null,
+    levelReturn: null,
   };
+  const spawnLevel = levelForCoordinate(spawn.x, spawn.y);
+  if (spawnLevel) {
+    player.levelId = spawnLevel.id;
+    player.levelReturn = spawnLevel.entrance ? { ...spawnLevel.entrance } : null;
+  }
   applyStats(player);
   player.health = clamp(savedHealth, 1, player.maxHealth);
   profileData.health = player.health;
@@ -299,9 +619,11 @@ function createPlayer(connection, requestedProfileId) {
   return player;
 }
 
-function createEnemy() {
-  const variant = ENEMY_VARIANTS[nextEnemyId % ENEMY_VARIANTS.length];
-  const spawn = findEnemySpawn();
+function createEnemy(options = {}) {
+  const level = options.level ?? null;
+  const pool = level && Array.isArray(level.enemyVariants) && level.enemyVariants.length ? level.enemyVariants : ENEMY_VARIANTS;
+  const variant = pool[nextEnemyId % pool.length];
+  const spawn = level ? findLevelSpawn(level) : findEnemySpawn();
   const enemy = {
     id: `e${nextEnemyId++}`,
     type: variant.type,
@@ -318,21 +640,54 @@ function createEnemy() {
     radius: variant.radius,
     attack: variant.attack ? { ...variant.attack } : null,
     attackCooldown: variant.attack ? variant.attack.cooldown * (0.5 + Math.random() * 0.6) : 0,
+    levelId: level ? level.id : null,
   };
   return enemy;
 }
 
 function updateEnemies(dt) {
   enemySpawnAccumulator += dt * 1000;
+  let overworldCount = 0;
+  for (const enemy of world.enemies) {
+    if (!enemy.levelId) {
+      overworldCount += 1;
+    }
+  }
+
+  const spawned = [];
   while (enemySpawnAccumulator >= ENEMY_SPAWN_INTERVAL) {
     enemySpawnAccumulator -= ENEMY_SPAWN_INTERVAL;
-    if (world.enemies.length < ENEMY_MAX_COUNT) {
-      world.enemies.push(createEnemy());
+    if (overworldCount < ENEMY_MAX_COUNT) {
+      const enemy = createEnemy();
+      spawned.push(enemy);
+      overworldCount += 1;
     }
+  }
+
+  for (const level of world.levels.values()) {
+    level.spawnTimer = (level.spawnTimer || 0) + dt * 1000;
+    let levelCount = 0;
+    for (const enemy of world.enemies) {
+      if (enemy.levelId === level.id) levelCount += 1;
+    }
+    for (const enemy of spawned) {
+      if (enemy.levelId === level.id) levelCount += 1;
+    }
+    while (levelCount < level.maxEnemies && level.spawnTimer >= level.spawnInterval) {
+      level.spawnTimer -= level.spawnInterval;
+      const enemy = createEnemy({ level });
+      spawned.push(enemy);
+      levelCount += 1;
+    }
+  }
+
+  if (spawned.length) {
+    world.enemies.push(...spawned);
   }
 
   const updated = [];
   for (const enemy of world.enemies) {
+    const level = enemy.levelId ? world.levels.get(enemy.levelId) : null;
     enemy.wanderTimer -= dt * 1000;
     if (enemy.wanderTimer <= 0) {
       enemy.wanderTarget = randomDirection();
@@ -342,6 +697,7 @@ function updateEnemies(dt) {
     let targetPlayer = null;
     let targetDistance = Infinity;
     for (const player of clients.values()) {
+      if ((player.levelId || null) !== (enemy.levelId || null)) continue;
       if (playerInSafeZone(player)) continue;
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist < targetDistance) {
@@ -363,12 +719,14 @@ function updateEnemies(dt) {
 
     const candidateX = enemy.x + dx;
     const candidateY = enemy.y + dy;
-    if (walkable(candidateX, enemy.y) && !isInSafeZone(candidateX, enemy.y)) {
+    const insideLevelX = !level || (candidateX >= level.bounds.minX && candidateX <= level.bounds.maxX);
+    if (walkable(candidateX, enemy.y) && (level ? insideLevelX : !isInSafeZone(candidateX, enemy.y))) {
       enemy.x = clamp(candidateX, 0.5, world.width - 0.5);
     } else {
       enemy.wanderTarget = randomDirection();
     }
-    if (walkable(enemy.x, candidateY) && !isInSafeZone(enemy.x, candidateY)) {
+    const insideLevelY = !level || (candidateY >= level.bounds.minY && candidateY <= level.bounds.maxY);
+    if (walkable(enemy.x, candidateY) && (level ? insideLevelY : !isInSafeZone(enemy.x, candidateY))) {
       enemy.y = clamp(candidateY, 0.5, world.height - 0.5);
     } else {
       enemy.wanderTarget = randomDirection();
@@ -414,6 +772,7 @@ function findOreSpawn() {
     const y = Math.floor(rand() * WORLD_HEIGHT) + 0.5;
     if (!walkable(x, y)) continue;
     if (isInSafeZone(x, y)) continue;
+    if (isInsideAnyLevel(x, y)) continue;
     let tooClose = false;
     for (const node of world.oreNodes) {
       if (Math.hypot(node.x - x, node.y - y) < ORE_NODE_MIN_DISTANCE) {
@@ -470,6 +829,7 @@ function updateOreNodes(now) {
 }
 
 function gatherNearestOre(player) {
+  if (player.levelId) return null;
   let target = null;
   let bestDist = 999;
   for (const node of world.oreNodes) {
@@ -494,7 +854,7 @@ function gatherNearestOre(player) {
   };
 }
 
-function createLootDrop(x, y, { currency = 0, items = {}, owner = null } = {}) {
+function createLootDrop(x, y, { currency = 0, items = {}, owner = null } = {}, levelId = null) {
   const normalizedItems = {};
   for (const [key, value] of Object.entries(items || {})) {
     if (value > 0) normalizedItems[key] = Math.floor(value);
@@ -509,6 +869,7 @@ function createLootDrop(x, y, { currency = 0, items = {}, owner = null } = {}) {
     items: normalizedItems,
     owner,
     expiresAt: Date.now() + LOOT_LIFETIME_MS,
+    levelId: levelId || null,
   };
   world.loot.push(drop);
   const now = Date.now();
@@ -522,6 +883,7 @@ function createLootDrop(x, y, { currency = 0, items = {}, owner = null } = {}) {
       items: normalizeItemMap(drop.items),
       owner: drop.owner,
       ttl: Math.max(0, drop.expiresAt - now),
+      levelId: drop.levelId,
     },
     removed: false,
   });
@@ -544,6 +906,7 @@ function lootNearestDrop(player) {
   let best = null;
   let bestDist = 999;
   for (const drop of world.loot) {
+    if ((drop.levelId || null) !== (player.levelId || null)) continue;
     const dist = Math.hypot(player.x - drop.x, player.y - drop.y);
     if (dist <= 1.6 && dist < bestDist) {
       best = drop;
@@ -581,7 +944,7 @@ function dropPlayerInventory(player) {
     items: { ...player.inventory.items },
   };
   if (payload.currency <= 0 && Object.keys(payload.items).length === 0) return;
-  createLootDrop(player.x, player.y, payload);
+  createLootDrop(player.x, player.y, payload, player.levelId || null);
   player.inventory.currency = 0;
   player.inventory.items = {};
 }
@@ -654,6 +1017,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     width: effectWidth,
     shape,
     expiresAt: now + EFFECT_LIFETIME * 0.6,
+    levelId: enemy.levelId || null,
   };
   world.effects.push(effect);
 
@@ -661,6 +1025,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
 
   if (attack.type === 'melee') {
     for (const player of clients.values()) {
+      if ((player.levelId || null) !== (enemy.levelId || null)) continue;
       if (playerInSafeZone(player)) continue;
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist <= attack.range + PLAYER_HIT_RADIUS + enemy.radius && Math.random() <= hitChance) {
@@ -672,6 +1037,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     let victim = null;
     let bestTravel = Infinity;
     for (const player of clients.values()) {
+      if ((player.levelId || null) !== (enemy.levelId || null)) continue;
       if (playerInSafeZone(player)) continue;
       const travel = projectileTravel(enemy, aim, player, PLAYER_HIT_RADIUS, attack.range, halfWidth);
       if (travel !== null && travel < bestTravel) {
@@ -685,6 +1051,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
   } else if (attack.type === 'spell') {
     const splash = attack.splash ?? 1.2;
     for (const player of clients.values()) {
+      if ((player.levelId || null) !== (enemy.levelId || null)) continue;
       if (playerInSafeZone(player)) continue;
       const dist = Math.hypot(player.x - effectX, player.y - effectY);
       if (dist <= splash + PLAYER_HIT_RADIUS && Math.random() <= hitChance) {
@@ -769,7 +1136,7 @@ function isInSafeZone(x, y) {
 }
 
 function playerInSafeZone(player) {
-  if (!player) return false;
+  if (!player || player.levelId) return false;
   return isInSafeZone(player.x, player.y);
 }
 
@@ -942,6 +1309,72 @@ function handleBankOperation(player, action) {
   };
 }
 
+function handlePortalEnter(player, portalId) {
+  if (!player || !portalId) return;
+  const portal = world.portals.find((p) => p.id === portalId);
+  if (!portal) return;
+  const level = world.levels.get(portal.levelId);
+  if (!level) return;
+  if (player.levelId && player.levelId !== level.id) return;
+  const distance = Math.hypot(player.x - portal.x, player.y - portal.y);
+  if (distance > PORTAL_DISTANCE_THRESHOLD) return;
+  if (player.levelId === level.id) return;
+  player.levelReturn = { x: player.x, y: player.y };
+  player.levelId = level.id;
+  player.x = level.entry.x;
+  player.y = level.entry.y;
+  player.move.x = 0;
+  player.move.y = 0;
+  player.action = null;
+  sendTo(player, {
+    type: 'portal-event',
+    event: 'enter',
+    level: {
+      id: level.id,
+      name: level.name,
+      difficulty: level.difficulty,
+      color: level.color,
+      exit: level.exit,
+    },
+  });
+  syncProfile(player);
+}
+
+function handlePortalExit(player) {
+  if (!player?.levelId) return;
+  const level = world.levels.get(player.levelId);
+  if (!level) {
+    player.levelId = null;
+    player.levelReturn = null;
+    return;
+  }
+  const distance = Math.hypot(player.x - level.exit.x, player.y - level.exit.y);
+  if (distance > PORTAL_DISTANCE_THRESHOLD) return;
+  let destination = player.levelReturn || level.entrance || findSpawn();
+  if (!walkable(destination.x, destination.y)) {
+    destination = level.entrance || findSpawn();
+  }
+  if (!walkable(destination.x, destination.y)) {
+    destination = findSpawn();
+  }
+  player.levelId = null;
+  player.levelReturn = null;
+  player.x = clamp(destination.x, 0.5, world.width - 0.5);
+  player.y = clamp(destination.y + 1.2, 0.5, world.height - 0.5);
+  player.move.x = 0;
+  player.move.y = 0;
+  player.action = null;
+  sendTo(player, {
+    type: 'portal-event',
+    event: 'exit',
+    level: {
+      id: level.id,
+      name: level.name,
+    },
+  });
+  syncProfile(player);
+}
+
 function sendInventoryUpdate(player) {
   sendTo(player, {
     type: 'inventory',
@@ -986,6 +1419,8 @@ if (!bankLocation) {
   bankLocation = resolveBankPosition();
 }
 
+initializeLevels();
+
 initializeOreNodes();
 
 function resolveMovement(player, dt) {
@@ -1014,6 +1449,8 @@ function damagePlayer(target, amount) {
   if (target.health <= 0) {
     dropPlayerInventory(target);
     sendInventoryUpdate(target);
+    target.levelId = null;
+    target.levelReturn = null;
     const spawn = findSpawn();
     target.x = spawn.x;
     target.y = spawn.y;
@@ -1076,6 +1513,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     width: actionType === 'ranged' ? (PROJECTILE_HALF_WIDTH + potency * 0.2) * 2 : null,
     shape: actionType === 'melee' ? 'cone' : actionType === 'ranged' ? 'beam' : 'burst',
     expiresAt: Date.now() + EFFECT_LIFETIME,
+    levelId: player.levelId || null,
   };
   world.effects.push(effect);
 
@@ -1088,6 +1526,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     let candidateDistance = Infinity;
     for (const target of clients.values()) {
       if (target.id === player.id) continue;
+      if ((target.levelId || null) !== (player.levelId || null)) continue;
       if (playerInSafeZone(target)) continue;
       const travel = projectileTravel(player, aim, target, PLAYER_HIT_RADIUS, range, projectileHalfWidth);
       if (travel !== null && travel < candidateDistance) {
@@ -1103,6 +1542,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   } else {
     for (const target of clients.values()) {
       if (target.id === player.id) continue;
+      if ((target.levelId || null) !== (player.levelId || null)) continue;
       if (playerInSafeZone(target)) continue;
       let within = false;
       if (actionType === 'melee') {
@@ -1120,10 +1560,12 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
 
   if (world.enemies.length) {
     let xpApplied = false;
+    const playerLevelId = player.levelId || null;
     if (actionType === 'ranged') {
       let candidateEnemy = null;
       let bestDistance = Infinity;
       for (const enemy of world.enemies) {
+        if ((enemy.levelId || null) !== playerLevelId) continue;
         const travel = projectileTravel(player, aim, enemy, enemy.radius ?? 0, range, projectileHalfWidth);
         if (travel !== null && travel < bestDistance) {
           bestDistance = travel;
@@ -1133,6 +1575,10 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
 
       const survivors = [];
       for (const enemy of world.enemies) {
+        if ((enemy.levelId || null) !== playerLevelId) {
+          survivors.push(enemy);
+          continue;
+        }
         if (enemy === candidateEnemy && Math.random() <= hitChance) {
           if (!xpApplied && grantSkillXP(player, actionType, xpGain)) {
             xpApplied = true;
@@ -1149,6 +1595,10 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     } else {
       const survivors = [];
       for (const enemy of world.enemies) {
+        if ((enemy.levelId || null) !== playerLevelId) {
+          survivors.push(enemy);
+          continue;
+        }
         let within = false;
         if (actionType === 'melee') {
           within = isWithinCone(player, aim, enemy, range + enemy.radius, coneCosHalfAngle, enemy.radius);
@@ -1253,6 +1703,7 @@ function gameTick(now, dt) {
       chargeRatio: player.action
         ? clamp((now - player.action.startedAt) / ((player.bonuses.maxCharge + CHARGE_TIME_BONUS) * 1000), 0, 1)
         : 0,
+      levelId: player.levelId || null,
     })),
     effects: world.effects.map((effect) => ({
       id: effect.id,
@@ -1267,6 +1718,7 @@ function gameTick(now, dt) {
       aim: effect.aim ?? { x: 1, y: 0 },
       owner: effect.owner,
       ttl: Math.max(0, effect.expiresAt - now),
+      levelId: effect.levelId || null,
     })),
     enemies: world.enemies.map((enemy) => ({
       id: enemy.id,
@@ -1276,12 +1728,14 @@ function gameTick(now, dt) {
       health: enemy.health,
       maxHealth: enemy.maxHealth,
       radius: enemy.radius,
+      levelId: enemy.levelId || null,
     })),
     chats: world.chats.map((chat) => ({
       id: chat.id,
       owner: chat.owner,
       text: chat.text,
       ttl: Math.max(0, chat.expiresAt - now),
+      levelId: chat.levelId || null,
     })),
     oreNodes: world.oreNodes.map((node) => ({
       id: node.id,
@@ -1301,6 +1755,7 @@ function gameTick(now, dt) {
       items: normalizeItemMap(drop.items),
       owner: drop.owner,
       ttl: Math.max(0, drop.expiresAt - now),
+      levelId: drop.levelId || null,
     })),
     bank: bankLocation
       ? {
@@ -1309,6 +1764,15 @@ function gameTick(now, dt) {
           radius: SAFE_ZONE_RADIUS,
         }
       : null,
+    portals: world.portals.map((portal) => ({
+      id: portal.id,
+      levelId: portal.levelId,
+      name: portal.name,
+      difficulty: portal.difficulty,
+      color: portal.color,
+      x: portal.x,
+      y: portal.y,
+    })),
   };
 
   broadcast(snapshot);
@@ -1357,6 +1821,7 @@ function handleMessage(player, message) {
       owner: player.id,
       text: message,
       expiresAt: Date.now() + CHAT_LIFETIME_MS,
+      levelId: player.levelId || null,
     };
     world.chats.push(chat);
     if (world.chats.length > 40) {
@@ -1369,6 +1834,7 @@ function handleMessage(player, message) {
         owner: chat.owner,
         text: chat.text,
         ttl: CHAT_LIFETIME_MS,
+        levelId: chat.levelId || null,
       },
     });
   } else if (payload.type === 'gather') {
@@ -1417,6 +1883,7 @@ function handleMessage(player, message) {
         currency: result.drop.currency,
         items: normalizeItemMap(result.drop.items),
         ttl: Math.max(0, result.drop.expiresAt - now),
+        levelId: result.drop.levelId || null,
       },
       collectedBy: player.id,
       pickup: result.pickup,
@@ -1431,6 +1898,14 @@ function handleMessage(player, message) {
     const result = handleBankOperation(player, action);
     if (result) {
       sendTo(player, { type: 'bank-result', ...result });
+    }
+  } else if (payload.type === 'portal') {
+    const action = typeof payload.action === 'string' ? payload.action.toLowerCase() : '';
+    if (action === 'enter') {
+      const portalId = typeof payload.portalId === 'string' ? payload.portalId : null;
+      handlePortalEnter(player, portalId);
+    } else if (action === 'exit') {
+      handlePortalExit(player);
     }
   }
 }
@@ -1729,6 +2204,38 @@ function serializeProfiles() {
   return JSON.stringify(output, null, 2);
 }
 
+function serializeLevel(level) {
+  if (!level || !level.id) return null;
+  const toPoint = (point) => {
+    if (!point) return null;
+    const x = Number(point.x);
+    const y = Number(point.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+  };
+  const toBounds = (bounds) => {
+    if (!bounds) return null;
+    const minX = Number(bounds.minX);
+    const minY = Number(bounds.minY);
+    const maxX = Number(bounds.maxX);
+    const maxY = Number(bounds.maxY);
+    if ([minX, minY, maxX, maxY].some((value) => !Number.isFinite(value))) return null;
+    return { minX, minY, maxX, maxY };
+  };
+  return {
+    id: level.id,
+    name: level.name,
+    difficulty: level.difficulty,
+    color: level.color,
+    origin: toPoint(level.origin),
+    size: Math.max(0, Number(level.size) || 0),
+    bounds: toBounds(level.bounds),
+    entry: toPoint(level.entry),
+    exit: toPoint(level.exit),
+    entrance: toPoint(level.entrance),
+  };
+}
+
 function queueSaveProfiles() {
   if (profileSaveTimer) return;
   profileSaveTimer = setTimeout(() => {
@@ -1811,6 +2318,8 @@ function startServer() {
       broadcast({ type: 'disconnect', id: player.id });
     };
 
+    const youLevel = player.levelId ? world.levels.get(player.levelId) : null;
+
     sendTo(player, {
       type: 'init',
       id: player.id,
@@ -1853,6 +2362,7 @@ function startServer() {
         items: normalizeItemMap(drop.items),
         owner: drop.owner,
         ttl: Math.max(0, drop.expiresAt - Date.now()),
+        levelId: drop.levelId || null,
       })),
       bank: bankLocation
         ? {
@@ -1861,6 +2371,18 @@ function startServer() {
             radius: SAFE_ZONE_RADIUS,
           }
         : null,
+      portals: world.portals.map((portal) => ({
+        id: portal.id,
+        levelId: portal.levelId,
+        name: portal.name,
+        difficulty: portal.difficulty,
+        color: portal.color,
+        x: portal.x,
+        y: portal.y,
+      })),
+      levels: Array.from(world.levels.values())
+        .map((level) => serializeLevel(level))
+        .filter(Boolean),
       you: {
         x: player.x,
         y: player.y,
@@ -1868,6 +2390,11 @@ function startServer() {
         bonuses: player.bonuses,
         health: player.health,
         maxHealth: player.maxHealth,
+        levelId: player.levelId || null,
+        levelExit: youLevel?.exit ?? null,
+        levelName: youLevel?.name ?? null,
+        levelDifficulty: youLevel?.difficulty ?? null,
+        levelColor: youLevel?.color ?? null,
       },
     });
     sendInventoryUpdate(player);
