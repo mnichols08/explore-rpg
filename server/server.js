@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const url = require('url');
 const fs = require('fs');
@@ -95,6 +96,11 @@ let initializationPromise = null;
 let initialized = false;
 const pendingMongoWrites = new Set();
 let shuttingDown = false;
+
+function logMongoStatus(message) {
+  if (!message) return;
+  console.log(`[mongo] ${message}`);
+}
 
 const PORTAL_DISTANCE_THRESHOLD = 1.6;
 const LEVEL_PORTAL_MIN_DISTANCE = 14;
@@ -2741,6 +2747,25 @@ function serveStatic(req, res) {
   const parsedUrl = url.parse(req.url);
   const publicRoot = path.resolve(path.join(__dirname, '..', 'public'));
   const pathname = parsedUrl.pathname || '/';
+  if (pathname === '/status/persistence') {
+    const response = {
+      storage: usingMongo ? 'mongo' : 'file',
+      mongo: {
+        configured: Boolean(MONGO_URL),
+        connected: usingMongo,
+        database: usingMongo ? MONGO_DB_NAME : null,
+        collection: usingMongo ? MONGO_COLLECTION : null,
+        pendingWrites: usingMongo ? pendingMongoWrites.size : 0,
+      },
+      file: {
+        path: PROFILE_PATH,
+        queuedSave: Boolean(profileSaveTimer),
+      },
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(response));
+    return;
+  }
   const relative = pathname === '/' ? 'index.html' : pathname.replace(/^[/\\]+/, '');
   const sanitized = path
     .normalize(relative)
@@ -2907,6 +2932,7 @@ async function loadProfiles() {
       const db = mongoClient.db(MONGO_DB_NAME);
       profilesCollection = db.collection(MONGO_COLLECTION);
       usingMongo = true;
+      logMongoStatus(`Connected. Database="${MONGO_DB_NAME}" Collection="${MONGO_COLLECTION}"`);
       const docs = await profilesCollection.find().toArray();
       const entries = docs
         .map((doc) => [normalizeProfileId(doc._id || doc.id || ''), doc])
@@ -2917,6 +2943,9 @@ async function loadProfiles() {
       usingMongo = false;
       closeMongoConnection();
     }
+  }
+  if (!MONGO_URL) {
+    logMongoStatus('MONGO_URL not configured; using local file persistence.');
   }
   return loadProfilesFromFile();
 }

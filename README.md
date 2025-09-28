@@ -56,7 +56,7 @@ node .\server\server.js --self-test
   npm start
   ```
 
-  The server will create/use the `explore_rpg` database and a `profiles` collection by default. If the connection fails, it automatically falls back to the JSON file without crashing.
+  The server will create/use the `explore_rpg` database and a `profiles` collection by default. If the connection fails, it automatically falls back to the JSON file without crashing. While the server is running you can confirm the active mode at [http://localhost:8180/status/persistence](http://localhost:8180/status/persistence), which reports whether MongoDB is connected or the JSON fallback is active.
 
 ## Controls
 
