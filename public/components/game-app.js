@@ -68,6 +68,26 @@ template.innerHTML = `
       min-width: 0;
     }
 
+    .minimap-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .minimap-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .minimap-header-actions span {
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.78);
+    }
+
     .minimap-header button {
       all: unset;
       cursor: pointer;
@@ -89,6 +109,91 @@ template.innerHTML = `
 
     .minimap-header button:active {
       transform: translateY(1px);
+    }
+
+    .map-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.2rem;
+      padding: 2.5rem clamp(1.5rem, 4vw, 3rem);
+      background: rgba(15, 23, 42, 0.86);
+      backdrop-filter: blur(8px);
+      z-index: 40;
+      pointer-events: auto;
+    }
+
+    .map-overlay[hidden] {
+      display: none;
+    }
+
+    .map-overlay header {
+      text-align: center;
+      display: grid;
+      gap: 0.35rem;
+      color: rgba(226, 232, 240, 0.96);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .map-overlay header h3 {
+      margin: 0;
+      font-size: clamp(1.1rem, 2vw, 1.6rem);
+      letter-spacing: 0.08em;
+    }
+
+    .map-overlay header p {
+      margin: 0;
+      font-size: clamp(0.7rem, 1vw, 0.85rem);
+      color: rgba(148, 163, 184, 0.9);
+      letter-spacing: 0.05em;
+    }
+
+    .map-overlay canvas {
+      width: min(78vw, 78vh);
+      max-width: 780px;
+      max-height: 780px;
+      border-radius: 1.1rem;
+      border: 1px solid rgba(148, 163, 184, 0.38);
+      box-shadow: 0 1.8rem 3.4rem rgba(8, 15, 31, 0.55);
+      background: rgba(10, 17, 31, 0.92);
+    }
+
+    .map-overlay button {
+      all: unset;
+      cursor: pointer;
+      padding: 0.55rem 1.2rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(30, 41, 59, 0.76);
+      color: rgba(226, 232, 240, 0.92);
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: background 120ms ease, border 120ms ease, transform 120ms ease;
+    }
+
+    .map-overlay button:hover {
+      background: rgba(51, 65, 85, 0.85);
+      border-color: rgba(148, 163, 184, 0.65);
+    }
+
+    .map-overlay button:active {
+      transform: translateY(1px);
+    }
+
+    .map-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    :host([data-map-open="true"]) .minimap-card {
+      visibility: hidden;
+      pointer-events: none;
     }
 
     .minimap-body {
@@ -1405,6 +1510,7 @@ template.innerHTML = `
           <span>Minimap</span>
           <div class="minimap-header-actions">
             <span data-minimap-label>Overworld</span>
+            <button type="button" data-minimap-expand aria-haspopup="dialog" aria-pressed="false">Expand</button>
             <button type="button" data-minimap-float aria-pressed="false">Float</button>
             <button type="button" data-minimap-toggle aria-pressed="false">Hide</button>
           </div>
@@ -1432,7 +1538,7 @@ template.innerHTML = `
           <li><span>Spell</span><span>Space or both buttons</span></li>
           <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
         </ul>
-        <div class="help-footnote">Enter chats nearby • M toggles music • Shift+N starts a fresh hero.</div>
+        <div class="help-footnote">Enter chats nearby • M opens map • Alt+M toggles music • Shift+M toggles controls • Shift+N starts a fresh hero.</div>
       </div>
       <div class="mobile-help">
         Use the left pad to move, Slash/Volley/Spell to act, Interact for loot and portals, Chat to speak, and tap HUD anytime to reveal the panels.
@@ -1640,6 +1746,24 @@ template.innerHTML = `
     </div>
   </div>
   <div class="toast-stack" data-toast-stack></div>
+  <div
+    class="map-overlay"
+    hidden
+    data-map-overlay
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="map-overlay-title"
+    aria-hidden="true"
+  >
+    <header>
+      <h3 id="map-overlay-title">World Map</h3>
+      <p>Press M or Escape to close • Alt+M toggles music • Drag the minimap anytime to reposition</p>
+    </header>
+    <canvas data-map-canvas></canvas>
+    <div class="map-controls">
+      <button type="button" data-map-close>Close Map</button>
+    </div>
+  </div>
 `;
 
 const TILE_STYLE = {
@@ -1944,9 +2068,17 @@ class GameApp extends HTMLElement {
     this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
     this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
     this.minimapToggleButton = this.shadowRoot.querySelector('[data-minimap-toggle]');
+    this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
   this.minimapFloatButton = this.shadowRoot.querySelector('[data-minimap-float]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
   this.toastStackEl = this.shadowRoot.querySelector('[data-toast-stack]');
+    this.mapOverlayEl = this.shadowRoot.querySelector('[data-map-overlay]');
+    this.mapOverlayCanvas = this.shadowRoot.querySelector('[data-map-canvas]');
+    this.mapOverlayCtx = this.mapOverlayCanvas ? this.mapOverlayCanvas.getContext('2d') : null;
+    if (this.mapOverlayCtx) {
+      this.mapOverlayCtx.imageSmoothingEnabled = false;
+    }
+    this.mapOverlayCloseButton = this.shadowRoot.querySelector('[data-map-close]');
   this.minimapDockParent = this.minimapCardEl?.parentElement ?? null;
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
     this.visualToggleButton = this.shadowRoot.querySelector('[data-visual-toggle]');
@@ -2093,6 +2225,9 @@ class GameApp extends HTMLElement {
   this.minimapFloatPosition = null;
   this.minimapDragPointerId = null;
   this.minimapDragOffset = { x: 0, y: 0 };
+  this.mapOverlayVisible = false;
+  this.mapOverlayLastFocus = null;
+  this.mapOverlayRenderSize = 0;
     this.currentLevelId = null;
     this.currentLevelExit = null;
     this.currentLevelInfo = null;
@@ -2165,6 +2300,9 @@ class GameApp extends HTMLElement {
     this._handlePointerCancel = this._handlePointerCancel.bind(this);
     this._handleMusicToggle = this._handleMusicToggle.bind(this);
   this._toggleMinimapVisibility = this._toggleMinimapVisibility.bind(this);
+  this._toggleMapOverlay = this._toggleMapOverlay.bind(this);
+  this._closeMapOverlay = this._closeMapOverlay.bind(this);
+  this._handleMapOverlayBackdropClick = this._handleMapOverlayBackdropClick.bind(this);
     this._handleMinimapFloatToggle = this._handleMinimapFloatToggle.bind(this);
     this._handleMinimapDragStart = this._handleMinimapDragStart.bind(this);
     this._handleMinimapDragMove = this._handleMinimapDragMove.bind(this);
@@ -2193,6 +2331,7 @@ class GameApp extends HTMLElement {
   this._handleSettingsResetTutorial = this._handleSettingsResetTutorial.bind(this);
   this._handleControlHintsToggle = this._handleControlHintsToggle.bind(this);
     this._resizeCanvas = this._resizeCanvas.bind(this);
+  this._syncMapOverlaySize = this._syncMapOverlaySize.bind(this);
     this._handleBankDeposit = this._handleBankDeposit.bind(this);
     this._handleBankWithdraw = this._handleBankWithdraw.bind(this);
     this._handleBankSell = this._handleBankSell.bind(this);
@@ -2235,8 +2374,11 @@ class GameApp extends HTMLElement {
     }
     this.visualToggleButton?.addEventListener('click', this._handleVisualToggle);
     this.minimapToggleButton?.addEventListener('click', this._toggleMinimapVisibility);
+  this.minimapExpandButton?.addEventListener('click', this._toggleMapOverlay);
     this.minimapFloatButton?.addEventListener('click', this._handleMinimapFloatToggle);
     this.minimapHeaderEl?.addEventListener('pointerdown', this._handleMinimapDragStart);
+  this.mapOverlayCloseButton?.addEventListener('click', this._closeMapOverlay);
+  this.mapOverlayEl?.addEventListener('click', this._handleMapOverlayBackdropClick);
     this.copyHeroButton?.addEventListener('click', this._handleCopyHeroId);
     this.newHeroButton?.addEventListener('click', this._handleNewHeroRequest);
     this.useHeroButton?.addEventListener('click', this._handleUseHeroRequest);
@@ -2276,6 +2418,7 @@ class GameApp extends HTMLElement {
       this._enableTouchControls();
     }
     this._resizeCanvas();
+    this._syncMapOverlaySize();
     this._initializeIdentity();
     requestAnimationFrame(this._loop);
   }
@@ -2301,8 +2444,11 @@ class GameApp extends HTMLElement {
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
   this.visualToggleButton?.removeEventListener('click', this._handleVisualToggle);
   this.minimapToggleButton?.removeEventListener('click', this._toggleMinimapVisibility);
+  this.minimapExpandButton?.removeEventListener('click', this._toggleMapOverlay);
   this.minimapFloatButton?.removeEventListener('click', this._handleMinimapFloatToggle);
   this.minimapHeaderEl?.removeEventListener('pointerdown', this._handleMinimapDragStart);
+  this.mapOverlayCloseButton?.removeEventListener('click', this._closeMapOverlay);
+  this.mapOverlayEl?.removeEventListener('click', this._handleMapOverlayBackdropClick);
   this.copyHeroButton?.removeEventListener('click', this._handleCopyHeroId);
   this.newHeroButton?.removeEventListener('click', this._handleNewHeroRequest);
   this.useHeroButton?.removeEventListener('click', this._handleUseHeroRequest);
@@ -3165,6 +3311,7 @@ class GameApp extends HTMLElement {
   this._renderPortalCompass(ctx, anchor, nearestPortal, cameraX, cameraY, width, height, currentLevelId, time);
 
   this._renderMinimap(local, currentLevelId, nearestPortal);
+  this._renderMapOverlay(local, currentLevelId, nearestPortal);
 
     if (currentLevelId) {
       const tint = levelTheme?.fill || this._withAlpha(this.currentLevelColor || DEFAULT_PORTAL_COLOR, 0.18);
@@ -3337,6 +3484,14 @@ class GameApp extends HTMLElement {
     if (this._shouldIgnoreGlobalKey(event)) {
       return;
     }
+    const noModifiers = !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+    if (this.mapOverlayVisible) {
+      if ((event.code === 'KeyM' && noModifiers) || event.code === 'Escape') {
+        event.preventDefault();
+        this._setMapOverlayVisible(false);
+      }
+      return;
+    }
     if (this.chatActive) {
       if (event.code === 'Escape') {
         event.preventDefault();
@@ -3354,12 +3509,12 @@ class GameApp extends HTMLElement {
       this._startNewHero(false);
       return;
     }
-    if (event.code === 'KeyM' && event.shiftKey) {
+    if (event.code === 'KeyM' && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       this._handleControlHintsToggle();
       return;
     }
-    if (event.code === 'KeyM') {
+    if (event.code === 'KeyM' && event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       this.audio.ensureContext();
       const next = !this.audio.musicEnabled;
@@ -3367,6 +3522,11 @@ class GameApp extends HTMLElement {
       if (this.audioToggle) {
         this.audioToggle.active = next;
       }
+      return;
+    }
+    if (event.code === 'KeyM' && noModifiers) {
+      event.preventDefault();
+      this._setMapOverlayVisible(!this.mapOverlayVisible);
       return;
     }
     this.audio.ensureContext();
@@ -3989,6 +4149,109 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _toggleMapOverlay(event) {
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+    this._setMapOverlayVisible(!this.mapOverlayVisible);
+  }
+
+  _closeMapOverlay(event) {
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+    this._setMapOverlayVisible(false);
+  }
+
+  _handleMapOverlayBackdropClick(event) {
+    if (!this.mapOverlayEl || !event) return;
+    if (event.target === this.mapOverlayEl) {
+      this._closeMapOverlay(event);
+    }
+  }
+
+  _setMapOverlayVisible(visible) {
+    const next = Boolean(visible);
+    if (!this.mapOverlayEl) {
+      this.mapOverlayVisible = false;
+      return;
+    }
+    if (this.mapOverlayVisible === next) {
+      if (next) {
+        this._syncMapOverlaySize();
+      }
+      return;
+    }
+    if (next) {
+      const globalActive = typeof document !== 'undefined' ? document.activeElement : null;
+      this.mapOverlayLastFocus = this.shadowRoot.activeElement || globalActive || null;
+    }
+    this.mapOverlayVisible = next;
+    this.mapOverlayEl.hidden = !next;
+    this.mapOverlayEl.setAttribute('aria-hidden', next ? 'false' : 'true');
+    if (next) {
+      this.setAttribute('data-map-open', 'true');
+      this._syncMapOverlaySize(true);
+    } else {
+      this.removeAttribute('data-map-open');
+    }
+    if (this.minimapExpandButton) {
+      this.minimapExpandButton.textContent = next ? 'Collapse' : 'Expand';
+      this.minimapExpandButton.setAttribute('aria-pressed', next ? 'true' : 'false');
+      this.minimapExpandButton.setAttribute(
+        'aria-label',
+        next ? 'Close expanded map' : 'Open expanded map'
+      );
+    }
+    if (next) {
+      this.mapOverlayCloseButton?.focus({ preventScroll: true });
+    } else {
+      const focusTarget = this.mapOverlayLastFocus || this.minimapExpandButton;
+      if (focusTarget && typeof focusTarget.focus === 'function') {
+        setTimeout(() => {
+          try {
+            focusTarget.focus({ preventScroll: true });
+          } catch (err) {
+            // ignore focus errors
+          }
+        }, 0);
+      }
+      this.mapOverlayLastFocus = null;
+    }
+  }
+
+  _syncMapOverlaySize(force = false) {
+    if (!this.mapOverlayCanvas || !this.mapOverlayCtx) return;
+    let reference = Math.min(this.viewportWidth || 0, this.viewportHeight || 0);
+    if (!reference || !Number.isFinite(reference)) {
+      if (typeof window !== 'undefined') {
+        const vw = window.innerWidth || 0;
+        const vh = window.innerHeight || 0;
+        reference = Math.min(vw, vh);
+      }
+    }
+    if (!reference || !Number.isFinite(reference)) {
+      reference = 640;
+    }
+    const cssSize = Math.max(320, Math.min(820, Math.round(reference * 0.78)));
+    const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1;
+    const pixelSize = Math.max(320, Math.floor(cssSize * dpr));
+    if (force || this.mapOverlayCanvas.width !== pixelSize) {
+      this.mapOverlayCanvas.width = pixelSize;
+      this.mapOverlayCanvas.height = pixelSize;
+      this.mapOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+      this.mapOverlayCtx.scale(dpr, dpr);
+      this.mapOverlayCtx.imageSmoothingEnabled = false;
+    }
+    if (this.mapOverlayCanvas.style) {
+      this.mapOverlayCanvas.style.width = `${cssSize}px`;
+      this.mapOverlayCanvas.style.height = `${cssSize}px`;
+    }
+    this.mapOverlayRenderSize = cssSize;
+  }
+
   _loadMinimapPreference() {
     let stored = null;
     try {
@@ -4508,14 +4771,46 @@ class GameApp extends HTMLElement {
       if (!this.minimapCtx) return;
       this.minimapCtx.imageSmoothingEnabled = false;
     }
-    const ctx = this.minimapCtx;
     const width = this.minimapCanvas.width;
     const height = this.minimapCanvas.height;
+    if (!width || !height) return;
+    this._renderMapSurface(this.minimapCtx, width, height, local, currentLevelId, nearestPortal, {
+      includeViewport: true,
+    });
+  }
+
+  _renderMapOverlay(local, currentLevelId, nearestPortal) {
+    if (!this.mapOverlayVisible) return;
+    if (!this.mapOverlayCanvas || !this.mapOverlayCtx || !this.world) return;
+    this._syncMapOverlaySize();
+    const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1;
+    const width = this.mapOverlayRenderSize || (this.mapOverlayCanvas.width / dpr);
+    const height = width;
+    if (!width || !height) return;
+    this._renderMapSurface(this.mapOverlayCtx, width, height, local, currentLevelId, nearestPortal, {
+      includeViewport: true,
+    });
+  }
+
+  _renderMapSurface(ctx, width, height, local, currentLevelId, nearestPortal, options = {}) {
+    if (!ctx || !width || !height) return;
+    if (!this.world) return;
+    if (!this.minimapBase) {
+      this._prepareMinimap();
+      if (!this.minimapBase) return;
+    }
+    if (!this.levels) {
+      this.levels = new Map();
+    }
     ctx.clearRect(0, 0, width, height);
     ctx.drawImage(this.minimapBase, 0, 0, width, height);
 
-    const scaleX = this.minimapScaleX || 1;
-    const scaleY = this.minimapScaleY || 1;
+    const baseWidth = this.minimapBase.width || width;
+    const baseHeight = this.minimapBase.height || height;
+    const scaleMultiplierX = baseWidth ? width / baseWidth : 1;
+    const scaleMultiplierY = baseHeight ? height / baseHeight : 1;
+    const scaleX = (this.minimapScaleX || 1) * scaleMultiplierX;
+    const scaleY = (this.minimapScaleY || 1) * scaleMultiplierY;
     const levelKey = currentLevelId || null;
     const anchorX = local?.x ?? this.lastKnownPosition?.x ?? null;
     const anchorY = local?.y ?? this.lastKnownPosition?.y ?? null;
@@ -4523,6 +4818,7 @@ class GameApp extends HTMLElement {
     ctx.save();
 
     for (const level of this.levels.values()) {
+      if (!level) continue;
       const origin = level.origin || { x: 0, y: 0 };
       const size = Math.max(0, level.size || 0);
       const rectX = origin.x * scaleX;
@@ -4560,7 +4856,7 @@ class GameApp extends HTMLElement {
       ctx.restore();
     }
 
-    if (!this.levels.size || levelKey === null) {
+    if ((!this.levels || this.levels.size === 0) || levelKey === null) {
       for (const portal of this.portals.values()) {
         if (!portal) continue;
         const px = portal.x * scaleX;
@@ -4580,7 +4876,7 @@ class GameApp extends HTMLElement {
       }
     }
 
-    if (!currentLevelId && nearestPortal && anchorX != null && anchorY != null) {
+    if (!levelKey && nearestPortal && anchorX != null && anchorY != null) {
       const px = nearestPortal.portal.x * scaleX;
       const py = nearestPortal.portal.y * scaleY;
       const cx = anchorX * scaleX;
@@ -4648,13 +4944,14 @@ class GameApp extends HTMLElement {
       ctx.globalAlpha = 0.95;
       ctx.fillStyle = MINIMAP_PLAYER_COLORS.you;
       ctx.beginPath();
-      ctx.arc(px, py, Math.max(3.2, (scaleX + scaleY)), 0, Math.PI * 2);
+      ctx.arc(px, py, Math.max(3.2, scaleX + scaleY), 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
+    const includeViewport = options.includeViewport !== false;
     const anchor = local || this.lastKnownPosition;
-    if (anchor && this.canvas && this.canvas.clientWidth && this.canvas.clientHeight) {
+    if (includeViewport && anchor && this.canvas && this.canvas.clientWidth && this.canvas.clientHeight) {
       const halfX = (this.canvas.clientWidth / this.tileSize) / 2;
       const halfY = (this.canvas.clientHeight / this.tileSize) / 2;
       if (halfX > 0 && halfY > 0) {
@@ -6761,6 +7058,7 @@ class GameApp extends HTMLElement {
     }
     this._evaluateCompactLayout();
     this._syncCompactOverlayVisibility();
+    this._syncMapOverlaySize();
   }
 }
 
