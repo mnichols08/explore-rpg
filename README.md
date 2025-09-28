@@ -15,7 +15,9 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Procedurally generated strongholds** &mdash; shimmering gateways whisk heroes into harder, instanced arenas brimming with tougher enemies and richer rewards.
 - **Dynamic dungeon atmospherics** &mdash; animated lava pools, obsidian corridors, and exit sigils add tension without sacrificing performance.
 - **Live minimap HUD** &mdash; a top-right tactical map tracks heroes, portals, and the shimmering safe zone so you always know where to head next.
+- **Portal compass & collapsible minimap** &mdash; follow the HUD arrow and nearest-portals hint, or tuck the minimap away when you want an unobstructed view.
 - **Ambient recovery with safe haven boosts** &mdash; health slowly returns anywhere in the wild, but stepping into the safe zone accelerates regeneration about a thousand-fold.
+- **Battle Momentum streaks** &mdash; chain takedowns to ignite short-lived boosts to power, speed, and XP, all tracked right on your stat panel.
 
 ## Getting started
 
@@ -44,13 +46,16 @@ node .\server\server.js --self-test
 - **WASD** to move
 - **Left click** for melee swings (strength growth)
 - **Right click** for charged arrow shots (dexterity growth)
-- **Left + Right click together** for spellcasting (intellect growth)
+- **Space bar** or **Left + Right click together** for spellcasting (intellect growth)
 - Hold any action to charge; release to unleash more powerful attacks.
 - **E key** gathers nearby resources/loot or activates portals and exit sigils when you are within their glow.
 - **M key or Music button** toggles the procedural soundtrack.
 - **Shift + N** starts a fresh hero (copy your Hero ID first if you want to return later).
+- **Minimap Toggle** button collapses or reopens the tactical map, and your choice sticks between sessions.
+- Watch for the on-screen portal prompt; when it lights up, press **E** to jump through a gateway or exit a dungeon.
 - Down enemies together to earn bonus XP aligned with the finishing attack type.
-- Keep an eye on the top-right minimap: cyan rings mark the bank's safe zone, gold diamonds mark gateways, and orange dots show nearby allies.
+- Chain kills quickly to build **Battle Momentum** for stacked speed, damage, and XP bonuses before the timer expires.
+- Keep an eye on the top-right minimap (or its HUD arrow when hidden): cyan rings mark the bank's safe zone, gold diamonds mark gateways, and orange dots show nearby allies.
 
 ## Save & Continue
 

@@ -60,6 +60,60 @@ template.innerHTML = `
       gap: 0.35rem;
       margin-top: 0.4rem;
     }
+
+    .momentum {
+      display: grid;
+      gap: 0.35rem;
+      margin-top: 0.6rem;
+      padding-top: 0.6rem;
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .momentum-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .momentum-head .value {
+      font-weight: 700;
+      font-size: 0.8rem;
+      color: #fbbf24;
+    }
+
+    .momentum-bar {
+      height: 0.45rem;
+      background: rgba(71, 85, 105, 0.4);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .momentum-bar span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, #f97316, #fb7185);
+      transition: width 150ms ease;
+    }
+
+    .momentum-status {
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(250, 204, 21, 0.82);
+    }
+
+    .momentum:not(.active) .momentum-head .value {
+      color: rgba(148, 163, 184, 0.8);
+    }
+
+    .momentum:not(.active) .momentum-status {
+      color: rgba(148, 163, 184, 0.7);
+    }
+
+    .momentum:not(.active) .momentum-bar span {
+      background: linear-gradient(90deg, rgba(148, 163, 184, 0.55), rgba(148, 163, 184, 0.25));
+    }
   </style>
   <h2>Your Hero</h2>
   <div class="grid">
@@ -77,6 +131,16 @@ template.innerHTML = `
     </div>
     <span class="value" data-health-text>0 / 0</span>
   </div>
+  <div class="momentum" data-momentum>
+    <div class="momentum-head">
+      <span class="label">Battle Momentum</span>
+      <span class="value" data-momentum-label>Ready</span>
+    </div>
+    <div class="momentum-bar">
+      <span data-momentum-bar></span>
+    </div>
+    <span class="momentum-status" data-momentum-status>Chain takedowns to surge with power.</span>
+  </div>
 `;
 
 class StatPanel extends HTMLElement {
@@ -93,6 +157,10 @@ class StatPanel extends HTMLElement {
       charge: this.shadowRoot.querySelector('[data-charge]'),
       healthBar: this.shadowRoot.querySelector('[data-health]'),
       healthText: this.shadowRoot.querySelector('[data-health-text]'),
+      momentumContainer: this.shadowRoot.querySelector('[data-momentum]'),
+      momentumLabel: this.shadowRoot.querySelector('[data-momentum-label]'),
+      momentumStatus: this.shadowRoot.querySelector('[data-momentum-status]'),
+      momentumBar: this.shadowRoot.querySelector('[data-momentum-bar]'),
     };
     this._data = null;
   }
@@ -119,6 +187,43 @@ class StatPanel extends HTMLElement {
     const ratio = maxHealth ? health / maxHealth : 0;
     this.dom.healthBar.style.width = `${Math.max(0, Math.min(1, ratio)) * 100}%`;
     this.dom.healthText.textContent = `${Math.round(health)} / ${Math.round(maxHealth)}`;
+
+    if (this.dom.momentumContainer) {
+      const momentum = this._data.momentum || null;
+      const stacks = Math.max(0, Math.floor(momentum?.stacks ?? 0));
+      const remainingMs = Math.max(0, momentum?.remaining ?? 0);
+      const durationMs = Math.max(1, momentum?.duration ?? 0);
+      const progress = Math.max(0, Math.min(1, remainingMs / durationMs));
+      if (this.dom.momentumBar) {
+        this.dom.momentumBar.style.width = `${progress * 100}%`;
+      }
+
+      const seconds = remainingMs / 1000;
+      let label = 'Ready';
+      if (stacks > 0) {
+        let timeText = '';
+        if (seconds > 0) {
+          timeText = seconds >= 10 ? `${Math.round(seconds)}s` : `${seconds.toFixed(1)}s`;
+        }
+        label = `${stacks} stack${stacks === 1 ? '' : 's'}${timeText ? ` • ${timeText}` : ''}`;
+      }
+      if (this.dom.momentumLabel) {
+        this.dom.momentumLabel.textContent = label;
+      }
+
+      const bonus = momentum?.bonus || {};
+      const bonusParts = [];
+      if (bonus.damage) bonusParts.push(`Power +${(bonus.damage * 100).toFixed(0)}%`);
+      if (bonus.speed) bonusParts.push(`Speed +${(bonus.speed * 100).toFixed(0)}%`);
+      if (bonus.xp) bonusParts.push(`XP +${(bonus.xp * 100).toFixed(0)}%`);
+      const statusText = stacks > 0 && bonusParts.length
+        ? bonusParts.join(' • ')
+        : 'Chain takedowns to surge with power.';
+      if (this.dom.momentumStatus) {
+        this.dom.momentumStatus.textContent = statusText;
+      }
+      this.dom.momentumContainer.classList.toggle('active', stacks > 0);
+    }
   }
 }
 

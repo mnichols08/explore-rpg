@@ -70,6 +70,11 @@ const SAFE_ZONE_RADIUS = 8.5;
 const BANK_TRADE_BATCH = 5;
 const SAFE_ZONE_HEAL_DURATION_MS = 60000;
 const WILDERNESS_HEAL_SCALE = 1 / 1000;
+const MOMENTUM_MAX_STACKS = 5;
+const MOMENTUM_DURATION_MS = 15000;
+const MOMENTUM_DAMAGE_SCALE = 0.1;
+const MOMENTUM_SPEED_SCALE = 0.06;
+const MOMENTUM_XP_SCALE = 0.08;
 
 const PORTAL_DISTANCE_THRESHOLD = 1.6;
 const LEVEL_PORTAL_MIN_DISTANCE = 14;
@@ -607,6 +612,7 @@ function createPlayer(connection, requestedProfileId) {
     bank,
     levelId: null,
     levelReturn: null,
+    momentum: createMomentumState(),
   };
   const spawnLevel = levelForCoordinate(spawn.x, spawn.y);
   if (spawnLevel) {
@@ -958,10 +964,28 @@ function damageEnemy(enemy, amount) {
 function awardKillXP(player, actionType, enemy) {
   const reward = enemy?.xpReward;
   if (!reward) return;
-  if (actionType === 'melee') player.xp.melee += reward.melee ?? 0;
-  else if (actionType === 'ranged') player.xp.ranged += reward.ranged ?? 0;
-  else if (actionType === 'spell') player.xp.magic += reward.spell ?? 0;
+  const now = Date.now();
+  const momentum = ensureMomentum(player);
+  const stacks = momentum.stacks || 0;
+  const multiplier = 1 + stacks * MOMENTUM_XP_SCALE;
+  const scaleXP = (base) => {
+    if (!base) return 0;
+    const scaled = Math.round(base * multiplier);
+    return Math.max(base, scaled);
+  };
+
+  if (actionType === 'melee') {
+    player.xp.melee += scaleXP(reward.melee ?? 0);
+  } else if (actionType === 'ranged') {
+    player.xp.ranged += scaleXP(reward.ranged ?? 0);
+  } else if (actionType === 'spell') {
+    player.xp.magic += scaleXP(reward.spell ?? 0);
+  } else {
+    return;
+  }
+
   applyStats(player);
+  gainMomentum(player, now);
   syncProfile(player);
 }
 
@@ -1158,6 +1182,87 @@ function ensureBankData(source) {
   return {
     items: base.items,
     currency: base.currency,
+  };
+}
+
+function createMomentumState() {
+  return {
+    stacks: 0,
+    expiresAt: 0,
+    peak: 0,
+    lastGainAt: 0,
+  };
+}
+
+function ensureMomentum(player) {
+  if (!player.momentum) {
+    player.momentum = createMomentumState();
+  }
+  return player.momentum;
+}
+
+function resetMomentum(player) {
+  const momentum = ensureMomentum(player);
+  momentum.stacks = 0;
+  momentum.expiresAt = 0;
+  momentum.lastGainAt = 0;
+  return momentum;
+}
+
+function gainMomentum(player, now = Date.now()) {
+  const momentum = ensureMomentum(player);
+  if (momentum.stacks > 0 && momentum.expiresAt > now) {
+    momentum.stacks = Math.min(MOMENTUM_MAX_STACKS, momentum.stacks + 1);
+  } else {
+    momentum.stacks = 1;
+  }
+  momentum.expiresAt = now + MOMENTUM_DURATION_MS;
+  momentum.lastGainAt = now;
+  momentum.peak = Math.max(momentum.peak || 0, momentum.stacks);
+  return momentum;
+}
+
+function decayMomentum(player, now) {
+  const momentum = player?.momentum;
+  if (!momentum) return false;
+  const current = now ?? Date.now();
+  if (momentum.stacks > 0 && momentum.expiresAt && momentum.expiresAt <= current) {
+    momentum.stacks = 0;
+    momentum.expiresAt = 0;
+    momentum.lastGainAt = 0;
+    return true;
+  }
+  return false;
+}
+
+function getMomentumStacks(player, now) {
+  const momentum = player?.momentum;
+  if (!momentum) return 0;
+  const current = now ?? Date.now();
+  if (momentum.stacks > 0 && momentum.expiresAt && momentum.expiresAt <= current) {
+    momentum.stacks = 0;
+    momentum.expiresAt = 0;
+    momentum.lastGainAt = 0;
+    return 0;
+  }
+  return momentum.stacks || 0;
+}
+
+function serializeMomentum(player, now) {
+  const momentum = player?.momentum;
+  const stacks = momentum?.stacks > 0 ? momentum.stacks : 0;
+  const current = now ?? Date.now();
+  const remaining = stacks > 0 && momentum?.expiresAt ? Math.max(0, momentum.expiresAt - current) : 0;
+  return {
+    stacks,
+    remaining,
+    duration: MOMENTUM_DURATION_MS,
+    bonus: {
+      damage: stacks * MOMENTUM_DAMAGE_SCALE,
+      speed: stacks * MOMENTUM_SPEED_SCALE,
+      xp: stacks * MOMENTUM_XP_SCALE,
+    },
+    peak: Math.max(momentum?.peak || 0, stacks),
   };
 }
 
@@ -1426,7 +1531,9 @@ initializeOreNodes();
 
 function resolveMovement(player, dt) {
   const direction = normalizeVector(player.move);
-  const speed = 4 + player.stats.dexterity * 0.12;
+  const stacks = ensureMomentum(player).stacks || 0;
+  const speedMultiplier = 1 + stacks * MOMENTUM_SPEED_SCALE;
+  const speed = (4 + player.stats.dexterity * 0.12) * speedMultiplier;
   const dx = direction.x * speed * dt;
   const dy = direction.y * speed * dt;
   const candidateX = player.x + dx;
@@ -1452,6 +1559,7 @@ function damagePlayer(target, amount) {
     sendInventoryUpdate(target);
     target.levelId = null;
     target.levelReturn = null;
+    resetMomentum(target);
     const spawn = findSpawn();
     target.x = spawn.x;
     target.y = spawn.y;
@@ -1464,11 +1572,15 @@ function damagePlayer(target, amount) {
 }
 
 function resolveAction(player, actionType, aimVector, chargeSeconds) {
+  const now = Date.now();
   const bonuses = player.bonuses;
   const baseChargeCap = clamp(bonuses.maxCharge, 0.5, 5);
   const maxChargeTime = baseChargeCap + CHARGE_TIME_BONUS;
   const charge = clamp(chargeSeconds, 0.1, maxChargeTime);
   const potency = charge;
+  const momentumStacks = getMomentumStacks(player, now);
+  const damageMultiplier = 1 + momentumStacks * MOMENTUM_DAMAGE_SCALE;
+  const xpMultiplier = 1 + momentumStacks * MOMENTUM_XP_SCALE;
 
   let aim = aimVector && typeof aimVector.x === 'number' && typeof aimVector.y === 'number'
     ? normalizeVector(aimVector)
@@ -1500,6 +1612,8 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   const rangeBonusFactor = CHARGE_RANGE_SCALE[actionType] ?? 0.4;
   const normalizedCharge = Math.max(0, charge - 0.1);
   range *= 1 + normalizedCharge * rangeBonusFactor;
+  xpGain *= xpMultiplier;
+  damageBase *= damageMultiplier;
 
   const effect = {
     id: `fx${effectCounter++}`,
@@ -1513,7 +1627,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     angle: actionType === 'melee' ? MELEE_CONE_HALF_ANGLE * 2 : null,
     width: actionType === 'ranged' ? (PROJECTILE_HALF_WIDTH + potency * 0.2) * 2 : null,
     shape: actionType === 'melee' ? 'cone' : actionType === 'ranged' ? 'beam' : 'burst',
-    expiresAt: Date.now() + EFFECT_LIFETIME,
+    expiresAt: now + EFFECT_LIFETIME,
     levelId: player.levelId || null,
   };
   world.effects.push(effect);
@@ -1645,6 +1759,7 @@ function gameTick(now, dt) {
   updateOreNodes(now);
   updateLoot(now);
   for (const player of clients.values()) {
+    decayMomentum(player, now);
     resolveMovement(player, dt);
     if (player.health < player.maxHealth) {
       const healRatePerMs = player.maxHealth / SAFE_ZONE_HEAL_DURATION_MS;
@@ -1708,6 +1823,7 @@ function gameTick(now, dt) {
         ? clamp((now - player.action.startedAt) / ((player.bonuses.maxCharge + CHARGE_TIME_BONUS) * 1000), 0, 1)
         : 0,
       levelId: player.levelId || null,
+      momentum: serializeMomentum(player, now),
     })),
     effects: world.effects.map((effect) => ({
       id: effect.id,
@@ -2394,6 +2510,7 @@ function startServer() {
         bonuses: player.bonuses,
         health: player.health,
         maxHealth: player.maxHealth,
+        momentum: serializeMomentum(player, Date.now()),
         levelId: player.levelId || null,
         levelExit: youLevel?.exit ?? null,
         levelName: youLevel?.name ?? null,

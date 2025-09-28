@@ -63,21 +63,65 @@ template.innerHTML = `
       border: 1px solid rgba(148, 163, 184, 0.35);
       box-shadow: 0 1.1rem 2.4rem rgba(8, 15, 31, 0.45);
       backdrop-filter: blur(6px);
+      transition: padding 150ms ease;
+    }
+
+    .minimap-card.collapsed {
+      padding-bottom: 0.55rem;
+    }
+
+    .minimap-card.collapsed .minimap-body {
+      display: none;
     }
 
     .minimap-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      gap: 0.45rem;
       font-size: 0.72rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: rgba(148, 163, 184, 0.85);
     }
 
+    .minimap-header .minimap-header-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
     .minimap-header span[data-minimap-label] {
       color: var(--minimap-accent, #38bdf8);
       font-weight: 600;
+    }
+
+    .minimap-header button {
+      all: unset;
+      cursor: pointer;
+      padding: 0.2rem 0.45rem;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(30, 41, 59, 0.6);
+      color: rgba(226, 232, 240, 0.9);
+      font-size: 0.66rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: background 120ms ease, border 120ms ease, transform 120ms ease;
+    }
+
+    .minimap-header button:hover {
+      background: rgba(51, 65, 85, 0.75);
+      border-color: rgba(148, 163, 184, 0.6);
+    }
+
+    .minimap-header button:active {
+      transform: translateY(1px);
+    }
+
+    .minimap-body {
+      display: grid;
+      gap: 0.55rem;
     }
 
     canvas[data-minimap] {
@@ -135,6 +179,14 @@ template.innerHTML = `
 
     .minimap-legend li[data-type="safe"]::before {
       background: #22d3ee;
+    }
+
+    .minimap-footer {
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.7);
+      line-height: 1.4;
     }
 
     .hud .bottom-left {
@@ -484,6 +536,28 @@ template.innerHTML = `
       box-shadow: 0 0 0.65rem var(--level-accent-shadow, rgba(56, 189, 248, 0.6));
     }
 
+    .portal-prompt {
+      position: absolute;
+      top: 4.4rem;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.45rem 0.9rem;
+      border-radius: 0.75rem;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: #f8fafc;
+      font-size: 0.76rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      box-shadow: 0 0.9rem 2.1rem rgba(15, 23, 42, 0.4);
+      pointer-events: none;
+      transition: opacity 140ms ease;
+    }
+
+    .portal-prompt[hidden] {
+      display: none;
+    }
+
     @keyframes resourceFlash {
       0% {
         box-shadow: 0 0 0 rgba(56, 189, 248, 0.5);
@@ -546,27 +620,33 @@ template.innerHTML = `
     <div class="top-right">
       <charge-meter></charge-meter>
       <audio-toggle></audio-toggle>
-      <div class="minimap-card">
+      <div class="minimap-card" data-minimap-card>
         <div class="minimap-header" data-minimap-header>
           <span>Minimap</span>
-          <span data-minimap-label>Overworld</span>
+          <div class="minimap-header-actions">
+            <span data-minimap-label>Overworld</span>
+            <button type="button" data-minimap-toggle aria-pressed="false">Hide</button>
+          </div>
         </div>
-        <canvas data-minimap></canvas>
-        <ul class="minimap-legend">
-          <li data-type="you">You</li>
-          <li data-type="hero">Allies</li>
-          <li data-type="portal">Portals</li>
-          <li data-type="safe">Safe Zone</li>
-        </ul>
+        <div class="minimap-body" data-minimap-body>
+          <canvas data-minimap></canvas>
+          <ul class="minimap-legend">
+            <li data-type="you">You</li>
+            <li data-type="hero">Allies</li>
+            <li data-type="portal">Portals</li>
+            <li data-type="safe">Safe Zone</li>
+          </ul>
+          <div class="minimap-footer" data-minimap-portal-hint>Follow the gold arrow to reach a gateway.</div>
+        </div>
       </div>
     </div>
     <div class="bottom-left">
       <div>
         <strong>Explore &amp; grow:</strong><br />
-        WASD to move. Left click to swing. Right click to shoot. Press both to cast. Hold to overcharge every action.<br />
-        Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.<br />
-        Seek shimmering gateways across the world—press E while inside their glow to enter a generated stronghold, and press E again atop the exit sigil to return.<br />
-        Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Music toggle: button or press M. Shift + N to forge a new hero.
+  WASD to move. Left click to swing. Right click to shoot. Spacebar channels spells (or hold both mouse buttons). Hold any action to overcharge.<br />
+  Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.<br />
+  Follow the gold arrow or minimap marker to the nearest gateway—press E while inside its glow to enter a generated stronghold, and press E again atop the exit sigil to return.<br />
+  Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Collapse or reopen the minimap from its header button. Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
@@ -606,6 +686,7 @@ template.innerHTML = `
         <div class="bank-feedback" data-bank-feedback></div>
       </div>
     </div>
+    <div class="portal-prompt" hidden data-portal-prompt></div>
     <div class="level-banner" hidden data-level-banner></div>
     <div class="message" hidden data-message>Connecting...</div>
   </div>
@@ -693,6 +774,7 @@ const LEVEL_VIGNETTE = {
   },
 };
 const PORTAL_INTERACT_RADIUS = 1.6;
+const MINIMAP_STORAGE_KEY = 'explore-rpg-minimap';
 const MINIMAP_SIZE = 176;
 const MINIMAP_TILE_COLORS = {
   water: '#0f172a',
@@ -716,6 +798,12 @@ const MINIMAP_SAFE_STROKE = 'rgba(125, 211, 252, 0.75)';
 const MINIMAP_VIEWPORT_STROKE = 'rgba(148, 163, 184, 0.55)';
 const MINIMAP_VIEWPORT_FILL = 'rgba(30, 41, 59, 0.22)';
 const MINIMAP_BACKGROUND = 'rgba(12, 20, 32, 0.95)';
+const PORTAL_COMPASS_RADIUS_FACTOR = 0.42;
+const PORTAL_COMPASS_MIN_DISTANCE = 2.5;
+const PORTAL_ARROW_COLOR = '#fbbf24';
+const PORTAL_ARROW_OUTLINE = 'rgba(15, 23, 42, 0.85)';
+const PORTAL_COMPASS_TEXT_COLOR = '#fde68a';
+const PORTAL_COMPASS_LABEL_BACKGROUND = 'rgba(15, 23, 42, 0.68)';
 
 function wrapChatLines(ctx, text, maxWidth) {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -764,6 +852,8 @@ class GameApp extends HTMLElement {
     this.statPanel = this.shadowRoot.querySelector('stat-panel');
     this.chargeMeter = this.shadowRoot.querySelector('charge-meter');
     this.messageEl = this.shadowRoot.querySelector('[data-message]');
+    this.minimapCardEl = this.shadowRoot.querySelector('[data-minimap-card]');
+    this.minimapBodyEl = this.shadowRoot.querySelector('[data-minimap-body]');
     this.minimapCanvas = this.shadowRoot.querySelector('[data-minimap]');
     this.minimapCtx = this.minimapCanvas ? this.minimapCanvas.getContext('2d') : null;
     if (this.minimapCtx) {
@@ -771,6 +861,8 @@ class GameApp extends HTMLElement {
     }
     this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
     this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
+    this.minimapToggleButton = this.shadowRoot.querySelector('[data-minimap-toggle]');
+    this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
   this.heroIdEl = this.shadowRoot.querySelector('[data-hero-id]');
   this.copyHeroButton = this.shadowRoot.querySelector('[data-copy-id]');
@@ -793,6 +885,7 @@ class GameApp extends HTMLElement {
     this.zoneStatusEl = this.shadowRoot.querySelector('[data-zone-status]');
     this.zoneIndicatorEl = this.shadowRoot.querySelector('[data-zone-indicator]');
     this.levelBannerEl = this.shadowRoot.querySelector('[data-level-banner]');
+    this.portalPromptEl = this.shadowRoot.querySelector('[data-portal-prompt]');
   this.bankActionsEl = this.shadowRoot.querySelector('[data-bank-actions]');
   this.bankDepositButton = this.shadowRoot.querySelector('[data-bank-deposit]');
   this.bankWithdrawButton = this.shadowRoot.querySelector('[data-bank-withdraw]');
@@ -815,12 +908,14 @@ class GameApp extends HTMLElement {
     this.localStats = null;
     this.localBonuses = null;
     this.localHealth = { health: 0, maxHealth: 0 };
+  this.localMomentum = null;
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
   this.minimapBase = null;
   this.minimapScaleX = 1;
   this.minimapScaleY = 1;
+    this.minimapVisible = true;
     this.currentLevelId = null;
     this.currentLevelExit = null;
     this.currentLevelInfo = null;
@@ -838,6 +933,7 @@ class GameApp extends HTMLElement {
   this.profileId = null;
   this.pendingProfileId = undefined;
     this.chatActive = false;
+    this.spellKeyActive = false;
 
   this.lastSafeZoneState = null;
     this.levelBannerTimer = null;
@@ -853,6 +949,7 @@ class GameApp extends HTMLElement {
     this._handlePointerLeave = this._handlePointerLeave.bind(this);
     this._handlePointerCancel = this._handlePointerCancel.bind(this);
     this._handleMusicToggle = this._handleMusicToggle.bind(this);
+  this._toggleMinimapVisibility = this._toggleMinimapVisibility.bind(this);
   this._handleCopyHeroId = this._handleCopyHeroId.bind(this);
   this._handleNewHeroRequest = this._handleNewHeroRequest.bind(this);
   this._handleUseHeroRequest = this._handleUseHeroRequest.bind(this);
@@ -870,6 +967,9 @@ class GameApp extends HTMLElement {
     this._updateInventoryPanel();
     this._updateLevelStatus(null);
     this._updateMinimapLabel(null);
+    this._updatePortalHint(null, null);
+    this._setMinimapVisible(true, false);
+    this._loadMinimapPreference();
   }
 
   connectedCallback() {
@@ -888,6 +988,7 @@ class GameApp extends HTMLElement {
     if (this.audioToggle) {
       this.audioToggle.active = this.audio.musicEnabled;
     }
+    this.minimapToggleButton?.addEventListener('click', this._toggleMinimapVisibility);
     this.copyHeroButton?.addEventListener('click', this._handleCopyHeroId);
     this.newHeroButton?.addEventListener('click', this._handleNewHeroRequest);
     this.useHeroButton?.addEventListener('click', this._handleUseHeroRequest);
@@ -915,6 +1016,7 @@ class GameApp extends HTMLElement {
     this.canvas.removeEventListener('pointerleave', this._handlePointerLeave);
     this.canvas.removeEventListener('pointercancel', this._handlePointerCancel);
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
+  this.minimapToggleButton?.removeEventListener('click', this._toggleMinimapVisibility);
   this.copyHeroButton?.removeEventListener('click', this._handleCopyHeroId);
   this.newHeroButton?.removeEventListener('click', this._handleNewHeroRequest);
   this.useHeroButton?.removeEventListener('click', this._handleUseHeroRequest);
@@ -1008,12 +1110,14 @@ class GameApp extends HTMLElement {
         this.localStats = data.you.stats;
         this.localBonuses = data.you.bonuses;
         this.localHealth = { health: data.you.health ?? 100, maxHealth: data.you.maxHealth ?? 100 };
+        this.localMomentum = data.you.momentum || null;
         this._applyLevelInfoFromPayload(data.you);
         this.statPanel.data = {
           stats: this.localStats,
           bonuses: this.localBonuses,
           health: this.localHealth.health,
           maxHealth: this.localHealth.maxHealth,
+          momentum: this.localMomentum,
         };
         this.chargeMeter.actionName = 'Idle';
       } else if (data.type === 'state') {
@@ -1048,11 +1152,13 @@ class GameApp extends HTMLElement {
           this.localStats = me.stats;
           this.localBonuses = me.bonuses;
           this.localHealth = { health: me.health, maxHealth: me.maxHealth };
+          this.localMomentum = me.momentum || null;
           this.statPanel.data = {
             stats: this.localStats,
             bonuses: this.localBonuses,
             health: me.health,
             maxHealth: me.maxHealth,
+            momentum: this.localMomentum,
           };
           const ratio = me.chargeRatio ?? 0;
           if (!this.activeAction) {
@@ -1168,8 +1274,12 @@ class GameApp extends HTMLElement {
       return;
     }
 
-    const local = this.players.get(this.youId);
-    const currentLevelId = local?.levelId ?? this.currentLevelId;
+  const local = this.players.get(this.youId);
+  const anchor = local ?? this.lastKnownPosition;
+  const currentLevelId = local?.levelId ?? this.currentLevelId;
+  const nearestPortal = this._computeNearestPortal(anchor, currentLevelId);
+  this._updatePortalHint(currentLevelId, nearestPortal);
+  this._updatePortalPrompt(local, currentLevelId, nearestPortal);
     const levelTheme = this._getLevelTheme(currentLevelId, this.currentLevelColor);
 
     ctx.fillStyle = levelTheme?.background || '#0f172a';
@@ -1541,9 +1651,11 @@ class GameApp extends HTMLElement {
       this.chats.delete(id);
     }
 
-    ctx.restore();
+  ctx.restore();
 
-    this._renderMinimap(local, currentLevelId);
+  this._renderPortalCompass(ctx, anchor, nearestPortal, cameraX, cameraY, width, height, currentLevelId, time);
+
+  this._renderMinimap(local, currentLevelId, nearestPortal);
 
     if (currentLevelId) {
       const tint = levelTheme?.fill || this._withAlpha(this.currentLevelColor || DEFAULT_PORTAL_COLOR, 0.18);
@@ -1604,6 +1716,7 @@ class GameApp extends HTMLElement {
     this.chatActive = true;
     this.keys.clear();
     this.pointerButtons = 0;
+    this.spellKeyActive = false;
     if (this.activeAction) {
       this._cancelAction();
     }
@@ -1728,6 +1841,19 @@ class GameApp extends HTMLElement {
     if (this.identityOverlay && !this.identityOverlay.hidden) {
       return;
     }
+    if (event.code === 'Space') {
+      event.preventDefault();
+      if (!this.spellKeyActive) {
+        this.spellKeyActive = true;
+        if (this.activeAction && this.activeAction !== 'spell') {
+          this._cancelAction();
+        }
+        if (this.activeAction !== 'spell') {
+          this._startAction('spell');
+        }
+      }
+      return;
+    }
     if (event.code === 'KeyE') {
       event.preventDefault();
       if (this._attemptPortalInteraction()) {
@@ -1741,6 +1867,15 @@ class GameApp extends HTMLElement {
 
   _handleKeyUp(event) {
     if (this.chatActive) return;
+    if (event.code === 'Space') {
+      event.preventDefault();
+      this.spellKeyActive = false;
+      const pointerAction = this._determineAction(this.pointerButtons);
+      if (this.activeAction === 'spell' && pointerAction !== 'spell') {
+        this._releaseAction();
+      }
+      return;
+    }
     this.keys.delete(event.code);
   }
 
@@ -1959,6 +2094,221 @@ class GameApp extends HTMLElement {
     this.portals = map;
   }
 
+  _toggleMinimapVisibility(event) {
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+    this._setMinimapVisible(!this.minimapVisible);
+  }
+
+  _setMinimapVisible(visible, persist = true) {
+    const next = Boolean(visible);
+    this.minimapVisible = next;
+    if (this.minimapCardEl) {
+      this.minimapCardEl.classList.toggle('collapsed', !next);
+    }
+    if (this.minimapBodyEl) {
+      this.minimapBodyEl.style.display = next ? '' : 'none';
+    }
+    if (this.minimapToggleButton) {
+      this.minimapToggleButton.textContent = next ? 'Hide' : 'Show';
+      this.minimapToggleButton.setAttribute('aria-pressed', next ? 'true' : 'false');
+    }
+    if (persist) {
+      try {
+        window.localStorage?.setItem(MINIMAP_STORAGE_KEY, next ? '1' : '0');
+      } catch (err) {
+        // ignore storage failures
+      }
+    }
+  }
+
+  _loadMinimapPreference() {
+    let stored = null;
+    try {
+      stored = window.localStorage?.getItem(MINIMAP_STORAGE_KEY);
+    } catch (err) {
+      stored = null;
+    }
+    if (stored === '0') {
+      this._setMinimapVisible(false, false);
+    } else {
+      this._setMinimapVisible(true, false);
+    }
+  }
+
+  _formatDistance(distance) {
+    if (!Number.isFinite(distance)) return '0 tiles';
+    const rounded = Math.max(0, Math.round(distance));
+    return `${rounded} tile${rounded === 1 ? '' : 's'}`;
+  }
+
+  _describeDirection(dx, dy) {
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return '';
+    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return '';
+    const compass = (Math.atan2(dx, -dy) * 180) / Math.PI;
+    const normalized = (compass + 360) % 360;
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const index = Math.round(normalized / 45) % directions.length;
+    return directions[index];
+  }
+
+  _computeNearestPortal(anchor, currentLevelId) {
+    if (!anchor || !this.portals || currentLevelId) return null;
+    let best = null;
+    for (const portal of this.portals.values()) {
+      if (!portal) continue;
+      const dx = portal.x - anchor.x;
+      const dy = portal.y - anchor.y;
+      const distance = Math.hypot(dx, dy);
+      if (!best || distance < best.distance) {
+        best = { portal, distance, dx, dy };
+      }
+    }
+    return best;
+  }
+
+  _updatePortalHint(currentLevelId, nearest) {
+    if (!this.minimapPortalHintEl) return;
+    if (currentLevelId) {
+      this.minimapPortalHintEl.textContent = 'Find the exit sigil to return to the overworld.';
+      return;
+    }
+    if (!nearest) {
+      this.minimapPortalHintEl.textContent = 'Scouting for gateways...';
+      return;
+    }
+    const direction = this._describeDirection(nearest.dx, nearest.dy);
+    const parts = [`${nearest.portal.name || 'Gateway'}`, this._formatDistance(nearest.distance)];
+    if (direction) {
+      parts.push(direction);
+    }
+    this.minimapPortalHintEl.textContent = `Nearest gateway: ${parts.join(' · ')}`;
+  }
+
+  _updatePortalPrompt(local, currentLevelId, nearest) {
+    if (!this.portalPromptEl) return;
+    let text = '';
+    if (local) {
+      if (currentLevelId && this.currentLevelExit) {
+        const exitDist = Math.hypot(local.x - this.currentLevelExit.x, local.y - this.currentLevelExit.y);
+        if (exitDist <= PORTAL_INTERACT_RADIUS * 1.25) {
+          const label = this.currentLevelInfo?.name || 'Stronghold';
+          text = `Press E to exit ${label}`;
+        }
+      } else if (!currentLevelId && this.portals && this.portals.size) {
+        let closest = null;
+        let bestDist = Infinity;
+        for (const portal of this.portals.values()) {
+          const dist = Math.hypot(local.x - portal.x, local.y - portal.y);
+          if (dist < bestDist) {
+            bestDist = dist;
+            closest = portal;
+          }
+        }
+        if (closest && bestDist <= PORTAL_INTERACT_RADIUS * 1.3) {
+          const parts = [`Enter ${closest.name || 'Gateway'}`];
+          if (closest.difficulty) {
+            parts.push(closest.difficulty);
+          }
+          text = `Press E to ${parts.join(' · ')}`;
+        } else if (!closest && nearest && nearest.distance <= PORTAL_INTERACT_RADIUS * 1.3) {
+          const parts = [`Enter ${nearest.portal.name || 'Gateway'}`];
+          if (nearest.portal.difficulty) {
+            parts.push(nearest.portal.difficulty);
+          }
+          text = `Press E to ${parts.join(' · ')}`;
+        }
+      }
+    }
+    if (text) {
+      this.portalPromptEl.textContent = text;
+      this.portalPromptEl.hidden = false;
+    } else {
+      this.portalPromptEl.hidden = true;
+      this.portalPromptEl.textContent = '';
+    }
+  }
+
+  _renderPortalCompass(ctx, anchor, nearest, cameraX, cameraY, width, height, currentLevelId, time) {
+    if (!ctx || !nearest || !anchor || currentLevelId) return;
+    const { portal, distance, dx, dy } = nearest;
+    if (!portal || !Number.isFinite(distance) || distance < PORTAL_COMPASS_MIN_DISTANCE) return;
+    const screenX = (portal.x - cameraX) * this.tileSize + width / 2;
+    const screenY = (portal.y - cameraY) * this.tileSize + height / 2;
+    const margin = this.tileSize * 1.2;
+    if (screenX >= -margin && screenX <= width + margin && screenY >= -margin && screenY <= height + margin) {
+      return;
+    }
+    const nx = dx / distance;
+    const ny = dy / distance;
+    const radius = Math.min(width, height) * PORTAL_COMPASS_RADIUS_FACTOR;
+    const centerX = width / 2 + nx * radius;
+    const centerY = height / 2 + ny * radius;
+    const angle = Math.atan2(ny, nx);
+    const color = portal.color || PORTAL_ARROW_COLOR;
+    const pulse = Math.sin((time / 240) + distance * 0.15) * 0.08 + 0.88;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(angle);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = this._withAlpha(color, pulse);
+    const arrowLength = 30;
+    const arrowWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(arrowLength / 2, 0);
+    ctx.lineTo(-arrowLength / 2, arrowWidth / 2);
+    ctx.lineTo(-arrowLength / 3, 0);
+    ctx.lineTo(-arrowLength / 2, -arrowWidth / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = PORTAL_ARROW_OUTLINE;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.setLineDash([6, 10]);
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = this._withAlpha(color, 0.5);
+    ctx.beginPath();
+    ctx.arc(width / 2, height / 2, radius, angle - 0.04, angle + 0.04);
+    ctx.stroke();
+    ctx.restore();
+
+    const direction = this._describeDirection(dx, dy);
+    const labelParts = [portal.name || 'Gateway', this._formatDistance(distance)];
+    if (direction) {
+      labelParts.push(direction);
+    }
+    const label = labelParts.join(' · ');
+    const metricsCtx = ctx;
+    metricsCtx.save();
+    metricsCtx.font = '600 13px "Segoe UI"';
+    metricsCtx.textAlign = 'center';
+    metricsCtx.textBaseline = 'middle';
+    const textWidth = metricsCtx.measureText(label).width;
+    const paddingX = 12;
+    const paddingY = 6;
+    const boxWidth = textWidth + paddingX * 2;
+    const boxHeight = 26;
+    const labelX = width / 2;
+    const labelY = 54;
+    metricsCtx.globalAlpha = 0.82;
+    metricsCtx.fillStyle = PORTAL_COMPASS_LABEL_BACKGROUND;
+    metricsCtx.fillRect(labelX - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight);
+    metricsCtx.globalAlpha = 0.9;
+    metricsCtx.strokeStyle = this._withAlpha(color, 0.65);
+    metricsCtx.lineWidth = 1.2;
+    metricsCtx.strokeRect(labelX - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight);
+    metricsCtx.fillStyle = PORTAL_COMPASS_TEXT_COLOR;
+    metricsCtx.fillText(label, labelX, labelY);
+    metricsCtx.restore();
+  }
+
   _normalizeLevel(level) {
     if (!level || !level.id) return null;
     const toPoint = (point) => {
@@ -2063,7 +2413,8 @@ class GameApp extends HTMLElement {
     this.minimapScaleY = scaleY;
   }
 
-  _renderMinimap(local, currentLevelId) {
+  _renderMinimap(local, currentLevelId, nearestPortal) {
+    if (!this.minimapVisible) return;
     if (!this.minimapCanvas || !this.world) return;
     if (!this.minimapBase) {
       this._prepareMinimap();
@@ -2083,6 +2434,8 @@ class GameApp extends HTMLElement {
     const scaleX = this.minimapScaleX || 1;
     const scaleY = this.minimapScaleY || 1;
     const levelKey = currentLevelId || null;
+    const anchorX = local?.x ?? this.lastKnownPosition?.x ?? null;
+    const anchorY = local?.y ?? this.lastKnownPosition?.y ?? null;
 
     ctx.save();
 
@@ -2142,6 +2495,23 @@ class GameApp extends HTMLElement {
         ctx.fill();
         ctx.restore();
       }
+    }
+
+    if (!currentLevelId && nearestPortal && anchorX != null && anchorY != null) {
+      const px = nearestPortal.portal.x * scaleX;
+      const py = nearestPortal.portal.y * scaleY;
+      const cx = anchorX * scaleX;
+      const cy = anchorY * scaleY;
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = this._withAlpha(nearestPortal.portal.color || MINIMAP_PORTAL_COLOR, 0.85);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(px, py);
+      ctx.stroke();
+      ctx.restore();
     }
 
     if (levelKey && this.currentLevelExit && Number.isFinite(this.currentLevelExit.x) && Number.isFinite(this.currentLevelExit.y)) {
@@ -2706,6 +3076,7 @@ class GameApp extends HTMLElement {
     this.localStats = null;
     this.localBonuses = null;
     this.localHealth = { health: 0, maxHealth: 0 };
+  this.localMomentum = null;
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
@@ -2719,17 +3090,23 @@ class GameApp extends HTMLElement {
   this._updateLevelStatus(null);
   this._hideLevelBanner();
   this._showBankFeedback('');
+  if (this.portalPromptEl) {
+    this.portalPromptEl.hidden = true;
+    this.portalPromptEl.textContent = '';
+  }
     if (this.statPanel) {
       this.statPanel.data = {
         stats: { strength: 0, dexterity: 0, intellect: 0 },
         bonuses: { hitChance: 0, range: 0, maxCharge: 0 },
         health: 0,
         maxHealth: 0,
+        momentum: null,
       };
     }
     this.activeAction = null;
     this.actionStart = 0;
     this.pointerButtons = 0;
+    this.spellKeyActive = false;
     this.chargeMeter.actionName = 'Idle';
     this.chargeMeter.value = 0;
     if (this.heroIdEl) {
