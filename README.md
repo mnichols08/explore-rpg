@@ -18,7 +18,7 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Portal compass & collapsible minimap** &mdash; follow the HUD arrow and nearest-portals hint, or tuck the minimap away when you want an unobstructed view.
 - **Ambient recovery with safe haven boosts** &mdash; health slowly returns anywhere in the wild, but stepping into the safe zone accelerates regeneration about a thousand-fold.
 - **Battle Momentum streaks** &mdash; chain takedowns to ignite short-lived boosts to power, speed, and XP, all tracked right on your stat panel.
-- **Aurora WebGL backdrop** &mdash; a native shader paints portal beams, hero auras, and dynamic skies that react to dungeons, safe zones, and momentum streaks.
+- **Aurora WebGL backdrop** &mdash; a native shader paints portal beams, hero auras, danger flares around enemy clusters, and dynamic skies that react to dungeons, safe zones, and momentum streaks—with a Glow toggle for purists who want the classic flat look.
 - **Touch-first controls** &mdash; a virtual joystick, ability palette, chat toggle, and quick HUD hide button keep tablets and phones fully playable without a keyboard or mouse.
 
 ## Getting started
@@ -54,11 +54,12 @@ node .\server\server.js --self-test
 - **M key or Music button** toggles the procedural soundtrack.
 - **Shift + N** starts a fresh hero (copy your Hero ID first if you want to return later).
 - **Minimap Toggle** button collapses or reopens the tactical map, and your choice sticks between sessions.
+- **Glow toggle** button switches the WebGL aurora on or off instantly if you want the classic flat look.
 - Watch for the on-screen portal prompt; when it lights up, press **E** to jump through a gateway or exit a dungeon.
 - Down enemies together to earn bonus XP aligned with the finishing attack type.
 - Chain kills quickly to build **Battle Momentum** for stacked speed, damage, and XP bonuses before the timer expires.
 - Keep an eye on the top-right minimap (or its HUD arrow when hidden): cyan rings mark the bank's safe zone, gold diamonds mark gateways, and orange dots show nearby allies.
-- **Touch devices:** drag the left pad to move, tap Slash/Volley/Spell to attack (hold to overcharge), press HUD to hide or reveal the panels, and hit Interact to gather, loot, or traverse portals. Tap the minimap or music buttons in the HUD as needed, and Chat to talk.
+- **Touch devices:** drag the left pad to move, tap Slash/Volley/Spell to attack (hold to overcharge), press HUD to hide or reveal the panels, and hit Interact to gather, loot, or traverse portals. Tap the minimap, glow, or music buttons in the HUD as needed, and Chat to talk.
 
 ## Save & Continue
 
@@ -85,7 +86,7 @@ README.md       # This file
 - **Networking** relies on a handcrafted WebSocket implementation (handshake + frame encoder/decoder) to avoid external packages.
 - **Game loop** runs server-side: movement, combat, attribute updates, and effect resolution happen authoritatively.
 - **Client rendering** uses a canvas-based renderer with a stateless camera, plus Web Components for UI panels.
-- **Visual effects** layer a native WebGL shader beneath the HUD to generate aurora lighting, safe-zone halos, and portal spotlights without third-party libraries.
+- **Visual effects** layer a native WebGL shader beneath the HUD to generate aurora lighting, safe-zone halos, portal spotlights, and dynamic danger lighting without third-party libraries.
 
 ## Next steps
 

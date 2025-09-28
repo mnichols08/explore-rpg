@@ -1,4 +1,5 @@
 const FULLSCREEN_TRIANGLE = new Float32Array([-1, -1, 3, -1, -1, 3]);
+const MAX_DANGER_POINTS = 8;
 
 const VERTEX_SHADER_SOURCE = `
   attribute vec2 a_position;
@@ -22,6 +23,12 @@ const FRAGMENT_SHADER_SOURCE = `
   uniform vec3 u_accentColor;
   uniform float u_momentum;
   uniform float u_dungeonFactor;
+
+  const int MAX_DANGER_POINTS = ${MAX_DANGER_POINTS};
+
+  uniform vec3 u_dangerClusters[MAX_DANGER_POINTS];
+  uniform float u_dangerRadius[MAX_DANGER_POINTS];
+  uniform float u_dangerCount;
 
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -85,6 +92,21 @@ const FRAGMENT_SHADER_SOURCE = `
       base += beam * sweep * clamp(u_portalIntensity, 0.0, 1.0) * vec3(1.0, 0.8, 0.25);
     }
 
+    float dangerGlow = 0.0;
+    for (int i = 0; i < MAX_DANGER_POINTS; i++) {
+      if (float(i) >= u_dangerCount) {
+        continue;
+      }
+      vec3 cluster = u_dangerClusters[i];
+      vec2 dangerCenter = vec2(cluster.x, 1.0 - cluster.y);
+      float dangerIntensity = cluster.z;
+      float radius = max(0.0001, u_dangerRadius[i]);
+      float dist = length((uv - dangerCenter) * vec2(aspect, 1.0));
+      float falloff = smoothstep(radius, 0.0, dist);
+      dangerGlow += pow(max(0.0, falloff), 2.2) * dangerIntensity;
+    }
+    base += dangerGlow * vec3(1.05, 0.3, 0.32);
+
     float star = noise(centered * 120.0 + u_time * 0.3);
     star = step(0.96, star) * 0.4;
     base += star * vec3(0.6, 0.8, 1.0) * (0.2 + 0.8 * clamp(u_momentum, 0.0, 1.0));
@@ -109,6 +131,9 @@ export class WorldWebGLRenderer {
     this._lost = false;
     this.resolution = [canvas.width || 1, canvas.height || 1];
     this._dpr = window.devicePixelRatio || 1;
+    this.maxDangerPoints = MAX_DANGER_POINTS;
+    this._dangerCentersData = new Float32Array(this.maxDangerPoints * 3);
+    this._dangerRadiusData = new Float32Array(this.maxDangerPoints);
 
     if (!this.supported) {
       return;
@@ -192,6 +217,29 @@ export class WorldWebGLRenderer {
 
     const baseColor = Array.isArray(state.baseColor) && state.baseColor.length === 3 ? state.baseColor : DEFAULT_BASE_COLOR;
     const accentColor = Array.isArray(state.accentColor) && state.accentColor.length === 3 ? state.accentColor : DEFAULT_ACCENT_COLOR;
+    const clusters = Array.isArray(state.dangerClusters) ? state.dangerClusters : [];
+    const maxDanger = this.maxDangerPoints || MAX_DANGER_POINTS;
+    const dangerCount = Math.min(maxDanger, clusters.length);
+    if (this._dangerCentersData.length !== maxDanger * 3) {
+      this._dangerCentersData = new Float32Array(maxDanger * 3);
+    }
+    if (this._dangerRadiusData.length !== maxDanger) {
+      this._dangerRadiusData = new Float32Array(maxDanger);
+    }
+    this._dangerCentersData.fill(0);
+    this._dangerRadiusData.fill(0);
+    for (let i = 0; i < dangerCount; i += 1) {
+      const cluster = clusters[i] || {};
+      const x = typeof cluster.x === 'number' && Number.isFinite(cluster.x) ? cluster.x : 0.5;
+      const y = typeof cluster.y === 'number' && Number.isFinite(cluster.y) ? cluster.y : 0.5;
+      const intensity = typeof cluster.intensity === 'number' && Number.isFinite(cluster.intensity) ? cluster.intensity : 0.0;
+      const radius = typeof cluster.radius === 'number' && Number.isFinite(cluster.radius) ? cluster.radius : 0.2;
+      const baseIndex = i * 3;
+      this._dangerCentersData[baseIndex] = x;
+      this._dangerCentersData[baseIndex + 1] = y;
+      this._dangerCentersData[baseIndex + 2] = intensity;
+      this._dangerRadiusData[i] = radius;
+    }
 
     gl.uniform2f(this.locations.uniforms.resolution, this.resolution[0], this.resolution[1]);
     gl.uniform1f(this.locations.uniforms.time, state.time ?? 0);
@@ -216,6 +264,15 @@ export class WorldWebGLRenderer {
     gl.uniform3fv(this.locations.uniforms.accentColor, accentColor);
     gl.uniform1f(this.locations.uniforms.momentum, state.momentum ?? 0);
     gl.uniform1f(this.locations.uniforms.dungeonFactor, state.dungeonFactor ?? 0);
+    if (this.locations.uniforms.dangerCount) {
+      gl.uniform1f(this.locations.uniforms.dangerCount, dangerCount);
+    }
+    if (this.locations.uniforms.dangerClusters) {
+      gl.uniform3fv(this.locations.uniforms.dangerClusters, this._dangerCentersData);
+    }
+    if (this.locations.uniforms.dangerRadius) {
+      gl.uniform1fv(this.locations.uniforms.dangerRadius, this._dangerRadiusData);
+    }
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -244,6 +301,8 @@ export class WorldWebGLRenderer {
       this.canvas.removeEventListener('webglcontextrestored', this._handleContextRestored);
     }
     this.supported = false;
+    this._dangerCentersData = new Float32Array(0);
+    this._dangerRadiusData = new Float32Array(0);
   }
 
   _initContext() {
@@ -279,6 +338,9 @@ export class WorldWebGLRenderer {
         accentColor: gl.getUniformLocation(this.program, 'u_accentColor'),
         momentum: gl.getUniformLocation(this.program, 'u_momentum'),
         dungeonFactor: gl.getUniformLocation(this.program, 'u_dungeonFactor'),
+        dangerClusters: gl.getUniformLocation(this.program, 'u_dangerClusters'),
+        dangerRadius: gl.getUniformLocation(this.program, 'u_dangerRadius'),
+        dangerCount: gl.getUniformLocation(this.program, 'u_dangerCount'),
       },
     };
 

@@ -257,6 +257,37 @@ template.innerHTML = `
       transform: translateY(1px);
     }
 
+    .visual-toggle {
+      all: unset;
+      cursor: pointer;
+      padding: 0.35rem 0.65rem;
+      border-radius: 0.55rem;
+      background: rgba(30, 41, 59, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #f8fafc;
+      transition: background 150ms ease, border 150ms ease, transform 150ms ease, color 150ms ease;
+    }
+
+    .visual-toggle:hover:not([disabled]) {
+      background: rgba(51, 65, 85, 0.88);
+      border-color: rgba(148, 163, 184, 0.55);
+    }
+
+    .visual-toggle:active:not([disabled]) {
+      transform: translateY(1px);
+    }
+
+    .visual-toggle[disabled] {
+      cursor: default;
+      opacity: 0.55;
+      color: rgba(148, 163, 184, 0.7);
+      border-color: rgba(148, 163, 184, 0.25);
+      background: rgba(30, 41, 59, 0.55);
+    }
+
     .hero-id {
       font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
       font-size: 0.78rem;
@@ -898,6 +929,7 @@ template.innerHTML = `
     <div class="top-right">
       <charge-meter></charge-meter>
       <audio-toggle></audio-toggle>
+      <button type="button" class="visual-toggle" data-visual-toggle aria-pressed="true">Glow On</button>
       <div class="minimap-card" data-minimap-card>
         <div class="minimap-header" data-minimap-header>
           <span>Minimap</span>
@@ -927,7 +959,7 @@ template.innerHTML = `
   Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Collapse or reopen the minimap from its header button. Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div class="mobile-help">
-        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Tap Chat to open the message bar, HUD to hide or reveal panels, and Interact to scoop loot, gather ore, or slip through glowing portals. The minimap toggle and music switch live up top when you need them.
+        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Tap Chat to open the message bar, HUD to hide or reveal panels, and Interact to scoop loot, gather ore, or slip through glowing portals. The minimap, glow, and music toggles live up top when you need them.
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
@@ -993,7 +1025,7 @@ template.innerHTML = `
         <button type="button" class="touch-interact" data-touch-interact aria-label="Interact">
           <span>Interact</span>
         </button>
-    <p class="touch-hint">Drag left pad to move · Tap actions to attack · Chat to talk · HUD to clear or restore panels · Interact for loot and portals</p>
+  <p class="touch-hint">Drag left pad to move · Tap actions to attack · Chat to talk · Glow to swap visuals · HUD to clear panels · Interact for loot and portals</p>
       </div>
     </div>
   </div>
@@ -1082,6 +1114,7 @@ const LEVEL_VIGNETTE = {
 };
 const PORTAL_INTERACT_RADIUS = 1.6;
 const MINIMAP_STORAGE_KEY = 'explore-rpg-minimap';
+const VISUAL_STORAGE_KEY = 'explore-rpg-visuals';
 const UI_COLLAPSE_STORAGE_KEY = 'explore-rpg-ui-collapsed';
 const MINIMAP_SIZE = 176;
 const MINIMAP_TILE_COLORS = {
@@ -1177,6 +1210,7 @@ class GameApp extends HTMLElement {
     this.minimapToggleButton = this.shadowRoot.querySelector('[data-minimap-toggle]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
+    this.visualToggleButton = this.shadowRoot.querySelector('[data-visual-toggle]');
   this.heroIdEl = this.shadowRoot.querySelector('[data-hero-id]');
   this.copyHeroButton = this.shadowRoot.querySelector('[data-copy-id]');
   this.newHeroButton = this.shadowRoot.querySelector('[data-new-hero]');
@@ -1227,6 +1261,7 @@ class GameApp extends HTMLElement {
   this._handlePointerSchemeChange = this._handlePointerSchemeChange.bind(this);
   this._handleTouchChatToggle = this._handleTouchChatToggle.bind(this);
   this._handleTouchChatPointerEnd = this._handleTouchChatPointerEnd.bind(this);
+  this._handleVisualToggle = this._handleVisualToggle.bind(this);
   this._handleTouchUiToggle = this._handleTouchUiToggle.bind(this);
   this._handleTouchUiPointerEnd = this._handleTouchUiPointerEnd.bind(this);
 
@@ -1246,6 +1281,7 @@ class GameApp extends HTMLElement {
   this.uiCollapsed = false;
   this.viewportWidth = 0;
   this.viewportHeight = 0;
+  this.webglEnabled = Boolean(this.webglRenderer);
     const coarseQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(pointer: coarse)') : null;
     this.coarsePointerQuery = coarseQuery;
     if ((typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) || (coarseQuery && coarseQuery.matches)) {
@@ -1320,6 +1356,7 @@ class GameApp extends HTMLElement {
     this._setMinimapVisible(true, false);
     this._loadMinimapPreference();
     this._loadUiCollapsePreference();
+    this._loadVisualPreference();
   }
 
   connectedCallback() {
@@ -1338,6 +1375,7 @@ class GameApp extends HTMLElement {
     if (this.audioToggle) {
       this.audioToggle.active = this.audio.musicEnabled;
     }
+    this.visualToggleButton?.addEventListener('click', this._handleVisualToggle);
     this.minimapToggleButton?.addEventListener('click', this._toggleMinimapVisibility);
     this.copyHeroButton?.addEventListener('click', this._handleCopyHeroId);
     this.newHeroButton?.addEventListener('click', this._handleNewHeroRequest);
@@ -1385,6 +1423,7 @@ class GameApp extends HTMLElement {
     this.canvas.removeEventListener('pointerleave', this._handlePointerLeave);
     this.canvas.removeEventListener('pointercancel', this._handlePointerCancel);
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
+  this.visualToggleButton?.removeEventListener('click', this._handleVisualToggle);
   this.minimapToggleButton?.removeEventListener('click', this._toggleMinimapVisibility);
   this.copyHeroButton?.removeEventListener('click', this._handleCopyHeroId);
   this.newHeroButton?.removeEventListener('click', this._handleNewHeroRequest);
@@ -1407,6 +1446,9 @@ class GameApp extends HTMLElement {
     this.levelBannerTimer = null;
   }
     this.audio.setMusicEnabled(false);
+    this.webglRenderer?.dispose?.();
+    this.webglRenderer = null;
+    this.webglEnabled = false;
     if (this.socket) {
       this.socket.close();
       this.socket = null;
@@ -1641,8 +1683,8 @@ class GameApp extends HTMLElement {
     ctx.clearRect(0, 0, width, height);
 
     if (!this.world) {
-      if (this.webglRenderer) {
-        this.webglRenderer.render({ width, height, dpr, time: timeSeconds });
+      if (this.webglRenderer && this.webglEnabled) {
+        this.webglRenderer.render({ width, height, dpr, time: timeSeconds, dangerClusters: [] });
       } else {
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, width, height);
@@ -1706,7 +1748,11 @@ class GameApp extends HTMLElement {
     const baseColorVec = this._cssColorToVec3(levelTheme?.background || '#0f172a', [0.05, 0.07, 0.12]);
     const dungeonFactor = currentLevelId ? 1 : 0;
 
-    if (this.webglRenderer) {
+    const dangerClusters = this.webglRenderer && this.webglEnabled
+      ? this._collectDangerClusters(cameraX, cameraY, width, height, currentLevelId)
+      : [];
+
+    if (this.webglRenderer && this.webglEnabled) {
       this.webglRenderer.render({
         width,
         height,
@@ -1721,6 +1767,7 @@ class GameApp extends HTMLElement {
         baseColor: baseColorVec,
         accentColor: accentColorVec,
         dungeonFactor,
+        dangerClusters,
       });
     } else {
       ctx.fillStyle = levelTheme?.background || '#0f172a';
@@ -2591,6 +2638,74 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _handleVisualToggle(event) {
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+    if (!this.webglRenderer) {
+      return;
+    }
+    this._setVisualEffectsEnabled(!this.webglEnabled);
+  }
+
+  _setVisualEffectsEnabled(enabled, persist = true) {
+    const available = Boolean(this.webglRenderer);
+    const next = available && Boolean(enabled);
+    this.webglEnabled = next;
+    if (this.webglCanvas) {
+      this.webglCanvas.style.visibility = next ? 'visible' : 'hidden';
+      this.webglCanvas.style.opacity = next ? '1' : '0';
+    }
+    this._syncVisualToggle();
+    if (persist) {
+      try {
+        window.localStorage?.setItem(VISUAL_STORAGE_KEY, enabled ? '1' : '0');
+      } catch (err) {
+        // ignore storage issues
+      }
+    }
+  }
+
+  _syncVisualToggle() {
+    if (!this.visualToggleButton) return;
+    if (!this.webglRenderer) {
+      this.visualToggleButton.textContent = 'Glow N/A';
+      this.visualToggleButton.disabled = true;
+      this.visualToggleButton.setAttribute('aria-pressed', 'false');
+      this.visualToggleButton.setAttribute('aria-label', 'Glow visuals not supported');
+      return;
+    }
+    const label = this.webglEnabled ? 'Glow On' : 'Glow Off';
+    this.visualToggleButton.disabled = false;
+    this.visualToggleButton.textContent = label;
+    this.visualToggleButton.setAttribute('aria-pressed', this.webglEnabled ? 'true' : 'false');
+    this.visualToggleButton.setAttribute('aria-label', `Glow visuals ${this.webglEnabled ? 'enabled' : 'disabled'}`);
+  }
+
+  _loadVisualPreference() {
+    if (!this.webglRenderer) {
+      this.webglEnabled = false;
+      if (this.webglCanvas) {
+        this.webglCanvas.style.visibility = 'hidden';
+        this.webglCanvas.style.opacity = '0';
+      }
+      this._syncVisualToggle();
+      return;
+    }
+    let stored = null;
+    try {
+      stored = window.localStorage?.getItem(VISUAL_STORAGE_KEY);
+    } catch (err) {
+      stored = null;
+    }
+    if (stored === '0') {
+      this._setVisualEffectsEnabled(false, false);
+    } else {
+      this._setVisualEffectsEnabled(true, false);
+    }
+  }
+
   _setUICollapsed(collapsed, persist = true) {
     const next = Boolean(collapsed);
     this.uiCollapsed = next;
@@ -3287,6 +3402,76 @@ class GameApp extends HTMLElement {
       shadow: this._withAlpha(accent, 0.45),
       background: '#0f172a',
     };
+  }
+
+  _collectDangerClusters(cameraX, cameraY, width, height, currentLevelId) {
+    if (!this.enemies || !this.enemies.size) return [];
+    const maxRadiusTiles = 2.5;
+    const clusterDivisor = 2;
+    const maxDistance = 30;
+    const clusters = new Map();
+    for (const enemy of this.enemies.values()) {
+      if (!enemy) continue;
+      if (enemy.levelId && enemy.levelId !== currentLevelId) continue;
+      if (Number.isFinite(enemy.level) && enemy.level < 0) continue;
+      const ex = Number(enemy.x);
+      const ey = Number(enemy.y);
+      if (!Number.isFinite(ex) || !Number.isFinite(ey)) continue;
+      const dx = ex - cameraX;
+      const dy = ey - cameraY;
+      if (Math.hypot(dx, dy) > maxDistance) continue;
+      const gx = Math.round(ex / clusterDivisor);
+      const gy = Math.round(ey / clusterDivisor);
+      const key = `${gx},${gy}`;
+      let cluster = clusters.get(key);
+      if (!cluster) {
+        cluster = {
+          count: 0,
+          sumX: 0,
+          sumY: 0,
+          minX: ex,
+          maxX: ex,
+          minY: ey,
+          maxY: ey,
+        };
+        clusters.set(key, cluster);
+      }
+      cluster.count += 1;
+      cluster.sumX += ex;
+      cluster.sumY += ey;
+      if (ex < cluster.minX) cluster.minX = ex;
+      if (ex > cluster.maxX) cluster.maxX = ex;
+      if (ey < cluster.minY) cluster.minY = ey;
+      if (ey > cluster.maxY) cluster.maxY = ey;
+    }
+
+    if (!clusters.size) return [];
+    const results = [];
+    const denomW = Math.max(1, width);
+    const denomH = Math.max(1, height);
+    const denomRadius = Math.max(denomW, denomH);
+    for (const cluster of clusters.values()) {
+      if (cluster.count <= 0) continue;
+      const centerX = cluster.sumX / cluster.count;
+      const centerY = cluster.sumY / cluster.count;
+      const spanX = cluster.maxX - cluster.minX;
+      const spanY = cluster.maxY - cluster.minY;
+      const estimatedRadiusTiles = Math.min(maxRadiusTiles, Math.max(1.2, Math.max(spanX, spanY) * 0.5 + 0.8));
+      const distance = Math.hypot(centerX - cameraX, centerY - cameraY);
+      const crowdFactor = Math.min(1, cluster.count / 6);
+      const distanceFactor = Math.max(0, 1 - distance / maxDistance);
+      const intensity = Math.min(1, 0.35 + crowdFactor * 0.9) * distanceFactor;
+      if (intensity <= 0.02) continue;
+      const screen = this._worldToScreen(centerX, centerY, cameraX, cameraY, width, height);
+      const normX = Math.max(-2, Math.min(3, screen.x / denomW));
+      const normY = Math.max(-2, Math.min(3, screen.y / denomH));
+      const radiusPx = estimatedRadiusTiles * this.tileSize;
+      const normRadius = Math.min(1.2, radiusPx / denomRadius);
+      results.push({ x: normX, y: normY, intensity, radius: normRadius });
+    }
+
+    results.sort((a, b) => b.intensity - a.intensity);
+    return results.slice(0, 8);
   }
 
   _renderPortals(ctx, cameraX, cameraY, width, height, time, local, currentLevelId) {
