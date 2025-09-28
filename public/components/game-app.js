@@ -6778,11 +6778,42 @@ class GameApp extends HTMLElement {
   _shouldIgnoreGlobalKey(event) {
     if (!event) return false;
     const target = event.target;
-    if (!target) return false;
-    if (target === this.chatInput) {
+    const isChatInput = (node) => node === this.chatInput;
+
+    const checkNode = (node) => {
+      if (!node) return false;
+      if (isChatInput(node)) {
+        return false;
+      }
+      return this._isEditableTarget(node);
+    };
+
+    if (checkNode(target)) {
+      return true;
+    }
+
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : null;
+    if (Array.isArray(path)) {
+      for (const node of path) {
+        if (isChatInput(node)) {
+          return false;
+        }
+        if (this._isEditableTarget(node)) {
+          return true;
+        }
+      }
+    }
+
+    const active = (this.shadowRoot && this.shadowRoot.activeElement) || (typeof document !== 'undefined' ? document.activeElement : null);
+    if (checkNode(active)) {
+      return true;
+    }
+
+    if (isChatInput(target) || (Array.isArray(path) && path.includes(this.chatInput)) || checkNode(this.chatInput)) {
       return false;
     }
-    return this._isEditableTarget(target);
+
+    return false;
   }
 
   _handleJoystickStart(event) {
