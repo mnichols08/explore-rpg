@@ -86,6 +86,9 @@ const MOMENTUM_DAMAGE_SCALE = 0.1;
 const MOMENTUM_SPEED_SCALE = 0.06;
 const MOMENTUM_XP_SCALE = 0.08;
 
+const HERO_NAME_MIN_LENGTH = 3;
+const HERO_NAME_MAX_LENGTH = 24;
+
 let MongoClientModule = null;
 let mongoClient = null;
 let profilesCollection = null;
@@ -744,6 +747,9 @@ function createPlayer(connection, requestedProfileId) {
   const normalizedProfileId = normalizeProfileId(requestedProfileId);
   const profileId = normalizedProfileId ?? generateProfileId();
   let profileData = profiles.get(profileId);
+  const isNewProfile = !profileData;
+  const isFirstProfile = isNewProfile && profiles.size === 0;
+
   if (!profileData) {
     profileData = {
       xp: cloneXP(),
@@ -754,13 +760,34 @@ function createPlayer(connection, requestedProfileId) {
       health: 100,
       inventory: ensureInventoryData(),
       bank: ensureBankData(),
+      name: null,
+      tutorialCompleted: false,
+      admin: isFirstProfile,
+      banned: false,
+      createdAt: timestamp,
     };
-  } else if (!profileData.alias) {
-    profileData.alias = allocateAlias();
+  } else {
+    profileData.xp = cloneXP(profileData.xp);
+    profileData.maxHealth = Number(profileData.maxHealth) || 100;
+    profileData.lastSeen = timestamp;
+    if (!profileData.alias) {
+      profileData.alias = allocateAlias();
+    }
+    profileData.name = normalizeHeroName(profileData.name);
+    profileData.tutorialCompleted = Boolean(profileData.tutorialCompleted);
+    profileData.admin = Boolean(profileData.admin);
+    profileData.banned = Boolean(profileData.banned);
+    const createdAt = Number(profileData.createdAt);
+    profileData.createdAt = Number.isFinite(createdAt) && createdAt > 0 ? createdAt : timestamp;
   }
 
   profileData.inventory = ensureInventoryData(profileData.inventory);
   profileData.bank = ensureBankData(profileData.bank);
+
+  if (profileData.banned) {
+    profiles.set(profileId, profileData);
+    return { error: 'banned', profileId, profileData };
+  }
 
   const alias = profileData.alias;
 
@@ -778,7 +805,7 @@ function createPlayer(connection, requestedProfileId) {
 
   profiles.set(profileId, profileData);
 
-  let spawn;
+  let spawn = null;
   if (profileData.position) {
     const px = clamp(Number(profileData.position.x) || 0.5, 0.5, WORLD_WIDTH - 0.5);
     const py = clamp(Number(profileData.position.y) || 0.5, 0.5, WORLD_HEIGHT - 0.5);
@@ -789,6 +816,7 @@ function createPlayer(connection, requestedProfileId) {
   if (!spawn) {
     spawn = findSpawn();
   }
+
   const xp = cloneXP(profileData?.xp);
   const baseMaxHealth = Number(profileData?.maxHealth) || 100;
   let savedHealth = Number(profileData?.health);
@@ -806,8 +834,8 @@ function createPlayer(connection, requestedProfileId) {
     x: spawn.x,
     y: spawn.y,
     move: { x: 0, y: 0 },
-  aim: { x: 1, y: 0 },
-  health: clamp(savedHealth, 1, baseMaxHealth),
+    aim: { x: 1, y: 0 },
+    health: clamp(savedHealth, 1, baseMaxHealth),
     maxHealth: baseMaxHealth,
     baseMaxHealth,
     lastUpdate: timestamp,
@@ -823,6 +851,15 @@ function createPlayer(connection, requestedProfileId) {
     levelReturn: null,
     momentum: createMomentumState(),
   };
+
+  player.profileMeta = {
+    name: profileData.name || null,
+    tutorialCompleted: Boolean(profileData.tutorialCompleted),
+    isAdmin: Boolean(profileData.admin),
+    banned: Boolean(profileData.banned),
+    createdAt: profileData.createdAt,
+  };
+
   const spawnLevel = levelForCoordinate(spawn.x, spawn.y);
   if (spawnLevel) {
     player.levelId = spawnLevel.id;
@@ -832,8 +869,14 @@ function createPlayer(connection, requestedProfileId) {
   player.health = clamp(savedHealth, 1, player.maxHealth);
   profileData.health = player.health;
   profileData.maxHealth = player.baseMaxHealth;
+  profileData.name = player.profileMeta.name;
+  profileData.tutorialCompleted = player.profileMeta.tutorialCompleted;
+  profileData.admin = player.profileMeta.isAdmin;
+  profileData.banned = player.profileMeta.banned;
+  profileData.lastSeen = timestamp;
   syncProfile(player);
-  return player;
+
+  return { player, profileId, profileData };
 }
 
 function createEnemy(options = {}) {
@@ -1441,6 +1484,35 @@ function isInSafeZone(x, y) {
 function playerInSafeZone(player) {
   if (!player || player.levelId) return false;
   return isInSafeZone(player.x, player.y);
+}
+
+function getSafeZoneLocation() {
+  if (!bankLocation) {
+    bankLocation = resolveBankPosition();
+  }
+  return bankLocation || { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+}
+
+function teleportPlayerToSafeZone(player) {
+  if (!player) return null;
+  const safe = getSafeZoneLocation();
+  const angle = Math.random() * Math.PI * 2;
+  const radius = Math.random() * Math.max(0, SAFE_ZONE_RADIUS - 1.2);
+  let x = safe.x + Math.cos(angle) * radius;
+  let y = safe.y + Math.sin(angle) * radius;
+  if (!walkable(x, y)) {
+    x = safe.x;
+    y = safe.y;
+  }
+  player.levelId = null;
+  player.levelReturn = null;
+  player.x = clamp(x, 0.5, WORLD_WIDTH - 0.5);
+  player.y = clamp(y, 0.5, WORLD_HEIGHT - 0.5);
+  player.move.x = 0;
+  player.move.y = 0;
+  player.action = null;
+  player.health = player.maxHealth;
+  return { x: player.x, y: player.y };
 }
 
 function ensureInventoryData(source) {
@@ -2400,6 +2472,8 @@ function gameTick(now, dt) {
     type: 'state',
     players: Array.from(clients.values()).map((player) => ({
       id: player.id,
+      name: player.profileMeta?.name || null,
+      admin: Boolean(player.profileMeta?.isAdmin),
       x: player.x,
       y: player.y,
       health: player.health,
@@ -2631,7 +2705,413 @@ function handleMessage(player, message) {
       message: result?.message ?? null,
       equipment: serializeEquipment(player.equipment),
     });
+  } else if (payload.type === 'profile') {
+    handleProfileMessage(player, payload);
+  } else if (payload.type === 'admin') {
+    handleAdminMessage(player, payload);
   }
+}
+
+function sendProfileSnapshot(player) {
+  if (!player) return;
+  sendTo(player, {
+    type: 'profile',
+    event: 'refresh',
+    profile: {
+      id: player.profileId,
+      name: player.profileMeta?.name || null,
+      tutorialCompleted: Boolean(player.profileMeta?.tutorialCompleted),
+      isAdmin: Boolean(player.profileMeta?.isAdmin),
+      banned: Boolean(player.profileMeta?.banned),
+      createdAt: player.profileMeta?.createdAt || null,
+    },
+  });
+}
+
+function handleProfileMessage(player, payload) {
+  if (!player?.profileId) return;
+  const action = typeof payload.action === 'string' ? payload.action.toLowerCase() : '';
+
+  if (action === 'set-name') {
+    const normalized = normalizeHeroName(payload.name);
+    if (!normalized) {
+      sendTo(player, {
+        type: 'profile',
+        event: 'error',
+        field: 'name',
+        message: `Hero name must be ${HERO_NAME_MIN_LENGTH}-${HERO_NAME_MAX_LENGTH} characters using letters, numbers, spaces, apostrophes, or hyphens.`,
+      });
+      return;
+    }
+    player.profileMeta.name = normalized;
+    const record = profiles.get(player.profileId) || {};
+    record.name = normalized;
+    profiles.set(player.profileId, record);
+    syncProfile(player);
+    sendTo(player, {
+      type: 'profile',
+      event: 'name-set',
+      name: normalized,
+    });
+    sendProfileSnapshot(player);
+  } else if (action === 'tutorial-complete') {
+    player.profileMeta.tutorialCompleted = true;
+    const record = profiles.get(player.profileId) || {};
+    record.tutorialCompleted = true;
+    profiles.set(player.profileId, record);
+    const destination = teleportPlayerToSafeZone(player);
+    syncProfile(player);
+    sendTo(player, {
+      type: 'profile',
+      event: 'tutorial-complete',
+      tutorialCompleted: true,
+      safeZone: destination,
+      skipped: Boolean(payload.skipped),
+    });
+    sendProfileSnapshot(player);
+  } else {
+    sendTo(player, {
+      type: 'profile',
+      event: 'error',
+      message: 'Unknown profile action.',
+    });
+  }
+}
+
+function handleAdminMessage(player, payload) {
+  if (!player?.profileMeta?.isAdmin) {
+    sendTo(player, {
+      type: 'admin',
+      event: 'error',
+      message: 'Admin access required.'
+    });
+    return;
+  }
+
+  const command = typeof payload.command === 'string' ? payload.command.toLowerCase() : 'list';
+  if (!command || command === 'list' || command === 'refresh') {
+    sendAdminProfiles(player);
+    return;
+  }
+
+  const respondError = (message, extra = {}) => {
+    sendTo(player, {
+      type: 'admin',
+      event: 'error',
+      command,
+      message,
+      ...extra,
+    });
+  };
+
+  const respondOk = (data = {}) => {
+    sendTo(player, {
+      type: 'admin',
+      event: 'ok',
+      command,
+      ...data,
+    });
+  };
+
+  const profileId = resolveProfileId(payload.profileId);
+  if (!profileId) {
+    respondError('Profile not found.');
+    return;
+  }
+
+  if (command === 'set-xp') {
+    const xpPayload = payload.xp || {};
+    const normalizeXp = (value) => Math.max(0, Math.floor(Number(value) || 0));
+    const nextXp = {
+      melee: normalizeXp(xpPayload.melee),
+      ranged: normalizeXp(xpPayload.ranged),
+      magic: normalizeXp(xpPayload.magic),
+    };
+    const targetPlayer = findPlayerByProfile(profileId);
+    if (targetPlayer) {
+      targetPlayer.xp = cloneXP(nextXp);
+      applyStats(targetPlayer);
+      targetPlayer.health = clamp(targetPlayer.health, 1, targetPlayer.maxHealth);
+      syncProfile(targetPlayer);
+    } else {
+      mutateProfileRecord(profileId, (record) => {
+        record.xp = cloneXP(nextXp);
+        record.maxHealth = Number(record.maxHealth) || 100;
+        record.health = clamp(Number(record.health) || record.maxHealth, 1, record.maxHealth);
+      });
+    }
+    respondOk({ profileId, xp: nextXp });
+    sendAdminProfiles(player);
+    return;
+  }
+
+  if (command === 'set-meta') {
+    const meta = payload.meta || {};
+    const targetPlayer = findPlayerByProfile(profileId);
+    const hasName = Object.prototype.hasOwnProperty.call(meta, 'name');
+    const hasAdminFlag = Object.prototype.hasOwnProperty.call(meta, 'admin');
+    const hasBannedFlag = Object.prototype.hasOwnProperty.call(meta, 'banned');
+    const hasTutorialFlag = Object.prototype.hasOwnProperty.call(meta, 'tutorialCompleted');
+
+    const updates = {};
+    if (hasName) {
+      if (!meta.name) {
+        updates.name = null;
+      } else {
+        const normalizedName = normalizeHeroName(meta.name);
+        if (!normalizedName) {
+          respondError(`Name must be ${HERO_NAME_MIN_LENGTH}-${HERO_NAME_MAX_LENGTH} characters.`, { field: 'name' });
+          return;
+        }
+        updates.name = normalizedName;
+      }
+    }
+    if (hasAdminFlag) {
+      updates.admin = Boolean(meta.admin);
+    }
+    if (hasBannedFlag) {
+      updates.banned = Boolean(meta.banned);
+    }
+    if (hasTutorialFlag) {
+      updates.tutorialCompleted = Boolean(meta.tutorialCompleted);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      respondError('No metadata fields provided.');
+      return;
+    }
+
+    const applyUpdatesToRecord = (record) => {
+      if (!record) return;
+      if (hasName) record.name = updates.name;
+      if (hasAdminFlag) record.admin = updates.admin;
+      if (hasBannedFlag) record.banned = updates.banned;
+      if (hasTutorialFlag) record.tutorialCompleted = updates.tutorialCompleted;
+    };
+
+    if (targetPlayer) {
+      if (hasName) targetPlayer.profileMeta.name = updates.name;
+      if (hasAdminFlag) targetPlayer.profileMeta.isAdmin = updates.admin;
+      if (hasBannedFlag) targetPlayer.profileMeta.banned = updates.banned;
+      if (hasTutorialFlag) targetPlayer.profileMeta.tutorialCompleted = updates.tutorialCompleted;
+      applyUpdatesToRecord(profiles.get(profileId));
+      syncProfile(targetPlayer);
+      sendProfileSnapshot(targetPlayer);
+      if (updates.banned) {
+        try {
+          sendTo(targetPlayer, {
+            type: 'control',
+            event: 'forced-logout',
+            reason: 'You have been banned by the server admin.',
+          });
+        } catch (err) {
+          // ignore send failures
+        }
+        setTimeout(() => {
+          try {
+            targetPlayer.connection?.socket?.end?.();
+          } catch (err) {
+            targetPlayer.connection?.socket?.destroy?.();
+          }
+        }, 25);
+      }
+    } else {
+      mutateProfileRecord(profileId, applyUpdatesToRecord);
+    }
+
+    respondOk({ profileId, meta: updates });
+    sendAdminProfiles(player);
+    return;
+  }
+
+  if (command === 'kick') {
+    const targetPlayer = findPlayerByProfile(profileId);
+    if (!targetPlayer) {
+      respondError('Player is not currently online.');
+      return;
+    }
+    try {
+      sendTo(targetPlayer, {
+        type: 'control',
+        event: 'forced-logout',
+        reason: 'You have been removed by the server admin.',
+      });
+    } catch (err) {
+      // ignore send failures
+    }
+    setTimeout(() => {
+      try {
+        targetPlayer.connection?.socket?.end?.();
+      } catch (err) {
+        targetPlayer.connection?.socket?.destroy?.();
+      }
+    }, 25);
+    respondOk({ profileId });
+    sendAdminProfiles(player);
+    return;
+  }
+
+  if (command === 'teleport-safe') {
+    const targetPlayer = findPlayerByProfile(profileId);
+    if (!targetPlayer) {
+      respondError('Player must be online to teleport.');
+      return;
+    }
+    const destination = teleportPlayerToSafeZone(targetPlayer);
+    syncProfile(targetPlayer);
+    try {
+      sendTo(targetPlayer, {
+        type: 'control',
+        event: 'teleport-safe',
+        location: destination,
+      });
+    } catch (err) {
+      // ignore
+    }
+    respondOk({ profileId, safeZone: destination });
+    sendAdminProfiles(player);
+    return;
+  }
+
+  if (command === 'grant-currency') {
+    const inventoryDelta = Math.floor(Number(payload.inventoryDelta) || 0);
+    const bankDelta = Math.floor(Number(payload.bankDelta) || 0);
+    if (inventoryDelta === 0 && bankDelta === 0) {
+      respondError('Specify a non-zero currency adjustment.');
+      return;
+    }
+    const applyAdjustments = (inventory, delta) => {
+      if (!delta) return inventory;
+      const next = { ...inventory };
+      next.currency = Math.max(0, Math.floor(Number(next.currency) || 0) + delta);
+      return next;
+    };
+    const targetPlayer = findPlayerByProfile(profileId);
+    if (targetPlayer) {
+      if (inventoryDelta) {
+        targetPlayer.inventory.currency = Math.max(0, Math.floor(Number(targetPlayer.inventory.currency) || 0) + inventoryDelta);
+      }
+      if (bankDelta) {
+        targetPlayer.bank.currency = Math.max(0, Math.floor(Number(targetPlayer.bank.currency) || 0) + bankDelta);
+      }
+      sendInventoryUpdate(targetPlayer);
+    } else {
+      mutateProfileRecord(profileId, (record) => {
+        const inventory = ensureInventoryData(record.inventory);
+        const bank = ensureBankData(record.bank);
+        record.inventory = applyAdjustments(inventory, inventoryDelta);
+        record.bank = applyAdjustments(bank, bankDelta);
+      });
+    }
+    respondOk({ profileId, inventoryDelta, bankDelta });
+    sendAdminProfiles(player);
+    return;
+  }
+
+  respondError('Unknown admin command.');
+}
+
+function resolveProfileId(identifier) {
+  if (!identifier) return null;
+  const normalized = normalizeProfileId(identifier);
+  if (normalized && profiles.has(normalized)) return normalized;
+  if (typeof identifier === 'string') {
+    const lowered = identifier.trim().toLowerCase();
+    for (const [id, record] of profiles.entries()) {
+      const alias = typeof record?.alias === 'string' ? record.alias.toLowerCase() : null;
+      if (alias && alias === lowered) {
+        return id;
+      }
+    }
+  }
+  return null;
+}
+
+function findPlayerByProfile(profileId) {
+  if (!profileId) return null;
+  for (const client of clients.values()) {
+    if (client.profileId === profileId) {
+      return client;
+    }
+  }
+  return null;
+}
+
+function mutateProfileRecord(profileId, mutator) {
+  if (!profileId || typeof mutator !== 'function') return null;
+  const record = profiles.get(profileId);
+  if (!record) return null;
+  mutator(record);
+  profiles.set(profileId, record);
+  if (usingMongo && profilesCollection) {
+    persistProfileToMongo(profileId, record);
+  } else {
+    queueSaveProfiles();
+  }
+  return record;
+}
+
+function snapshotInventory(source, bank = false) {
+  const base = bank ? ensureBankData(source) : ensureInventoryData(source);
+  return serializeInventory(base);
+}
+
+function buildAdminProfileList() {
+  const onlineByProfile = new Map();
+  for (const client of clients.values()) {
+    if (client.profileId) {
+      onlineByProfile.set(client.profileId, client);
+    }
+  }
+
+  const list = [];
+  for (const [profileId, record] of profiles.entries()) {
+    const online = onlineByProfile.get(profileId) || null;
+    const xp = cloneXP(record?.xp);
+    const stats = computeStatsFromXP({ xp });
+    const position = online
+      ? { x: online.x, y: online.y, levelId: online.levelId || null }
+      : record?.position && typeof record.position.x === 'number' && typeof record.position.y === 'number'
+      ? { x: record.position.x, y: record.position.y, levelId: null }
+      : null;
+    list.push({
+      id: profileId,
+      name: record?.name || null,
+      alias: record?.alias || null,
+      admin: Boolean(record?.admin),
+      banned: Boolean(record?.banned),
+      tutorialCompleted: Boolean(record?.tutorialCompleted),
+      lastSeen: Number(record?.lastSeen) || null,
+      createdAt: Number(record?.createdAt) || null,
+      maxHealth: Number(record?.maxHealth) || 100,
+      xp,
+      stats,
+      inventory: snapshotInventory(record?.inventory, false),
+      bank: snapshotInventory(record?.bank, true),
+      online: Boolean(online),
+      playerId: online?.id || null,
+      position,
+    });
+  }
+
+  list.sort((a, b) => {
+    const left = a.createdAt || 0;
+    const right = b.createdAt || 0;
+    if (left === right) return a.id.localeCompare(b.id);
+    return left - right;
+  });
+
+  return list;
+}
+
+function sendAdminProfiles(adminPlayer) {
+  if (!adminPlayer) return;
+  sendTo(adminPlayer, {
+    type: 'admin',
+    event: 'profiles',
+    profiles: buildAdminProfileList(),
+    safeZone: getSafeZoneLocation(),
+  });
 }
 
 class WebSocketConnection {
@@ -2817,6 +3297,21 @@ function normalizeProfileId(value) {
   return trimmed;
 }
 
+function normalizeHeroName(value) {
+  if (!value || typeof value !== 'string') return null;
+  let sanitized = value.replace(/[\r\n]+/g, ' ');
+  sanitized = sanitized.replace(/\s+/g, ' ').trim();
+  sanitized = sanitized.replace(/[^A-Za-z0-9'\-\s]/g, '');
+  sanitized = sanitized.replace(/\s{2,}/g, ' ');
+  if (sanitized.length > HERO_NAME_MAX_LENGTH) {
+    sanitized = sanitized.slice(0, HERO_NAME_MAX_LENGTH).trim();
+  }
+  if (sanitized.length < HERO_NAME_MIN_LENGTH) {
+    return null;
+  }
+  return sanitized;
+}
+
 function generateProfileId() {
   let id = null;
   do {
@@ -2831,16 +3326,40 @@ function generateProfileId() {
 
 function syncProfile(player) {
   if (!player?.profileId) return;
+  const now = Date.now();
+  const existing = profiles.get(player.profileId) || {};
+  const createdAt = Number(player.profileMeta?.createdAt) || Number(existing.createdAt) || now;
+  const meta = player.profileMeta || {};
+  const name = meta.name != null ? meta.name : existing.name || null;
+  const tutorialCompleted =
+    meta.tutorialCompleted != null ? Boolean(meta.tutorialCompleted) : Boolean(existing.tutorialCompleted);
+  const adminFlag = meta.isAdmin != null ? Boolean(meta.isAdmin) : Boolean(existing.admin);
+  const bannedFlag = meta.banned != null ? Boolean(meta.banned) : Boolean(existing.banned);
+
+  player.profileMeta = {
+    ...meta,
+    name,
+    tutorialCompleted,
+    isAdmin: adminFlag,
+    banned: bannedFlag,
+    createdAt,
+  };
+
   const record = {
     xp: cloneXP(player.xp),
     maxHealth: Number(player.baseMaxHealth) || 100,
-    lastSeen: Date.now(),
+    lastSeen: now,
     alias: player.id,
     position: {
       x: clamp(player.x, 0.5, world.width - 0.5),
       y: clamp(player.y, 0.5, world.height - 0.5),
     },
     health: clamp(player.health, 0, player.maxHealth),
+    name,
+    tutorialCompleted,
+    admin: adminFlag,
+    banned: bannedFlag,
+    createdAt,
     inventory: {
       currency: Math.max(0, Math.floor(player.inventory.currency || 0)),
       items: Object.fromEntries(
@@ -2895,6 +3414,11 @@ function buildProfileCache(entries) {
     const bank = ensureBankData(value?.bank);
     const gear = ensureGearData(value?.gear);
     const equipment = ensureEquipmentData(value?.equipment, gear);
+    const name = normalizeHeroName(value?.name) || null;
+    const tutorialCompleted = Boolean(value?.tutorialCompleted);
+    const admin = Boolean(value?.admin);
+    const banned = Boolean(value?.banned);
+    const createdAt = Number(value?.createdAt) || Number(value?.lastSeen) || Date.now();
     map.set(normalized, {
       xp: cloneXP(value?.xp),
       maxHealth,
@@ -2906,6 +3430,11 @@ function buildProfileCache(entries) {
       bank,
       gear,
       equipment,
+      name,
+      tutorialCompleted,
+      admin,
+      banned,
+      createdAt,
     });
   }
   return { map, nextPlayerId: maxAliasIndex + 1 };
@@ -2956,6 +3485,11 @@ function serializeProfileRecord(value) {
     maxHealth: Number(value?.maxHealth) || 100,
     lastSeen: Number(value?.lastSeen) || Date.now(),
     alias: typeof value?.alias === 'string' ? value.alias : undefined,
+    name: typeof value?.name === 'string' ? value.name : undefined,
+    tutorialCompleted: Boolean(value?.tutorialCompleted),
+    admin: Boolean(value?.admin),
+    banned: Boolean(value?.banned),
+    createdAt: Number(value?.createdAt) || undefined,
     position:
       value?.position && typeof value.position.x === 'number' && typeof value.position.y === 'number'
         ? { x: Number(value.position.x), y: Number(value.position.y) }
@@ -3098,6 +3632,8 @@ function persistProfileToMongo(profileId, record) {
       sanitized[key] = value;
     }
   }
+  const createdAt = sanitized.createdAt;
+  delete sanitized.createdAt;
   const op = profilesCollection
     .updateOne(
       { _id: profileId },
@@ -3107,7 +3643,7 @@ function persistProfileToMongo(profileId, record) {
           updatedAt: Date.now(),
         },
         $setOnInsert: {
-          createdAt: Date.now(),
+          createdAt: createdAt ?? Date.now(),
         },
       },
       { upsert: true }
@@ -3176,7 +3712,24 @@ function startServer() {
     socket.write(headers.join('\r\n'));
 
     const connection = new WebSocketConnection(socket);
-    const player = createPlayer(connection, requestedProfileId);
+    const result = createPlayer(connection, requestedProfileId);
+    if (!result || result.error) {
+      const reason = result?.error === 'banned' ? 'You are banned from this server.' : 'Unable to create hero profile.';
+      try {
+        connection.send(JSON.stringify({ type: 'control', event: 'connection-rejected', reason }));
+      } catch (err) {
+        // ignore send errors
+      }
+      setTimeout(() => {
+        try {
+          connection.socket?.end?.();
+        } catch (err) {
+          connection.socket?.destroy?.();
+        }
+      }, 10);
+      return;
+    }
+    const player = result.player;
     clients.set(player.id, player);
 
     connection.onMessage = (message) => handleMessage(player, message);
@@ -3196,6 +3749,14 @@ function startServer() {
         width: world.width,
         height: world.height,
         tiles: world.tiles,
+      },
+      profile: {
+        id: player.profileId,
+        name: player.profileMeta?.name || null,
+        tutorialCompleted: Boolean(player.profileMeta?.tutorialCompleted),
+        isAdmin: Boolean(player.profileMeta?.isAdmin),
+        banned: Boolean(player.profileMeta?.banned),
+        createdAt: player.profileMeta?.createdAt || null,
       },
       enemies: world.enemies.map((enemy) => ({
         id: enemy.id,
@@ -3329,7 +3890,11 @@ function runSelfTest() {
   }
 
   const stubConnection = { send() {} };
-  const firstPlayer = createPlayer(stubConnection, null);
+  const { player: firstPlayer } = createPlayer(stubConnection, null) || {};
+  if (!firstPlayer) {
+    console.error('Failed to create first player during self-test');
+    process.exit(1);
+  }
   const profileId = firstPlayer.profileId;
   const { x: expectedX, y: expectedY } = findSpawn();
   firstPlayer.x = expectedX;
@@ -3339,7 +3904,11 @@ function runSelfTest() {
     profileRecord.position = { x: expectedX, y: expectedY };
     profileRecord.health = 42;
   }
-  const secondPlayer = createPlayer(stubConnection, profileId);
+  const { player: secondPlayer } = createPlayer(stubConnection, profileId) || {};
+  if (!secondPlayer) {
+    console.error('Failed to restore profile during self-test');
+    process.exit(1);
+  }
   const distance = Math.hypot(secondPlayer.x - expectedX, secondPlayer.y - expectedY);
   if (distance > 0.01) {
     console.error('Profile position was not restored on reconnect');
@@ -3366,6 +3935,8 @@ async function main() {
     await ensureInitialized();
     if (selfTest) {
       runSelfTest();
+      await handleExit(true, 0);
+      return;
     } else {
       startServer();
     }

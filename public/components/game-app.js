@@ -259,6 +259,13 @@ template.innerHTML = `
       word-break: break-all;
     }
 
+    .hero-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #f8fafc;
+    }
+
     .identity-legend {
       font-size: 0.72rem;
       letter-spacing: 0.04em;
@@ -361,6 +368,136 @@ template.innerHTML = `
 
     .identity-card button:active {
       transform: translateY(1px);
+    }
+
+    .onboarding-feedback {
+      min-height: 1rem;
+      font-size: 0.76rem;
+      color: #fca5a5;
+    }
+
+    .tutorial-card {
+      width: clamp(300px, 50vw, 480px);
+      text-align: left;
+    }
+
+    .tutorial-card .tutorial-body {
+      display: grid;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: rgba(226, 232, 240, 0.9);
+    }
+
+    .tutorial-card .tutorial-progress {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(148, 163, 184, 0.78);
+      text-align: center;
+    }
+
+    .tutorial-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+
+    .tutorial-actions button {
+      flex: 1 1 auto;
+      text-align: center;
+    }
+
+    .admin-card {
+      width: clamp(320px, 60vw, 640px);
+      text-align: left;
+      gap: 1rem;
+    }
+
+    .admin-card h3 {
+      text-align: center;
+    }
+
+    .admin-status {
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.85);
+      text-align: center;
+    }
+
+    .admin-content {
+      max-height: clamp(220px, 55vh, 420px);
+      overflow-y: auto;
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .admin-profile {
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 0.65rem;
+      padding: 0.7rem 0.8rem;
+      background: rgba(30, 41, 59, 0.72);
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .admin-profile header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.45rem;
+      font-size: 0.85rem;
+      color: #e2e8f0;
+    }
+
+    .admin-profile .admin-flags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06rem;
+      color: rgba(148, 163, 184, 0.75);
+    }
+
+    .admin-profile .admin-details {
+      display: grid;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: rgba(226, 232, 240, 0.88);
+    }
+
+    .admin-profile .admin-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .admin-profile .admin-actions button,
+    .admin-profile .admin-actions input {
+      flex: 1 1 110px;
+    }
+
+    .admin-profile input[type="number"] {
+      all: unset;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 0.55rem;
+      padding: 0.4rem 0.5rem;
+      font-size: 0.75rem;
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+      color: #e2e8f0;
+      text-align: center;
+      width: 100%;
+    }
+
+    .admin-feedback {
+      font-size: 0.75rem;
+      min-height: 1rem;
+      text-align: center;
+      color: #bae6fd;
     }
 
     .hud .message {
@@ -1207,6 +1344,10 @@ template.innerHTML = `
         Use the left pad to move, Slash/Volley/Spell to act, Interact for loot and portals, Chat to speak, and tap HUD anytime to reveal the panels.
       </div>
       <div>
+        <span class="identity-legend">Hero</span>
+        <div class="hero-name" data-hero-name>New Adventurer</div>
+      </div>
+      <div>
         <span class="identity-legend">Hero ID</span>
         <div class="hero-id" data-hero-id>ΓÇö</div>
       </div>
@@ -1214,6 +1355,7 @@ template.innerHTML = `
         <button type="button" data-copy-id>Copy ID</button>
         <button type="button" data-new-hero>Start New Hero</button>
         <button type="button" data-use-id>Use Hero ID</button>
+        <button type="button" data-admin-panel hidden>Admin Panel</button>
       </div>
     </div>
     <div class="bottom-right">
@@ -1343,6 +1485,42 @@ template.innerHTML = `
         <button type="button" class="primary" data-identity-load>Load Hero</button>
         <button type="button" data-identity-new>Start New Hero</button>
         <button type="button" data-identity-cancel>Cancel</button>
+      </div>
+    </div>
+  </div>
+  <div class="identity-overlay" hidden data-onboarding-overlay>
+    <div class="identity-card onboarding-card">
+      <h3>Create Your Hero</h3>
+      <p>Choose a name for your new adventurer. You can always change it later from the admin panel.</p>
+      <input type="text" maxlength="24" placeholder="Enter hero name" data-hero-name-input />
+      <p class="onboarding-feedback" data-hero-name-feedback></p>
+      <div class="actions">
+        <button type="button" class="primary" data-hero-name-submit>Create Hero</button>
+        <button type="button" data-hero-name-cancel>Logout</button>
+      </div>
+    </div>
+  </div>
+  <div class="identity-overlay" hidden data-tutorial-overlay>
+    <div class="identity-card tutorial-card">
+      <h3>Learn the Basics</h3>
+      <div class="tutorial-body" data-tutorial-body></div>
+      <div class="tutorial-progress" data-tutorial-progress></div>
+      <div class="actions tutorial-actions">
+        <button type="button" data-tutorial-back hidden>Back</button>
+        <button type="button" class="primary" data-tutorial-next>Next</button>
+        <button type="button" data-tutorial-skip>Skip Tutorial</button>
+      </div>
+    </div>
+  </div>
+  <div class="identity-overlay" hidden data-admin-overlay>
+    <div class="identity-card admin-card">
+      <h3>Server Admin</h3>
+      <div class="admin-status" data-admin-status>Loading server data...</div>
+      <div class="admin-content" data-admin-content></div>
+      <div class="admin-feedback" data-admin-feedback></div>
+      <div class="actions">
+        <button type="button" data-admin-refresh>Refresh</button>
+        <button type="button" data-admin-close>Close</button>
       </div>
     </div>
   </div>
@@ -1647,15 +1825,34 @@ class GameApp extends HTMLElement {
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
     this.visualToggleButton = this.shadowRoot.querySelector('[data-visual-toggle]');
+  this.heroNameEl = this.shadowRoot.querySelector('[data-hero-name]');
   this.heroIdEl = this.shadowRoot.querySelector('[data-hero-id]');
   this.copyHeroButton = this.shadowRoot.querySelector('[data-copy-id]');
   this.newHeroButton = this.shadowRoot.querySelector('[data-new-hero]');
   this.useHeroButton = this.shadowRoot.querySelector('[data-use-id]');
+  this.adminPanelButton = this.shadowRoot.querySelector('[data-admin-panel]');
   this.identityOverlay = this.shadowRoot.querySelector('[data-identity-overlay]');
   this.identityInput = this.shadowRoot.querySelector('[data-identity-input]');
   this.identityLoadButton = this.shadowRoot.querySelector('[data-identity-load]');
   this.identityNewButton = this.shadowRoot.querySelector('[data-identity-new]');
   this.identityCancelButton = this.shadowRoot.querySelector('[data-identity-cancel]');
+  this.onboardingOverlay = this.shadowRoot.querySelector('[data-onboarding-overlay]');
+  this.heroNameInput = this.shadowRoot.querySelector('[data-hero-name-input]');
+  this.heroNameSubmitButton = this.shadowRoot.querySelector('[data-hero-name-submit]');
+  this.heroNameCancelButton = this.shadowRoot.querySelector('[data-hero-name-cancel]');
+  this.heroNameFeedback = this.shadowRoot.querySelector('[data-hero-name-feedback]');
+  this.tutorialOverlay = this.shadowRoot.querySelector('[data-tutorial-overlay]');
+  this.tutorialBody = this.shadowRoot.querySelector('[data-tutorial-body]');
+  this.tutorialProgress = this.shadowRoot.querySelector('[data-tutorial-progress]');
+  this.tutorialNextButton = this.shadowRoot.querySelector('[data-tutorial-next]');
+  this.tutorialBackButton = this.shadowRoot.querySelector('[data-tutorial-back]');
+  this.tutorialSkipButton = this.shadowRoot.querySelector('[data-tutorial-skip]');
+  this.adminOverlay = this.shadowRoot.querySelector('[data-admin-overlay]');
+  this.adminStatusEl = this.shadowRoot.querySelector('[data-admin-status]');
+  this.adminContentEl = this.shadowRoot.querySelector('[data-admin-content]');
+  this.adminFeedbackEl = this.shadowRoot.querySelector('[data-admin-feedback]');
+  this.adminRefreshButton = this.shadowRoot.querySelector('[data-admin-refresh]');
+  this.adminCloseButton = this.shadowRoot.querySelector('[data-admin-close]');
   this.chatEntry = this.shadowRoot.querySelector('[data-chat-entry]');
   this.chatInput = this.shadowRoot.querySelector('[data-chat-input]');
     this.touchControlsEl = this.shadowRoot.querySelector('[data-touch-controls]');
@@ -1772,6 +1969,41 @@ class GameApp extends HTMLElement {
     this.knownEffects = new Set();
   this.profileId = null;
   this.pendingProfileId = undefined;
+    this.profileMeta = {
+      name: null,
+      tutorialCompleted: false,
+      isAdmin: false,
+      banned: false,
+      createdAt: null,
+    };
+    this.pendingNameRequest = false;
+    this.tutorialSteps = [
+      {
+        title: 'Movement & Camera',
+        body: 'Use <strong>WASD</strong> (or the left stick on touch) to explore. Aim with your mouse or right pad ┬╖ the reticle shows where abilities will land.',
+        hint: 'Hold <strong>Shift</strong> to stroll carefully around the safe zone bank.',
+      },
+      {
+        title: 'Combat Basics',
+        body: 'Left click for <strong>Melee</strong>, right click for <strong>Ranged</strong>, and press <strong>Space</strong> (or both buttons) to cast a <strong>Spell</strong>. Hold any attack to charge and release a stronger strike.',
+        hint: 'Build Strength with melee, Dexterity with ranged, and Intellect with spells.',
+      },
+      {
+        title: 'Gather, Loot, & Momentum',
+        body: 'Tap <strong>E</strong> near shimmering nodes to gather ores, scoop glowing drops to loot, and keep attacking to build <strong>Momentum</strong> for bigger rewards.',
+        hint: 'Momentum fades if you pause ┬╖ chain fights to keep the edge.',
+      },
+      {
+        title: 'Safe Zone & Progress',
+        body: 'Return to the glowing safe zone bank to heal, store loot, and trade ores for coins. Portals whisk you to tougher realms once you are ready.',
+        hint: 'You can replay this tutorial anytime from the admin tools.',
+      },
+    ];
+    this.currentTutorialStep = 0;
+    this.tutorialCompleting = false;
+    this.adminProfiles = [];
+    this.adminSafeZone = null;
+    this.adminPanelOpen = false;
     this.chatActive = false;
     this.spellKeyActive = false;
 
@@ -1797,6 +2029,16 @@ class GameApp extends HTMLElement {
   this._handleIdentityNew = this._handleIdentityNew.bind(this);
   this._handleIdentityCancel = this._handleIdentityCancel.bind(this);
   this._handleIdentityInputKeydown = this._handleIdentityInputKeydown.bind(this);
+  this._handleHeroNameSubmit = this._handleHeroNameSubmit.bind(this);
+  this._handleHeroNameCancel = this._handleHeroNameCancel.bind(this);
+  this._handleHeroNameInputKeydown = this._handleHeroNameInputKeydown.bind(this);
+  this._handleTutorialNext = this._handleTutorialNext.bind(this);
+  this._handleTutorialBack = this._handleTutorialBack.bind(this);
+  this._handleTutorialSkip = this._handleTutorialSkip.bind(this);
+  this._handleAdminToggle = this._handleAdminToggle.bind(this);
+  this._handleAdminClose = this._handleAdminClose.bind(this);
+  this._handleAdminRefresh = this._handleAdminRefresh.bind(this);
+  this._handleAdminContentClick = this._handleAdminContentClick.bind(this);
     this._resizeCanvas = this._resizeCanvas.bind(this);
     this._handleBankDeposit = this._handleBankDeposit.bind(this);
     this._handleBankWithdraw = this._handleBankWithdraw.bind(this);
@@ -1844,6 +2086,16 @@ class GameApp extends HTMLElement {
     this.identityNewButton?.addEventListener('click', this._handleIdentityNew);
     this.identityCancelButton?.addEventListener('click', this._handleIdentityCancel);
     this.identityInput?.addEventListener('keydown', this._handleIdentityInputKeydown);
+  this.heroNameSubmitButton?.addEventListener('click', this._handleHeroNameSubmit);
+  this.heroNameCancelButton?.addEventListener('click', this._handleHeroNameCancel);
+  this.heroNameInput?.addEventListener('keydown', this._handleHeroNameInputKeydown);
+  this.tutorialNextButton?.addEventListener('click', this._handleTutorialNext);
+  this.tutorialBackButton?.addEventListener('click', this._handleTutorialBack);
+  this.tutorialSkipButton?.addEventListener('click', this._handleTutorialSkip);
+  this.adminPanelButton?.addEventListener('click', this._handleAdminToggle);
+  this.adminRefreshButton?.addEventListener('click', this._handleAdminRefresh);
+  this.adminCloseButton?.addEventListener('click', this._handleAdminClose);
+  this.adminContentEl?.addEventListener('click', this._handleAdminContentClick);
     this.chatInput?.addEventListener('keydown', this._handleChatInputKeydown);
   this.bankDepositButton?.addEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.addEventListener('click', this._handleBankWithdraw);
@@ -1893,6 +2145,16 @@ class GameApp extends HTMLElement {
   this.identityNewButton?.removeEventListener('click', this._handleIdentityNew);
   this.identityCancelButton?.removeEventListener('click', this._handleIdentityCancel);
   this.identityInput?.removeEventListener('keydown', this._handleIdentityInputKeydown);
+  this.heroNameSubmitButton?.removeEventListener('click', this._handleHeroNameSubmit);
+  this.heroNameCancelButton?.removeEventListener('click', this._handleHeroNameCancel);
+  this.heroNameInput?.removeEventListener('keydown', this._handleHeroNameInputKeydown);
+  this.tutorialNextButton?.removeEventListener('click', this._handleTutorialNext);
+  this.tutorialBackButton?.removeEventListener('click', this._handleTutorialBack);
+  this.tutorialSkipButton?.removeEventListener('click', this._handleTutorialSkip);
+  this.adminPanelButton?.removeEventListener('click', this._handleAdminToggle);
+  this.adminRefreshButton?.removeEventListener('click', this._handleAdminRefresh);
+  this.adminCloseButton?.removeEventListener('click', this._handleAdminClose);
+  this.adminContentEl?.removeEventListener('click', this._handleAdminContentClick);
   this.chatInput?.removeEventListener('keydown', this._handleChatInputKeydown);
   this.bankDepositButton?.removeEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.removeEventListener('click', this._handleBankWithdraw);
@@ -1922,6 +2184,15 @@ class GameApp extends HTMLElement {
   }
 
   _initializeIdentity() {
+    this.profileMeta = {
+      name: null,
+      tutorialCompleted: false,
+      isAdmin: false,
+      banned: false,
+      createdAt: null,
+    };
+    this._updateHeroNameDisplay();
+    this._updateAdminButtonVisibility();
     let storedId = null;
     try {
       storedId = window.localStorage?.getItem(PROFILE_STORAGE_KEY) ?? null;
@@ -1969,11 +2240,14 @@ class GameApp extends HTMLElement {
         this._prepareMinimap(true);
         this._ingestPortals(data.portals);
         this.youId = data.id;
+        this._applyProfileSnapshot(data.profile || null);
         if (data.profileId) {
           this.profileId = data.profileId;
           this._persistProfileId(data.profileId);
           this._updateHeroIdDisplay();
         }
+        this._updateHeroNameDisplay();
+        this._updateAdminButtonVisibility();
         this.enemies = new Map();
         if (Array.isArray(data.enemies)) {
           for (const enemy of data.enemies) {
@@ -2000,6 +2274,7 @@ class GameApp extends HTMLElement {
         this._updateCompactStatus();
         this._syncCompactOverlayVisibility();
         this.chargeMeter.actionName = 'Idle';
+        this._maybeStartOnboardingFlow();
       } else if (data.type === 'state') {
         if (Array.isArray(data.levels)) {
           this._ingestLevels(data.levels);
@@ -2094,12 +2369,12 @@ class GameApp extends HTMLElement {
         if (data.drop) {
           this._applyLootUpdate(data.drop, Boolean(data.removed));
         }
-      } else if (data.type === 'loot-update') {
-        if (data.drop) {
-          this._applyLootUpdate(data.drop, Boolean(data.removed));
-        }
-      } else if (data.type === 'gathered') {
-        this._flashInventoryPanel();
+      } else if (data.type === 'profile') {
+        this._handleProfileEvent(data);
+      } else if (data.type === 'admin') {
+        this._handleAdminEvent(data);
+      } else if (data.type === 'control') {
+        this._handleControlEvent(data);
       } else if (data.type === 'loot-collected') {
         this._flashInventoryPanel();
       } else if (data.type === 'bank-result') {
@@ -4636,6 +4911,9 @@ class GameApp extends HTMLElement {
     this.portalPromptEl.hidden = true;
     this.portalPromptEl.textContent = '';
   }
+    this._hideOnboarding(true);
+    this._closeTutorial(true);
+    this._closeAdminPanel(false);
     this._clearTouchMovement();
     if (this.statPanel) {
       this.statPanel.data = {
@@ -4675,6 +4953,7 @@ class GameApp extends HTMLElement {
   _updateHeroIdDisplay() {
     if (!this.heroIdEl) return;
     this.heroIdEl.textContent = this.profileId || 'ΓÇö';
+    this._updateHeroNameDisplay();
   }
 
   _persistProfileId(id) {
@@ -4777,6 +5056,634 @@ class GameApp extends HTMLElement {
     } else if (event.key === 'Escape') {
       event.preventDefault();
       this._handleIdentityCancel();
+    }
+  }
+
+  _applyProfileSnapshot(profile) {
+    if (!profile) return;
+    const current = this.profileMeta || {};
+    const name =
+      profile.name !== undefined
+        ? typeof profile.name === 'string' && profile.name.trim()
+          ? profile.name.trim()
+          : null
+        : current.name || null;
+    const tutorialCompleted =
+      profile.tutorialCompleted !== undefined
+        ? Boolean(profile.tutorialCompleted)
+        : Boolean(current.tutorialCompleted);
+    const isAdmin =
+      profile.isAdmin !== undefined ? Boolean(profile.isAdmin) : Boolean(current.isAdmin);
+    const banned = profile.banned !== undefined ? Boolean(profile.banned) : Boolean(current.banned);
+    const createdAt = profile.createdAt ?? current.createdAt ?? null;
+    this.profileMeta = {
+      name,
+      tutorialCompleted,
+      isAdmin,
+      banned,
+      createdAt,
+    };
+    this._updateHeroNameDisplay();
+    this._updateAdminButtonVisibility();
+  }
+
+  _updateHeroNameDisplay() {
+    if (!this.heroNameEl) return;
+    const name = this.profileMeta?.name;
+    this.heroNameEl.textContent = name && name.length ? name : 'New Adventurer';
+  }
+
+  _updateAdminButtonVisibility() {
+    if (!this.adminPanelButton) return;
+    const isAdmin = Boolean(this.profileMeta?.isAdmin);
+    this.adminPanelButton.hidden = !isAdmin;
+    if (!isAdmin) {
+      this._closeAdminPanel(false);
+    }
+  }
+
+  _maybeStartOnboardingFlow(force = false) {
+    if (!this.profileMeta) return;
+    if (!this.profileMeta.name) {
+      this._showOnboarding(force);
+      return;
+    }
+    this._hideOnboarding(true);
+    if (!this.profileMeta.tutorialCompleted) {
+      this._startTutorialFlow(force);
+    } else if (force) {
+      this._closeTutorial(true);
+    }
+  }
+
+  _showOnboarding(reset = false) {
+    if (!this.onboardingOverlay) return;
+    this.onboardingOverlay.hidden = false;
+    if (reset && this.heroNameInput) {
+      this.heroNameInput.value = '';
+    }
+    if (this.heroNameFeedback) {
+      this.heroNameFeedback.textContent = '';
+      this.heroNameFeedback.style.color = '#fca5a5';
+    }
+    this.heroNameSubmitButton?.removeAttribute('disabled');
+    this.pendingNameRequest = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.heroNameInput?.focus();
+        this.heroNameInput?.select?.();
+      });
+    });
+  }
+
+  _hideOnboarding(silent = false) {
+    if (!this.onboardingOverlay) return;
+    this.onboardingOverlay.hidden = true;
+    if (!silent && this.heroNameInput) {
+      this.heroNameInput.value = '';
+    }
+    if (this.heroNameFeedback) {
+      this.heroNameFeedback.textContent = '';
+      this.heroNameFeedback.style.color = '#fca5a5';
+    }
+    this.pendingNameRequest = false;
+    this.heroNameSubmitButton?.removeAttribute('disabled');
+  }
+
+  _handleHeroNameSubmit() {
+    if (!this.heroNameInput) return;
+    const value = this.heroNameInput.value.trim();
+    if (!value) {
+      if (this.heroNameFeedback) {
+        this.heroNameFeedback.textContent = 'Please enter a name to continue.';
+        this.heroNameFeedback.style.color = '#fca5a5';
+      }
+      this.heroNameInput.focus();
+      return;
+    }
+    if (!this._sendProfileAction('set-name', { name: value })) {
+      if (this.heroNameFeedback) {
+        this.heroNameFeedback.textContent = 'Connection unavailable. Retry in a moment.';
+        this.heroNameFeedback.style.color = '#fca5a5';
+      }
+      return;
+    }
+    this.pendingNameRequest = true;
+    this.heroNameSubmitButton?.setAttribute('disabled', 'disabled');
+    if (this.heroNameFeedback) {
+      this.heroNameFeedback.textContent = 'Saving hero name...';
+      this.heroNameFeedback.style.color = '#bae6fd';
+    }
+  }
+
+  _handleHeroNameCancel() {
+    const proceed = window.confirm('Leave without creating a hero? You can reconnect anytime.');
+    if (!proceed) return;
+    this._hideOnboarding(true);
+    this._clearStoredProfileId();
+    this.profileId = null;
+    this.pendingProfileId = null;
+    this._prepareForReconnect(null);
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      try {
+        this.socket.close();
+      } catch (err) {
+        // ignore
+      }
+    }
+    this.messageEl.textContent = 'Disconnected. Refresh when ready to play again.';
+    this.messageEl.hidden = false;
+  }
+
+  _handleHeroNameInputKeydown(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this._handleHeroNameSubmit();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this._handleHeroNameCancel();
+    }
+  }
+
+  _sendProfileAction(action, payload = {}) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    try {
+      this.socket.send(
+        JSON.stringify({
+          type: 'profile',
+          action,
+          ...payload,
+        })
+      );
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  _startTutorialFlow(force = false) {
+    if (!this.tutorialOverlay || !Array.isArray(this.tutorialSteps) || !this.tutorialSteps.length) return;
+    if (this.profileMeta?.tutorialCompleted && !force) return;
+    this.tutorialActive = true;
+    this.tutorialCompleting = false;
+    if (force || this.currentTutorialStep < 0 || this.currentTutorialStep >= this.tutorialSteps.length) {
+      this.currentTutorialStep = 0;
+    }
+    this._renderTutorialStep();
+    this.tutorialOverlay.hidden = false;
+  }
+
+  _renderTutorialStep() {
+    if (!this.tutorialBody || !Array.isArray(this.tutorialSteps) || !this.tutorialSteps.length) return;
+    const maxIndex = this.tutorialSteps.length - 1;
+    if (this.currentTutorialStep > maxIndex) {
+      this.currentTutorialStep = maxIndex;
+    }
+    if (this.currentTutorialStep < 0) {
+      this.currentTutorialStep = 0;
+    }
+    const step = this.tutorialSteps[this.currentTutorialStep];
+    if (!step) return;
+    this.tutorialBody.innerHTML = `
+      <div>
+        <h4>${this._escapeHtml(step.title || 'Tutorial')}</h4>
+        <p>${step.body}</p>
+        ${step.hint ? `<p><em>${step.hint}</em></p>` : ''}
+      </div>
+    `;
+    if (this.tutorialProgress) {
+      this.tutorialProgress.textContent = `Step ${this.currentTutorialStep + 1} of ${this.tutorialSteps.length}`;
+    }
+    if (this.tutorialBackButton) {
+      this.tutorialBackButton.hidden = this.currentTutorialStep === 0;
+      this.tutorialBackButton.disabled = this.tutorialCompleting;
+    }
+    if (this.tutorialNextButton) {
+      this.tutorialNextButton.textContent =
+        this.currentTutorialStep >= maxIndex ? 'Begin Adventure' : 'Next';
+      this.tutorialNextButton.disabled = this.tutorialCompleting;
+    }
+    if (this.tutorialSkipButton) {
+      this.tutorialSkipButton.disabled = this.tutorialCompleting;
+    }
+  }
+
+  _handleTutorialNext() {
+    if (this.tutorialCompleting) return;
+    if (this.currentTutorialStep >= this.tutorialSteps.length - 1) {
+      this._completeTutorial(false);
+    } else {
+      this.currentTutorialStep += 1;
+      this._renderTutorialStep();
+    }
+  }
+
+  _handleTutorialBack() {
+    if (this.tutorialCompleting) return;
+    if (this.currentTutorialStep > 0) {
+      this.currentTutorialStep -= 1;
+      this._renderTutorialStep();
+    }
+  }
+
+  _handleTutorialSkip() {
+    if (this.tutorialCompleting) return;
+    this._completeTutorial(true);
+  }
+
+  _completeTutorial(skipped = false) {
+    if (this.tutorialCompleting) return;
+    this.tutorialCompleting = true;
+    this.tutorialNextButton?.setAttribute('disabled', 'disabled');
+    this.tutorialBackButton?.setAttribute('disabled', 'disabled');
+    this.tutorialSkipButton?.setAttribute('disabled', 'disabled');
+    if (!this._sendProfileAction('tutorial-complete', { skipped: Boolean(skipped) })) {
+      this.tutorialCompleting = false;
+      this._renderTutorialStep();
+      if (this.tutorialProgress) {
+        this.tutorialProgress.textContent = 'Unable to reach server. Try again once reconnects.';
+      }
+    }
+  }
+
+  _closeTutorial(force = false) {
+    if (!this.tutorialOverlay) return;
+    this.tutorialOverlay.hidden = true;
+    this.tutorialActive = false;
+    this.tutorialCompleting = false;
+    this.tutorialNextButton?.removeAttribute('disabled');
+    this.tutorialBackButton?.removeAttribute('disabled');
+    this.tutorialSkipButton?.removeAttribute('disabled');
+    if (force && this.tutorialProgress) {
+      this.tutorialProgress.textContent = '';
+    }
+  }
+
+  _handleProfileEvent(data) {
+    const event = data?.event;
+    if (!event) return;
+    if (event === 'error') {
+      if (data.field === 'name' && this.heroNameFeedback) {
+        this.heroNameFeedback.textContent = data.message || 'Name rejected. Try another variation.';
+        this.heroNameFeedback.style.color = '#fca5a5';
+        this.heroNameSubmitButton?.removeAttribute('disabled');
+        this.pendingNameRequest = false;
+      } else if (this.adminFeedbackEl) {
+        this.adminFeedbackEl.textContent = data.message || 'Profile action failed.';
+        this.adminFeedbackEl.style.color = '#fca5a5';
+      }
+      return;
+    }
+
+    if (event === 'name-set') {
+      this.pendingNameRequest = false;
+      this.heroNameSubmitButton?.removeAttribute('disabled');
+      if (this.heroNameFeedback) {
+        this.heroNameFeedback.textContent = 'Name saved!';
+        this.heroNameFeedback.style.color = '#bbf7d0';
+      }
+      this._applyProfileSnapshot({ name: data.name });
+      setTimeout(() => {
+        this._hideOnboarding(true);
+        if (!this.profileMeta?.tutorialCompleted) {
+          this._startTutorialFlow(true);
+        }
+      }, 1200);
+      return;
+    }
+
+    if (event === 'tutorial-complete') {
+      this._applyProfileSnapshot({ tutorialCompleted: true });
+      this._closeTutorial();
+      if (this.messageEl) {
+        this.messageEl.textContent = data.safeZone ? 'Safe zone unlocked!' : 'Tutorial complete!';
+        this.messageEl.hidden = false;
+        setTimeout(() => {
+          this.messageEl.hidden = true;
+        }, 2400);
+      }
+      return;
+    }
+
+    if (event === 'refresh') {
+      this._applyProfileSnapshot(data.profile || {});
+      this._maybeStartOnboardingFlow(true);
+    }
+  }
+
+  _handleAdminEvent(data) {
+    const { event } = data || {};
+    if (!event) return;
+    if (event === 'profiles') {
+      this.adminProfiles = Array.isArray(data.profiles) ? data.profiles : [];
+      this.adminSafeZone = data.safeZone || null;
+      if (this.adminStatusEl) {
+        const count = this.adminProfiles.length;
+        if (this.adminSafeZone) {
+          const { x, y, radius } = this.adminSafeZone;
+          this.adminStatusEl.textContent = `Profiles: ${count} • Safe Zone (${x?.toFixed?.(1) ?? '─'}, ${y?.toFixed?.(1) ?? '─'}) r=${radius?.toFixed?.(1) ?? '─'}`;
+        } else {
+          this.adminStatusEl.textContent = `Profiles: ${count}`;
+        }
+      }
+      this._renderAdminProfiles();
+      return;
+    }
+
+    if (event === 'ok') {
+      if (this.adminFeedbackEl) {
+        const label = data.command ? data.command.replace(/-/g, ' ') : 'Action';
+        this.adminFeedbackEl.textContent = `${label} applied.`;
+        this.adminFeedbackEl.style.color = '#bbf7d0';
+      }
+      return;
+    }
+
+    if (event === 'error' && this.adminFeedbackEl) {
+      this.adminFeedbackEl.textContent = data.message || 'Admin command failed.';
+      this.adminFeedbackEl.style.color = '#fca5a5';
+    }
+  }
+
+  _handleControlEvent(data) {
+    const { event } = data || {};
+    if (!event) return;
+    if (event === 'forced-logout') {
+      this._clearStoredProfileId();
+      this.profileId = null;
+      this.pendingProfileId = null;
+      this.messageEl.textContent = data.reason || 'Disconnected by server.';
+      this.messageEl.hidden = false;
+      return;
+    }
+    if (event === 'teleport-safe') {
+      if (this.messageEl) {
+        this.messageEl.textContent = 'Teleported to the safe zone by an admin.';
+        this.messageEl.hidden = false;
+        setTimeout(() => {
+          this.messageEl.hidden = true;
+        }, 2200);
+      }
+      return;
+    }
+    if (event === 'connection-rejected') {
+      this._clearStoredProfileId();
+      this.profileId = null;
+      this.messageEl.textContent = data.reason || 'Connection rejected.';
+      this.messageEl.hidden = false;
+    }
+  }
+
+  _handleAdminToggle() {
+    if (!this.profileMeta?.isAdmin) return;
+    if (this.adminOverlay?.hidden === false) {
+      this._closeAdminPanel();
+    } else {
+      this._openAdminPanel();
+    }
+  }
+
+  _handleAdminClose() {
+    this._closeAdminPanel();
+  }
+
+  _openAdminPanel() {
+    if (!this.profileMeta?.isAdmin || !this.adminOverlay) return;
+    this.adminOverlay.hidden = false;
+    this.adminPanelOpen = true;
+    if (this.adminFeedbackEl) {
+      this.adminFeedbackEl.textContent = '';
+      this.adminFeedbackEl.style.color = '#bae6fd';
+    }
+    if (this.adminStatusEl) {
+      this.adminStatusEl.textContent = 'Fetching hero profiles...';
+    }
+    this._requestAdminProfiles();
+  }
+
+  _closeAdminPanel(silent = false) {
+    if (!this.adminOverlay) return;
+    this.adminOverlay.hidden = true;
+    this.adminPanelOpen = false;
+    if (!silent && this.adminFeedbackEl) {
+      this.adminFeedbackEl.textContent = '';
+    }
+  }
+
+  _requestAdminProfiles() {
+    if (!this.profileMeta?.isAdmin) return;
+    this._sendAdminCommand('list');
+  }
+
+  _handleAdminRefresh() {
+    if (this.profileMeta?.isAdmin) {
+      this._requestAdminProfiles();
+    }
+  }
+
+  _escapeHtml(value) {
+    if (value == null) return '';
+    return String(value).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char] || char));
+  }
+
+  _formatNumber(value) {
+    if (!Number.isFinite(value)) return '0';
+    try {
+      return Number(value).toLocaleString();
+    } catch (err) {
+      return String(Math.floor(value));
+    }
+  }
+
+  _renderAdminProfiles() {
+    if (!this.adminContentEl) return;
+    if (!Array.isArray(this.adminProfiles) || !this.adminProfiles.length) {
+      this.adminContentEl.innerHTML = '<p>No hero profiles yet. Invite players to explore!</p>';
+      return;
+    }
+    const html = this.adminProfiles.map((profile) => this._renderAdminProfile(profile)).join('');
+    this.adminContentEl.innerHTML = html;
+  }
+
+  _renderAdminProfile(profile) {
+    const profileId = typeof profile?.id === 'string' ? profile.id : '';
+  const xp = profile?.xp || { melee: 0, ranged: 0, magic: 0 };
+  const meleeXp = Number.isFinite(xp.melee) ? xp.melee : 0;
+  const rangedXp = Number.isFinite(xp.ranged) ? xp.ranged : 0;
+  const magicXp = Number.isFinite(xp.magic) ? xp.magic : 0;
+    const stats = profile?.stats || {};
+    const inventoryCoins = profile?.inventory?.currency ?? 0;
+    const bankCoins = profile?.bank?.currency ?? 0;
+    const badges = [];
+    badges.push(profile.online ? 'Online' : 'Offline');
+    if (profile.admin) badges.push('Admin');
+    if (profile.banned) badges.push('Banned');
+    badges.push(profile.tutorialCompleted ? 'Tutorial done' : 'Needs tutorial');
+    const badgeHtml = badges
+      .map((label) => `<span>${this._escapeHtml(label)}</span>`)
+      .join('');
+    const onlineDisabled = profile.online ? '' : 'disabled';
+    const bannedAttr = profile.banned ? 'true' : 'false';
+    const adminAttr = profile.admin ? 'true' : 'false';
+    const tutorialAttr = profile.tutorialCompleted ? 'true' : 'false';
+    const position = profile?.position
+      ? `(${profile.position.x?.toFixed?.(1) ?? '─'}, ${profile.position.y?.toFixed?.(1) ?? '─'})`
+      : 'Unknown';
+    return `
+      <div class="admin-profile" data-profile-id="${this._escapeHtml(profileId)}">
+        <header>
+          <span>${this._escapeHtml(profile.name || 'Unnamed Hero')}</span>
+          <span>${this._escapeHtml(profileId.slice(0, 12))}</span>
+        </header>
+        <div class="admin-flags">${badgeHtml}</div>
+        <div class="admin-details">
+          <div>Stats ┬╖ STR ${this._formatNumber(stats.strength ?? 0)}, DEX ${this._formatNumber(stats.dexterity ?? 0)}, INT ${this._formatNumber(stats.intellect ?? 0)}</div>
+          <div>XP ┬╖ Melee ${this._formatNumber(meleeXp)}, Ranged ${this._formatNumber(rangedXp)}, Magic ${this._formatNumber(magicXp)}</div>
+          <div>Coins ┬╖ Inventory ${this._formatNumber(inventoryCoins)}, Bank ${this._formatNumber(bankCoins)}</div>
+          <div>Location ┬╖ ${this._escapeHtml(position)}</div>
+        </div>
+        <div class="admin-actions">
+          <input type="text" maxlength="24" data-admin-input="hero-name" placeholder="Rename hero" value="${this._escapeHtml(profile.name || '')}" />
+          <button type="button" data-admin-action="set-name">Save Name</button>
+        </div>
+        <div class="admin-actions">
+          <input type="number" min="0" data-admin-input="xp-melee" placeholder="Melee XP" value="${meleeXp}" />
+          <input type="number" min="0" data-admin-input="xp-ranged" placeholder="Ranged XP" value="${rangedXp}" />
+          <input type="number" min="0" data-admin-input="xp-magic" placeholder="Magic XP" value="${magicXp}" />
+          <button type="button" data-admin-action="set-xp">Save Stats</button>
+        </div>
+        <div class="admin-actions">
+          <input type="number" data-admin-input="grant-inventory" placeholder="Inventory Δ" value="0" />
+          <input type="number" data-admin-input="grant-bank" placeholder="Bank Δ" value="0" />
+          <button type="button" data-admin-action="grant-currency">Apply Currency</button>
+        </div>
+        <div class="admin-actions">
+          <button type="button" data-admin-action="teleport-safe" ${onlineDisabled}>Teleport Safe</button>
+          <button type="button" data-admin-action="kick" ${onlineDisabled}>Force Logout</button>
+          <button type="button" data-admin-action="toggle-ban" data-current="${bannedAttr}">${profile?.banned ? 'Unban' : 'Ban'}</button>
+          <button type="button" data-admin-action="toggle-admin" data-current="${adminAttr}">${profile?.admin ? 'Revoke Admin' : 'Grant Admin'}</button>
+          <button type="button" data-admin-action="toggle-tutorial" data-current="${tutorialAttr}">${profile?.tutorialCompleted ? 'Reset Tutorial' : 'Mark Tutorial Done'}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  _handleAdminContentClick(event) {
+    const button = event.target.closest('[data-admin-action]');
+    if (!button || !this.adminContentEl?.contains(button)) return;
+    const action = button.dataset.adminAction;
+    const card = button.closest('[data-profile-id]');
+    if (!card) return;
+    const profileId = card.dataset.profileId;
+    if (!profileId) return;
+    event.preventDefault();
+    if (this.adminFeedbackEl) {
+      this.adminFeedbackEl.textContent = '';
+      this.adminFeedbackEl.style.color = '#bae6fd';
+    }
+
+    if (action === 'set-xp') {
+      const melee = Number(card.querySelector('[data-admin-input="xp-melee"]')?.value ?? 0);
+      const ranged = Number(card.querySelector('[data-admin-input="xp-ranged"]')?.value ?? 0);
+      const magic = Number(card.querySelector('[data-admin-input="xp-magic"]')?.value ?? 0);
+      if ([melee, ranged, magic].some((value) => !Number.isFinite(value) || value < 0)) {
+        if (this.adminFeedbackEl) {
+          this.adminFeedbackEl.textContent = 'XP values must be non-negative numbers.';
+          this.adminFeedbackEl.style.color = '#fca5a5';
+        }
+        return;
+      }
+      this._sendAdminCommand('set-xp', {
+        profileId,
+        xp: {
+          melee,
+          ranged,
+          magic,
+        },
+      });
+      return;
+    }
+
+    if (action === 'set-name') {
+      const input = card.querySelector('[data-admin-input="hero-name"]');
+      const newName = input ? input.value.trim() : '';
+      this._sendAdminCommand('set-meta', { profileId, meta: { name: newName } });
+      return;
+    }
+
+    if (action === 'grant-currency') {
+      const inventoryDelta = Number(card.querySelector('[data-admin-input="grant-inventory"]')?.value ?? 0);
+      const bankDelta = Number(card.querySelector('[data-admin-input="grant-bank"]')?.value ?? 0);
+      if (!inventoryDelta && !bankDelta) {
+        if (this.adminFeedbackEl) {
+          this.adminFeedbackEl.textContent = 'Set a positive or negative amount to adjust.';
+          this.adminFeedbackEl.style.color = '#fca5a5';
+        }
+        return;
+      }
+      this._sendAdminCommand('grant-currency', { profileId, inventoryDelta, bankDelta });
+      return;
+    }
+
+    if (action === 'teleport-safe') {
+      this._sendAdminCommand('teleport-safe', { profileId });
+      return;
+    }
+
+    if (action === 'kick') {
+      this._sendAdminCommand('kick', { profileId });
+      return;
+    }
+
+    if (action === 'toggle-ban') {
+      const current = button.dataset.current === 'true';
+      this._sendAdminCommand('set-meta', { profileId, meta: { banned: !current } });
+      return;
+    }
+
+    if (action === 'toggle-admin') {
+      const current = button.dataset.current === 'true';
+      this._sendAdminCommand('set-meta', { profileId, meta: { admin: !current } });
+      return;
+    }
+
+    if (action === 'toggle-tutorial') {
+      const current = button.dataset.current === 'true';
+      this._sendAdminCommand('set-meta', { profileId, meta: { tutorialCompleted: !current } });
+    }
+  }
+
+  _sendAdminCommand(command, payload = {}) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      if (this.adminFeedbackEl) {
+        this.adminFeedbackEl.textContent = 'Socket offline. Reconnect to manage the server.';
+        this.adminFeedbackEl.style.color = '#fca5a5';
+      }
+      return;
+    }
+    try {
+      this.socket.send(
+        JSON.stringify({
+          type: 'admin',
+          command,
+          ...payload,
+        })
+      );
+      if (this.adminFeedbackEl) {
+        this.adminFeedbackEl.textContent = 'Sending command...';
+        this.adminFeedbackEl.style.color = '#bae6fd';
+      }
+    } catch (err) {
+      if (this.adminFeedbackEl) {
+        this.adminFeedbackEl.textContent = 'Failed to send command.';
+        this.adminFeedbackEl.style.color = '#fca5a5';
+      }
     }
   }
 

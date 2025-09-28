@@ -20,6 +20,8 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Battle Momentum streaks** &mdash; chain takedowns to ignite short-lived boosts to power, speed, and XP, all tracked right on your stat panel.
 - **Aurora WebGL backdrop** &mdash; a native shader paints portal beams, hero auras, danger flares around enemy clusters, and dynamic skies that react to dungeons, safe zones, and momentum streaks—with a Glow toggle for purists who want the classic flat look.
 - **Touch-first controls** &mdash; a virtual joystick, ability palette, chat toggle, and quick HUD hide button keep tablets and phones fully playable without a keyboard or mouse.
+- **Hero onboarding & tutorial** &mdash; first-time players name their adventurer, learn combat, gathering, and safe-zone mechanics in a guided (and skippable) walkthrough, then warp directly into the safe haven to start their journey.
+- **In-game server command center** &mdash; the very first hero is promoted to server admin automatically and can rename heroes, tweak XP, grant or reclaim currency, teleport players to safety, and ban/kick profiles live through an integrated panel.
 
 ## Getting started
 
@@ -44,6 +46,18 @@ Open your browser at [http://localhost:8080](http://localhost:8080) and load the
 cd e:\Code\Playgrounds\explore-rpg
 node .\server\server.js --self-test
 ```
+
+## Onboarding & tutorial flow
+
+- The first time a browser connects without a stored Hero ID, an overlay prompts you to **name your adventurer** (letters, numbers, spaces, apostrophes, and hyphens are supported). Names are saved with your profile and can be edited later from the admin panel.
+- After naming, a **four-step tutorial** covers movement, combat, gathering, and the bank safe zone. Each step is quick, highlights the relevant controls, and you can repeat it any time from the admin tools.
+- Prefer to learn by doing? Hit **Skip Tutorial**. Whether you finish or skip, the server immediately **teleports you into the safe zone**, fully healed and ready to explore.
+
+## Server administration tools
+
+- The very first profile that touches a fresh database is automatically flagged as the **server admin**. Admins see an **Admin Panel** button in the lower-left HUD.
+- From the panel you can rename any hero, adjust their XP totals (and therefore stats), grant or subtract inventory/bank currency, teleport online players back to the safe zone, kick disruptive players, and ban/unban profiles. You can also reset or mark the tutorial as completed for any hero.
+- Changes apply instantly for online heroes and persist for offline ones thanks to the shared profile store (JSON or MongoDB). All admin actions are delivered through the existing WebSocket channel—no extra tooling required.
 
 ## Persistence options
 
@@ -82,6 +96,7 @@ node .\server\server.js --self-test
 - The game saves stats/XP to the server automatically after each action, keyed by that ID.
 - To resume on another device or browser, choose **Use Hero ID**, paste the value, and reconnect.
 - Want a clean slate? Remove the saved ID with **Start New Hero** (or press `Shift + N`) and a new one is minted.
+- The very first hero in a fresh world is promoted to server admin automatically; additional admins can be granted or revoked at any time from the Admin Panel.
 
 ## Project structure
 
