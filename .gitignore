@@ -1,2 +1,4 @@
 # Runtime data
 server/profiles.json
+/node_modules
+.env

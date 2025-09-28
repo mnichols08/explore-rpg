@@ -7,6 +7,9 @@ const crypto = require('crypto');
 const PORT = Number(process.env.PORT || 8180);
 const PROFILE_PATH = path.join(__dirname, 'profiles.json');
 const PROFILE_SAVE_DELAY = 750;
+const MONGO_URL = process.env.MONGO_URL || '';
+const MONGO_DB_NAME = process.env.MONGO_DB || 'explore_rpg';
+const MONGO_COLLECTION = process.env.MONGO_COLLECTION || 'profiles';
 const TICK_RATE = 20; // updates per second
 const WORLD_WIDTH = 160;
 const WORLD_HEIGHT = 160;
@@ -81,6 +84,15 @@ const MOMENTUM_DURATION_MS = 15000;
 const MOMENTUM_DAMAGE_SCALE = 0.1;
 const MOMENTUM_SPEED_SCALE = 0.06;
 const MOMENTUM_XP_SCALE = 0.08;
+
+let MongoClientModule = null;
+let mongoClient = null;
+let profilesCollection = null;
+let usingMongo = false;
+
+let profiles = new Map();
+let initializationPromise = null;
+let initialized = false;
 
 const PORTAL_DISTANCE_THRESHOLD = 1.6;
 const LEVEL_PORTAL_MIN_DISTANCE = 14;
@@ -264,10 +276,6 @@ let chatCounter = 1;
 let oreNodeCounter = 1;
 let lootCounter = 1;
 
-const profileSource = loadProfiles();
-const profiles = profileSource.map;
-nextPlayerId = Math.max(nextPlayerId, profileSource.nextPlayerId);
-
 const world = {
   width: WORLD_WIDTH,
   height: WORLD_HEIGHT,
@@ -290,16 +298,16 @@ let nextEnemyId = 1;
 let enemySpawnAccumulator = 0;
 
 process.on('beforeExit', () => {
-  saveProfilesSync();
+  flushPersistenceSync();
 });
 
 process.on('SIGINT', () => {
-  saveProfilesSync();
+  flushPersistenceSync();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  saveProfilesSync();
+  flushPersistenceSync();
   process.exit(0);
 });
 
@@ -2785,7 +2793,7 @@ function generateProfileId() {
 
 function syncProfile(player) {
   if (!player?.profileId) return;
-  profiles.set(player.profileId, {
+  const record = {
     xp: cloneXP(player.xp),
     maxHealth: Number(player.baseMaxHealth) || 100,
     lastSeen: Date.now(),
@@ -2809,100 +2817,152 @@ function syncProfile(player) {
     },
     gear: serializeGear(player.gear),
     equipment: serializeEquipment(player.equipment),
-  });
-  queueSaveProfiles();
+  };
+  profiles.set(player.profileId, record);
+  if (usingMongo && profilesCollection) {
+    persistProfileToMongo(player.profileId, record);
+  } else {
+    queueSaveProfiles();
+  }
 }
 
-function loadProfiles() {
+function buildProfileCache(entries) {
+  const map = new Map();
+  let maxAliasIndex = 0;
+  for (const [key, value] of entries) {
+    const normalized = normalizeProfileId(key);
+    if (!normalized) continue;
+    const alias = typeof value?.alias === 'string' ? value.alias : null;
+    if (alias) {
+      const match = /^p(\d+)$/.exec(alias);
+      if (match) {
+        maxAliasIndex = Math.max(maxAliasIndex, Number(match[1]));
+      }
+    }
+    const pos = value?.position;
+    let position = null;
+    if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
+      const px = clamp(pos.x, 0.5, WORLD_WIDTH - 0.5);
+      const py = clamp(pos.y, 0.5, WORLD_HEIGHT - 0.5);
+      position = { x: px, y: py };
+    }
+    const maxHealth = Number(value?.maxHealth) || 100;
+    let health = Number(value?.health);
+    if (!Number.isFinite(health) || health <= 0) {
+      health = maxHealth;
+    } else {
+      health = clamp(health, 1, maxHealth);
+    }
+    const inventory = ensureInventoryData(value?.inventory);
+    const bank = ensureBankData(value?.bank);
+    const gear = ensureGearData(value?.gear);
+    const equipment = ensureEquipmentData(value?.equipment, gear);
+    map.set(normalized, {
+      xp: cloneXP(value?.xp),
+      maxHealth,
+      lastSeen: Number(value?.lastSeen) || Date.now(),
+      alias,
+      position,
+      health,
+      inventory,
+      bank,
+      gear,
+      equipment,
+    });
+  }
+  return { map, nextPlayerId: maxAliasIndex + 1 };
+}
+
+function loadProfilesFromFile() {
   try {
     const raw = fs.readFileSync(PROFILE_PATH, 'utf8');
     const parsed = JSON.parse(raw);
-    const map = new Map();
-    let maxAliasIndex = 0;
-    for (const [key, value] of Object.entries(parsed)) {
-      const normalized = normalizeProfileId(key);
-      if (!normalized) continue;
-      const alias = typeof value?.alias === 'string' ? value.alias : null;
-      if (alias) {
-        const match = /^p(\d+)$/.exec(alias);
-        if (match) {
-          maxAliasIndex = Math.max(maxAliasIndex, Number(match[1]));
-        }
-      }
-      const pos = value?.position;
-      let position = null;
-      if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
-        const px = clamp(pos.x, 0.5, WORLD_WIDTH - 0.5);
-        const py = clamp(pos.y, 0.5, WORLD_HEIGHT - 0.5);
-        position = { x: px, y: py };
-      }
-      const maxHealth = Number(value?.maxHealth) || 100;
-      let health = Number(value?.health);
-      if (!Number.isFinite(health) || health <= 0) {
-        health = maxHealth;
-      } else {
-        health = clamp(health, 1, maxHealth);
-      }
-      const inventory = ensureInventoryData(value?.inventory);
-      const bank = ensureBankData(value?.bank);
-      const gear = ensureGearData(value?.gear);
-      const equipment = ensureEquipmentData(value?.equipment, gear);
-      map.set(normalized, {
-        xp: cloneXP(value?.xp),
-        maxHealth,
-        lastSeen: Number(value?.lastSeen) || Date.now(),
-        alias,
-        position,
-        health,
-        inventory,
-        bank,
-        gear,
-        equipment,
-      });
-    }
-    return { map, nextPlayerId: maxAliasIndex + 1 };
+    return buildProfileCache(Object.entries(parsed));
   } catch (err) {
     return { map: new Map(), nextPlayerId: 1 };
   }
 }
 
+async function loadProfiles() {
+  if (MONGO_URL) {
+    try {
+      if (!MongoClientModule) {
+        ({ MongoClient: MongoClientModule } = require('mongodb'));
+      }
+      mongoClient = new MongoClientModule(MONGO_URL, { serverSelectionTimeoutMS: 5000 });
+      await mongoClient.connect();
+      const db = mongoClient.db(MONGO_DB_NAME);
+      profilesCollection = db.collection(MONGO_COLLECTION);
+      usingMongo = true;
+      const docs = await profilesCollection.find().toArray();
+      const entries = docs
+        .map((doc) => [normalizeProfileId(doc._id || doc.id || ''), doc])
+        .filter(([id]) => Boolean(id));
+      return buildProfileCache(entries);
+    } catch (err) {
+      console.error('Failed to connect to MongoDB, falling back to local file storage:', err);
+      usingMongo = false;
+      closeMongoConnection();
+    }
+  }
+  return loadProfilesFromFile();
+}
+
+function serializeProfileRecord(value) {
+  const record = {
+    xp: cloneXP(value?.xp),
+    maxHealth: Number(value?.maxHealth) || 100,
+    lastSeen: Number(value?.lastSeen) || Date.now(),
+    alias: typeof value?.alias === 'string' ? value.alias : undefined,
+    position:
+      value?.position && typeof value.position.x === 'number' && typeof value.position.y === 'number'
+        ? { x: Number(value.position.x), y: Number(value.position.y) }
+        : undefined,
+    health:
+      typeof value?.health === 'number'
+        ? clamp(Number(value.health), 0, Number(value?.maxHealth) || 100)
+        : undefined,
+  };
+
+  if (value?.inventory) {
+    record.inventory = {
+      currency: Math.max(0, Math.floor(Number(value.inventory.currency) || 0)),
+      items: Object.fromEntries(
+        Object.entries(value.inventory.items || {})
+          .filter(([, qty]) => Number(qty) > 0)
+          .map(([key, qty]) => [key, Math.floor(Number(qty))])
+      ),
+    };
+  }
+
+  if (value?.bank) {
+    record.bank = {
+      currency: Math.max(0, Math.floor(Number(value.bank.currency) || 0)),
+      items: Object.fromEntries(
+        Object.entries(value.bank.items || {})
+          .filter(([, qty]) => Number(qty) > 0)
+          .map(([key, qty]) => [key, Math.floor(Number(qty))])
+      ),
+    };
+  }
+
+  if (value?.gear) {
+    const owned = Array.isArray(value.gear.owned) ? [...value.gear.owned] : [];
+    owned.sort();
+    record.gear = { owned };
+  }
+
+  if (value?.equipment) {
+    record.equipment = { ...value.equipment };
+  }
+
+  return record;
+}
+
 function serializeProfiles() {
   const output = {};
   for (const [key, value] of profiles.entries()) {
-    output[key] = {
-      xp: cloneXP(value?.xp),
-      maxHealth: Number(value?.maxHealth) || 100,
-      lastSeen: Number(value?.lastSeen) || Date.now(),
-      alias: typeof value?.alias === 'string' ? value.alias : undefined,
-      position:
-        value?.position && typeof value.position.x === 'number' && typeof value.position.y === 'number'
-          ? { x: Number(value.position.x), y: Number(value.position.y) }
-          : undefined,
-      health:
-        typeof value?.health === 'number'
-          ? clamp(Number(value.health), 0, Number(value?.maxHealth) || 100)
-          : undefined,
-      inventory: value?.inventory
-        ? {
-            currency: Math.max(0, Math.floor(Number(value.inventory.currency) || 0)),
-            items: Object.fromEntries(
-              Object.entries(value.inventory.items || {})
-                .filter(([, qty]) => Number(qty) > 0)
-                .map(([key, qty]) => [key, Math.floor(Number(qty))])
-            ),
-          }
-        : undefined,
-      bank: value?.bank
-        ? {
-            currency: Math.max(0, Math.floor(Number(value.bank.currency) || 0)),
-            items: Object.fromEntries(
-              Object.entries(value.bank.items || {})
-                .filter(([, qty]) => Number(qty) > 0)
-                .map(([key, qty]) => [key, Math.floor(Number(qty))])
-            ),
-          }
-        : undefined,
-    };
+    output[key] = serializeProfileRecord(value);
   }
   return JSON.stringify(output, null, 2);
 }
@@ -2940,6 +3000,7 @@ function serializeLevel(level) {
 }
 
 function queueSaveProfiles() {
+  if (usingMongo) return;
   if (profileSaveTimer) return;
   profileSaveTimer = setTimeout(() => {
     profileSaveTimer = null;
@@ -2948,6 +3009,7 @@ function queueSaveProfiles() {
 }
 
 function saveProfiles() {
+  if (usingMongo) return;
   if (!profiles.size) {
     fs.promises
       .writeFile(PROFILE_PATH, '{}', 'utf8')
@@ -2963,6 +3025,13 @@ function saveProfiles() {
 }
 
 function saveProfilesSync() {
+  if (usingMongo) {
+    if (profileSaveTimer) {
+      clearTimeout(profileSaveTimer);
+      profileSaveTimer = null;
+    }
+    return;
+  }
   if (profileSaveTimer) {
     clearTimeout(profileSaveTimer);
     profileSaveTimer = null;
@@ -2975,6 +3044,54 @@ function saveProfilesSync() {
     fs.writeFileSync(PROFILE_PATH, serializeProfiles(), 'utf8');
   } catch (err) {
     console.error('Failed to synchronously persist hero profiles:', err);
+  }
+}
+
+function persistProfileToMongo(profileId, record) {
+  if (!usingMongo || !profilesCollection || !profileId || !record) return;
+  const payload = serializeProfileRecord(record);
+  const sanitized = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (value !== undefined) {
+      sanitized[key] = value;
+    }
+  }
+  profilesCollection
+    .updateOne(
+      { _id: profileId },
+      {
+        $set: {
+          ...sanitized,
+          updatedAt: Date.now(),
+        },
+        $setOnInsert: {
+          createdAt: Date.now(),
+        },
+      },
+      { upsert: true }
+    )
+    .catch((err) => {
+      console.error('Failed to persist hero profile to MongoDB:', err);
+    });
+}
+
+function closeMongoConnection() {
+  if (!mongoClient) return;
+  const client = mongoClient;
+  mongoClient = null;
+  profilesCollection = null;
+  client
+    .close()
+    .catch((err) => {
+      console.error('Failed to close MongoDB client:', err);
+    });
+}
+
+function flushPersistenceSync() {
+  if (usingMongo) {
+    closeMongoConnection();
+  } else {
+    saveProfilesSync();
   }
 }
 
@@ -3129,6 +3246,22 @@ function startServer() {
   return server;
 }
 
+async function ensureInitialized() {
+  if (initialized) return;
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      const profileSource = await loadProfiles();
+      profiles = profileSource.map;
+      nextPlayerId = Math.max(nextPlayerId, profileSource.nextPlayerId);
+      initialized = true;
+    })().catch((err) => {
+      initializationPromise = null;
+      throw err;
+    });
+  }
+  await initializationPromise;
+}
+
 function runSelfTest() {
   console.log('Running self-test...');
   const mapA = generateTerrain(32, 32, 1234);
@@ -3179,17 +3312,28 @@ function runSelfTest() {
   console.log('Self-test passed.');
 }
 
-if (require.main === module) {
+async function main() {
   const selfTest = process.argv.some((arg) => arg === '--self-test' || arg === '--test');
-  if (selfTest) {
-    runSelfTest();
-  } else {
-    startServer();
+  try {
+    await ensureInitialized();
+    if (selfTest) {
+      runSelfTest();
+    } else {
+      startServer();
+    }
+  } catch (err) {
+    console.error('Failed to initialize server:', err);
+    process.exit(1);
   }
+}
+
+if (require.main === module) {
+  main();
 }
 
 module.exports = {
   startServer,
   generateTerrain,
   runSelfTest,
+  ensureInitialized,
 };

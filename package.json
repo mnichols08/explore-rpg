@@ -1,0 +1,17 @@
+{
+  "name": "explore-rpg",
+  "version": "0.1.0",
+  "description": "Multiplayer RPG sandbox server and client",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js"
+  },
+  "dependencies": {
+    "mongodb": "6.8.0"
+  },
+  "devDependencies": {
+    "nodemon": "3.1.0"
+  }
+}

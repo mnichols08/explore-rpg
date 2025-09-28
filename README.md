@@ -25,13 +25,15 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 
 ### Prerequisites
 
-- [Node.js 18+](https://nodejs.org/) (pure runtime, no package manager needed)
+- [Node.js 18+](https://nodejs.org/) (ships with `npm` for dependency installs)
+- Optional: a running [MongoDB](https://www.mongodb.com/try/download/community) instance if you want server-side persistence backed by a database instead of flat files.
 
 ### Run the prototype
 
 ```powershell
 cd e:\Code\Playgrounds\explore-rpg
-node .\server\server.js
+npm install
+npm start
 ```
 
 Open your browser at [http://localhost:8080](http://localhost:8080) and load the page in multiple tabs or devices on the same network to see multiplayer sync in action.
@@ -42,6 +44,19 @@ Open your browser at [http://localhost:8080](http://localhost:8080) and load the
 cd e:\Code\Playgrounds\explore-rpg
 node .\server\server.js --self-test
 ```
+
+## Persistence options
+
+- **Default (JSON file)** &mdash; If you do nothing, hero profiles are still saved to `server/profiles.json`, identical to earlier builds.
+- **MongoDB** &mdash; Set `MONGO_URL` (and optionally `MONGO_DB`, `MONGO_COLLECTION`) before starting the server to persist heroes in a Mongo collection:
+
+  ```powershell
+  cd e:\Code\Playgrounds\explore-rpg
+  $env:MONGO_URL = "mongodb://localhost:27017"
+  npm start
+  ```
+
+  The server will create/use the `explore_rpg` database and a `profiles` collection by default. If the connection fails, it automatically falls back to the JSON file without crashing.
 
 ## Controls
 
