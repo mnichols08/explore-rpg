@@ -1331,13 +1331,13 @@ template.innerHTML = `
       <div class="desktop-help">
         <h4>Core controls</h4>
         <ul class="help-list">
-          <li><span>Move</span><span>WASD ┬╖ Hold any attack to charge</span></li>
-          <li><span>Melee</span><span>Left click ┬╖ builds Strength</span></li>
-          <li><span>Ranged</span><span>Right click ┬╖ builds Dexterity</span></li>
+          <li><span>Move</span><span>WASD — Hold any attack to charge</span></li>
+          <li><span>Melee</span><span>Left click — builds Strength</span></li>
+          <li><span>Ranged</span><span>Right click — builds Dexterity</span></li>
           <li><span>Spell</span><span>Space or both buttons</span></li>
           <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
         </ul>
-        <div class="help-footnote">Enter chats nearby ┬╖ M toggles music ┬╖ Shift+N starts a fresh hero.</div>
+  <div class="help-footnote">Enter chats nearby • M toggles music • Shift+N starts a fresh hero.</div>
         
       </div>
       <div class="mobile-help">
@@ -1349,7 +1349,7 @@ template.innerHTML = `
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
-        <div class="hero-id" data-hero-id>ΓÇö</div>
+  <div class="hero-id" data-hero-id>—</div>
       </div>
       <div class="identity-tools">
         <button type="button" data-copy-id>Copy ID</button>
@@ -1449,7 +1449,7 @@ template.innerHTML = `
         <button type="button" class="touch-interact" data-touch-interact aria-label="Interact">
           <span>Interact</span>
         </button>
-        <p class="touch-hint">Move with the pad ┬╖ Slash, Volley, Spell attack ┬╖ Chat to talk ┬╖ HUD reveals panels ┬╖ Interact scoops loot and portals</p>
+  <p class="touch-hint">Move with the pad • Slash, Volley, Spell attack • Chat to talk • HUD reveals panels • Interact scoops loot and portals</p>
       </div>
     </div>
     <div class="compact-status" hidden data-compact-status>
@@ -1585,14 +1585,14 @@ const GEAR_LIBRARY = {
     slot: 'melee',
     name: 'Forager Stick',
     shortLabel: 'Stick',
-    summary: '+10% damage ┬╖ extra reach.',
+  summary: '+10% damage — extra reach.',
   },
   'melee-sword': {
     id: 'melee-sword',
     slot: 'melee',
     name: 'Steel Sword',
     shortLabel: 'Sword',
-    summary: '+35% damage ┬╖ wide arc swing.',
+  summary: '+35% damage — wide arc swing.',
   },
   'ranged-rock': {
     id: 'ranged-rock',
@@ -1606,14 +1606,14 @@ const GEAR_LIBRARY = {
     slot: 'ranged',
     name: 'Simple Sling',
     shortLabel: 'Sling',
-    summary: '+5% damage ┬╖ faster travel.',
+  summary: '+5% damage — faster travel.',
   },
   'ranged-bow': {
     id: 'ranged-bow',
     slot: 'ranged',
     name: 'Hunter Bow',
     shortLabel: 'Bow',
-    summary: '+30% damage ┬╖ long reach.',
+  summary: '+30% damage — long reach.',
   },
   'spell-air': {
     id: 'spell-air',
@@ -1648,7 +1648,7 @@ const GEAR_LIBRARY = {
     slot: 'armor',
     name: 'Traveler Cloth',
     shortLabel: 'Cloth',
-    summary: 'No bonus ΓÇö light and breezy.',
+  summary: 'No bonus — light and breezy.',
   },
   'armor-leather': {
     id: 'armor-leather',
@@ -1980,7 +1980,7 @@ class GameApp extends HTMLElement {
     this.tutorialSteps = [
       {
         title: 'Movement & Camera',
-        body: 'Use <strong>WASD</strong> (or the left stick on touch) to explore. Aim with your mouse or right pad ┬╖ the reticle shows where abilities will land.',
+  body: 'Use <strong>WASD</strong> (or the left stick on touch) to explore. Aim with your mouse or right pad — the reticle shows where abilities will land.',
         hint: 'Hold <strong>Shift</strong> to stroll carefully around the safe zone bank.',
       },
       {
@@ -1991,7 +1991,7 @@ class GameApp extends HTMLElement {
       {
         title: 'Gather, Loot, & Momentum',
         body: 'Tap <strong>E</strong> near shimmering nodes to gather ores, scoop glowing drops to loot, and keep attacking to build <strong>Momentum</strong> for bigger rewards.',
-        hint: 'Momentum fades if you pause ┬╖ chain fights to keep the edge.',
+  hint: 'Momentum fades if you pause — chain fights to keep the edge.',
       },
       {
         title: 'Safe Zone & Progress',
@@ -3753,7 +3753,7 @@ class GameApp extends HTMLElement {
     if (direction) {
       parts.push(direction);
     }
-    this.minimapPortalHintEl.textContent = `Nearest gateway: ${parts.join(' ┬╖ ')}`;
+  this.minimapPortalHintEl.textContent = `Nearest gateway: ${parts.join(' • ')}`;
   }
 
   _updatePortalPrompt(local, currentLevelId, nearest) {
@@ -3781,13 +3781,13 @@ class GameApp extends HTMLElement {
           if (closest.difficulty) {
             parts.push(closest.difficulty);
           }
-          text = `Press E to ${parts.join(' ┬╖ ')}`;
+          text = `Press E to ${parts.join(' • ')}`;
         } else if (!closest && nearest && nearest.distance <= PORTAL_INTERACT_RADIUS * 1.3) {
           const parts = [`Enter ${nearest.portal.name || 'Gateway'}`];
           if (nearest.portal.difficulty) {
             parts.push(nearest.portal.difficulty);
           }
-          text = `Press E to ${parts.join(' ┬╖ ')}`;
+          text = `Press E to ${parts.join(' • ')}`;
         }
       }
     }
@@ -3853,7 +3853,7 @@ class GameApp extends HTMLElement {
     if (direction) {
       labelParts.push(direction);
     }
-    const label = labelParts.join(' ┬╖ ');
+  const label = labelParts.join(' • ');
     const metricsCtx = ctx;
     metricsCtx.save();
     metricsCtx.font = '600 13px "Segoe UI"';
@@ -4170,10 +4170,10 @@ class GameApp extends HTMLElement {
     if (!this.minimapLabelEl) return;
     const header = this.minimapHeaderEl;
     if (info) {
-      const difficulty = info.difficulty ? ` ┬╖ ${info.difficulty}` : '';
+  const difficulty = info.difficulty ? ` • ${info.difficulty}` : '';
       this.minimapLabelEl.textContent = info.name ? `${info.name}${difficulty}` : info.id || 'Stronghold';
       if (info.difficulty) {
-        this.minimapLabelEl.title = `${info.name || info.id} ┬╖ ${info.difficulty}`;
+  this.minimapLabelEl.title = `${info.name || info.id} • ${info.difficulty}`;
       } else {
         this.minimapLabelEl.removeAttribute('title');
       }
@@ -4221,7 +4221,7 @@ class GameApp extends HTMLElement {
     if (!this.zoneIndicatorEl) return;
     this._updateMinimapLabel(info);
     if (info) {
-      const detail = info.difficulty ? `${info.name} ┬╖ ${info.difficulty}` : info.name;
+  const detail = info.difficulty ? `${info.name} • ${info.difficulty}` : info.name;
       this.zoneIndicatorEl.textContent = detail || info.id || 'Stronghold';
       const accent = info.color || DEFAULT_PORTAL_COLOR;
       this.zoneIndicatorEl.style.color = accent;
@@ -4307,7 +4307,7 @@ class GameApp extends HTMLElement {
       this._updateLevelStatus(info);
       this.audio.ensureContext();
       this.audio.onEffect({ type: 'spell' }, true);
-      this._showLevelBanner(`Entering ${info.name}${info.difficulty ? ` ┬╖ ${info.difficulty}` : ''}`, info.color);
+  this._showLevelBanner(`Entering ${info.name}${info.difficulty ? ` • ${info.difficulty}` : ''}`, info.color);
     } else if (event === 'exit') {
       this.currentLevelId = null;
       this.currentLevelExit = null;
@@ -4637,7 +4637,7 @@ class GameApp extends HTMLElement {
         if (!ownedItem) {
           li.classList.add('locked');
           const label = document.createElement('span');
-          label.textContent = `${def.name} ΓÇö Locked`;
+          label.textContent = `${def.name} — Locked`;
           li.appendChild(label);
           if (def.summary) {
             const summary = document.createElement('span');
@@ -4931,7 +4931,7 @@ class GameApp extends HTMLElement {
     this.chargeMeter.actionName = 'Idle';
     this.chargeMeter.value = 0;
     if (this.heroIdEl) {
-      this.heroIdEl.textContent = nextProfileId || 'ΓÇö';
+  this.heroIdEl.textContent = nextProfileId || '—';
     }
   }
 
@@ -4952,7 +4952,7 @@ class GameApp extends HTMLElement {
 
   _updateHeroIdDisplay() {
     if (!this.heroIdEl) return;
-    this.heroIdEl.textContent = this.profileId || 'ΓÇö';
+  this.heroIdEl.textContent = this.profileId || '—';
     this._updateHeroNameDisplay();
   }
 
@@ -4976,7 +4976,7 @@ class GameApp extends HTMLElement {
   _switchProfile(profileId) {
     const normalized = profileId ? String(profileId).trim() : null;
     this.pendingProfileId = normalized ?? null;
-    this._prepareForReconnect(normalized ?? 'ΓÇö');
+  this._prepareForReconnect(normalized ?? '—');
     this.messageEl.textContent = 'Switching hero...';
     this.messageEl.hidden = false;
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
@@ -5543,10 +5543,10 @@ class GameApp extends HTMLElement {
         </header>
         <div class="admin-flags">${badgeHtml}</div>
         <div class="admin-details">
-          <div>Stats ┬╖ STR ${this._formatNumber(stats.strength ?? 0)}, DEX ${this._formatNumber(stats.dexterity ?? 0)}, INT ${this._formatNumber(stats.intellect ?? 0)}</div>
-          <div>XP ┬╖ Melee ${this._formatNumber(meleeXp)}, Ranged ${this._formatNumber(rangedXp)}, Magic ${this._formatNumber(magicXp)}</div>
-          <div>Coins ┬╖ Inventory ${this._formatNumber(inventoryCoins)}, Bank ${this._formatNumber(bankCoins)}</div>
-          <div>Location ┬╖ ${this._escapeHtml(position)}</div>
+          <div>Stats — STR ${this._formatNumber(stats.strength ?? 0)}, DEX ${this._formatNumber(stats.dexterity ?? 0)}, INT ${this._formatNumber(stats.intellect ?? 0)}</div>
+          <div>XP — Melee ${this._formatNumber(meleeXp)}, Ranged ${this._formatNumber(rangedXp)}, Magic ${this._formatNumber(magicXp)}</div>
+          <div>Coins — Inventory ${this._formatNumber(inventoryCoins)}, Bank ${this._formatNumber(bankCoins)}</div>
+          <div>Location — ${this._escapeHtml(position)}</div>
         </div>
         <div class="admin-actions">
           <input type="text" maxlength="24" data-admin-input="hero-name" placeholder="Rename hero" value="${this._escapeHtml(profile.name || '')}" />
