@@ -2593,13 +2593,13 @@ class GameApp extends HTMLElement {
         const lengthTiles = effect.length ?? effect.range ?? 0;
         const lengthPx = lengthTiles * this.tileSize;
         if (lengthPx > 0) {
-          const widthTiles = effect.width != null ? effect.width / 2 : 0.4;
-          const radiusPx = Math.max(this.tileSize * 0.14, widthTiles * this.tileSize);
+          const widthTiles = effect.width != null ? effect.width / 2 : 0.18;
+          const radiusPx = Math.max(this.tileSize * 0.12, widthTiles * this.tileSize);
           const travel = lengthPx * travelProgress;
           ctx.rotate(aimAngle);
-          const tailLength = Math.max(radiusPx * 3, lengthPx * 0.25);
+          const tailLength = Math.max(radiusPx * 2.4, lengthPx * 0.22);
           const tailStart = Math.max(0, travel - tailLength);
-          const headRadius = radiusPx * 1.15;
+          const headRadius = radiusPx * 1.05;
 
           const gradient = ctx.createLinearGradient(tailStart, 0, travel + headRadius, 0);
           gradient.addColorStop(0, this._withAlpha(color, 0));

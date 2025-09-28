@@ -49,7 +49,7 @@ const ENEMY_VARIANTS = [
 ];
 const PLAYER_HIT_RADIUS = 0.45;
 const MELEE_CONE_HALF_ANGLE = Math.PI / 3; // 60° frontal swing
-const PROJECTILE_HALF_WIDTH = 0.35;
+const PROJECTILE_HALF_WIDTH = 0.18;
 const SPELL_PROJECTILE_HALF_WIDTH = 0.45;
 const CHARGE_TIME_BONUS = 0.75;
 const MELEE_BASE_RANGE = 2.05;
@@ -159,7 +159,7 @@ const ITEM_DEFINITIONS = {
     rangeBonus: -0.3,
     projectile: {
       travelMs: 900,
-      widthScale: 1.1,
+  widthScale: 0.85,
       variant: 'ranged-rock',
     },
   },
@@ -173,7 +173,7 @@ const ITEM_DEFINITIONS = {
     hitBonus: 0.05,
     projectile: {
       travelMs: 700,
-      widthScale: 1,
+  widthScale: 0.8,
       variant: 'ranged-sling',
     },
   },
@@ -187,7 +187,7 @@ const ITEM_DEFINITIONS = {
     hitBonus: 0.08,
     projectile: {
       travelMs: 520,
-      widthScale: 0.85,
+  widthScale: 0.72,
       variant: 'ranged-bow',
     },
   },
@@ -1298,7 +1298,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     const splashRadius = attack.splash != null ? Math.max(0.2, attack.splash * 0.5) : null;
     const baseHalfWidth = attack.width ?? (attack.type === 'spell'
       ? Math.max(SPELL_PROJECTILE_HALF_WIDTH, splashRadius ?? (SPELL_PROJECTILE_HALF_WIDTH + 0.05))
-      : PROJECTILE_HALF_WIDTH + 0.15);
+  : PROJECTILE_HALF_WIDTH + 0.05);
     effectWidth = baseHalfWidth * 2;
   }
 
@@ -1337,7 +1337,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     const splashRadius = attack.splash != null ? Math.max(0.2, attack.splash * 0.5) : null;
     const halfWidth = attack.width ?? (attack.type === 'spell'
       ? Math.max(SPELL_PROJECTILE_HALF_WIDTH, splashRadius ?? (SPELL_PROJECTILE_HALF_WIDTH + 0.05))
-      : PROJECTILE_HALF_WIDTH + 0.15);
+  : PROJECTILE_HALF_WIDTH + 0.05);
     let victim = null;
     let bestTravel = Infinity;
     for (const player of clients.values()) {
@@ -2153,7 +2153,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     xpGain = 5 * potency;
     damageBase = 16 * potency * (player.stats.dexterity / 10) * (rangedItem?.damageMultiplier ?? 1);
     range = bonuses.projectileRange ?? (RANGED_BASE_RANGE + player.stats.dexterity * RANGED_RANGE_PER_DEX);
-    projectileHalfWidth = (PROJECTILE_HALF_WIDTH + potency * 0.2) * (rangedItem?.projectile?.widthScale ?? 1);
+  projectileHalfWidth = (PROJECTILE_HALF_WIDTH + potency * 0.08) * (rangedItem?.projectile?.widthScale ?? 1);
     effectLifetime = rangedItem?.projectile?.travelMs ?? EFFECT_LIFETIME;
     effectVariant = rangedItem?.projectile?.variant ?? null;
   } else if (actionType === 'spell') {
