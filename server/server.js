@@ -2535,6 +2535,9 @@ function gameTick(now, dt) {
         : 0,
       levelId: player.levelId || null,
       momentum: serializeMomentum(player, now),
+      pvpOptIn: Boolean(player.profileMeta?.pvpOptIn),
+      pvpCooldownEndsAt: Number(player.profileMeta?.pvpCooldownUntil) || 0,
+      pvpLastCombatAt: Number(player.profileMeta?.pvpLastCombatAt) || 0,
     })),
     effects: world.effects.map((effect) => ({
       id: effect.id,

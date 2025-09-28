@@ -96,6 +96,18 @@ template.innerHTML = `
       gap: 0.55rem;
     }
 
+    .minimap-card.floating {
+      position: absolute;
+      z-index: 12;
+      cursor: grab;
+      pointer-events: auto;
+      box-shadow: 0 1.4rem 2.4rem rgba(15, 23, 42, 0.45);
+    }
+
+    .minimap-card.floating.dragging {
+      cursor: grabbing;
+    }
+
     canvas[data-minimap] {
       width: clamp(120px, 20vw, 160px);
       height: clamp(120px, 20vw, 160px);
@@ -562,6 +574,11 @@ template.innerHTML = `
       gap: 0.45rem;
     }
 
+    .desktop-help[hidden],
+    .mobile-help[hidden] {
+      display: none !important;
+    }
+
     .desktop-help h4 {
       margin: 0;
       font-size: 0.72rem;
@@ -769,6 +786,42 @@ template.innerHTML = `
       text-transform: uppercase;
       color: rgba(148, 163, 184, 0.82);
       text-align: center;
+    }
+
+    .toast-stack {
+      position: absolute;
+      top: clamp(1rem, 3vh, 2.5rem);
+      right: clamp(1rem, 3vw, 2.5rem);
+      display: grid;
+      gap: 0.6rem;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .toast-message {
+      min-width: 220px;
+      max-width: min(320px, 40vw);
+      padding: 0.65rem 0.9rem;
+      border-radius: 0.7rem;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: #e2e8f0;
+      font-size: 0.8rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      box-shadow: 0 1.2rem 2.4rem rgba(8, 16, 32, 0.45);
+      animation: toast-in 220ms ease;
+    }
+
+    @keyframes toast-in {
+      from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
 
     :host([data-touch]) .touch-controls {
@@ -1352,6 +1405,7 @@ template.innerHTML = `
           <span>Minimap</span>
           <div class="minimap-header-actions">
             <span data-minimap-label>Overworld</span>
+            <button type="button" data-minimap-float aria-pressed="false">Float</button>
             <button type="button" data-minimap-toggle aria-pressed="false">Hide</button>
           </div>
         </div>
@@ -1360,6 +1414,7 @@ template.innerHTML = `
           <ul class="minimap-legend">
             <li data-type="you">You</li>
             <li data-type="hero">Allies</li>
+            <li data-type="pvp">PvP Flagged</li>
             <li data-type="portal">Portals</li>
             <li data-type="safe">Safe Zone</li>
           </ul>
@@ -1394,6 +1449,7 @@ template.innerHTML = `
         <button type="button" data-copy-id>Copy ID</button>
         <button type="button" data-new-hero>Start New Hero</button>
         <button type="button" data-use-id>Use Hero ID</button>
+        <button type="button" data-control-hints-toggle>Show Controls</button>
         <button type="button" data-settings-panel>Settings</button>
         <button type="button" data-admin-panel hidden>Admin Panel</button>
       </div>
@@ -1583,6 +1639,7 @@ template.innerHTML = `
       </div>
     </div>
   </div>
+  <div class="toast-stack" data-toast-stack></div>
 `;
 
 const TILE_STYLE = {
@@ -1787,8 +1844,11 @@ const LEVEL_VIGNETTE = {
 };
 const PORTAL_INTERACT_RADIUS = 1.6;
 const MINIMAP_STORAGE_KEY = 'explore-rpg-minimap';
+const MINIMAP_FLOAT_STORAGE_KEY = 'explore-rpg-minimap-floating';
+const MINIMAP_FLOAT_POSITION_KEY = 'explore-rpg-minimap-pos';
 const VISUAL_STORAGE_KEY = 'explore-rpg-visuals';
 const UI_COLLAPSE_STORAGE_KEY = 'explore-rpg-ui-collapsed';
+const CONTROL_HINTS_STORAGE_KEY = 'explore-rpg-control-hints';
 const MINIMAP_SIZE = 176;
 const MINIMAP_TILE_COLORS = {
   water: '#0f172a',
@@ -1805,6 +1865,7 @@ const MINIMAP_TILE_COLORS = {
 const MINIMAP_PLAYER_COLORS = {
   you: '#38bdf8',
   ally: '#f97316',
+  pvp: '#f87171',
 };
 const MINIMAP_PORTAL_COLOR = '#fbbf24';
 const MINIMAP_SAFE_FILL = 'rgba(56, 189, 248, 0.16)';
@@ -1818,6 +1879,7 @@ const PORTAL_ARROW_COLOR = '#fbbf24';
 const PORTAL_ARROW_OUTLINE = 'rgba(15, 23, 42, 0.85)';
 const PORTAL_COMPASS_TEXT_COLOR = '#fde68a';
 const PORTAL_COMPASS_LABEL_BACKGROUND = 'rgba(15, 23, 42, 0.68)';
+const TOAST_DEFAULT_DURATION = 4000;
 
 function wrapChatLines(ctx, text, maxWidth) {
   const normalized = text.replace(/\s+/g, ' ').trim();
