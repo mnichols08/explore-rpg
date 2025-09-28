@@ -525,6 +525,20 @@ template.innerHTML = `
       color: #0f172a;
     }
 
+    .touch-actions .touch-hud {
+      grid-column: span 2;
+      background: rgba(45, 212, 191, 0.88);
+      border-color: rgba(94, 234, 212, 0.88);
+      color: #022c22;
+    }
+
+    .touch-actions .touch-hud:active,
+    .touch-actions .touch-hud.active {
+      background: rgba(20, 184, 166, 0.98);
+      border-color: rgba(94, 234, 212, 0.98);
+      color: #022c22;
+    }
+
     .touch-actions .touch-hint {
       grid-column: span 2;
       margin: 0;
@@ -537,6 +551,25 @@ template.innerHTML = `
 
     :host([data-touch]) .touch-controls {
       display: flex;
+    }
+
+    :host([data-touch][data-ui-collapsed]) .hud .top-left,
+    :host([data-touch][data-ui-collapsed]) .hud .top-right,
+    :host([data-touch][data-ui-collapsed]) .hud .bottom-left,
+    :host([data-touch][data-ui-collapsed]) .hud .bottom-right {
+      display: none !important;
+    }
+
+    :host([data-touch][data-ui-collapsed]) .hud .level-banner,
+    :host([data-touch][data-ui-collapsed]) .hud .portal-prompt,
+    :host([data-touch][data-ui-collapsed]) .hud .message {
+      display: none !important;
+    }
+
+    :host([data-touch][data-ui-collapsed]) .touch-actions .touch-hud {
+      background: rgba(20, 184, 166, 0.98);
+      border-color: rgba(94, 234, 212, 0.98);
+      color: #022c22;
     }
 
     @media (max-width: 1080px) {
@@ -880,7 +913,7 @@ template.innerHTML = `
   Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Collapse or reopen the minimap from its header button. Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div class="mobile-help">
-        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Tap Chat to open the message bar, and Interact to scoop loot, gather ore, or slip through glowing portals. The minimap toggle and music switch live up top when you need them.
+        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Tap Chat to open the message bar, HUD to hide or reveal panels, and Interact to scoop loot, gather ore, or slip through glowing portals. The minimap toggle and music switch live up top when you need them.
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
@@ -940,10 +973,13 @@ template.innerHTML = `
         <button type="button" class="touch-chat" data-touch-chat aria-label="Chat">
           <span>Chat</span>
         </button>
+        <button type="button" class="touch-hud" data-touch-ui-toggle aria-label="Hide HUD">
+          <span data-touch-ui-label>Hide HUD</span>
+        </button>
         <button type="button" class="touch-interact" data-touch-interact aria-label="Interact">
           <span>Interact</span>
         </button>
-  <p class="touch-hint">Drag left pad to move · Tap actions to attack · Chat to talk · Interact for loot and portals</p>
+    <p class="touch-hint">Drag left pad to move · Tap actions to attack · Chat to talk · HUD to clear or restore panels · Interact for loot and portals</p>
       </div>
     </div>
   </div>
@@ -1032,6 +1068,7 @@ const LEVEL_VIGNETTE = {
 };
 const PORTAL_INTERACT_RADIUS = 1.6;
 const MINIMAP_STORAGE_KEY = 'explore-rpg-minimap';
+const UI_COLLAPSE_STORAGE_KEY = 'explore-rpg-ui-collapsed';
 const MINIMAP_SIZE = 176;
 const MINIMAP_TILE_COLORS = {
   water: '#0f172a',
@@ -1138,6 +1175,8 @@ class GameApp extends HTMLElement {
     this.touchActionButtons = Array.from(this.shadowRoot.querySelectorAll('[data-touch-action]'));
     this.touchInteractButton = this.shadowRoot.querySelector('[data-touch-interact]');
   this.touchChatButton = this.shadowRoot.querySelector('[data-touch-chat]');
+    this.touchUiToggleButton = this.shadowRoot.querySelector('[data-touch-ui-toggle]');
+    this.touchUiToggleLabel = this.shadowRoot.querySelector('[data-touch-ui-label]');
     this.inventoryPanel = this.shadowRoot.querySelector('[data-inventory-panel]');
     this.inventoryCurrencyEl = this.shadowRoot.querySelector('[data-inventory-currency]');
     this.inventoryItemsEl = this.shadowRoot.querySelector('[data-inventory-items]');
@@ -1169,6 +1208,8 @@ class GameApp extends HTMLElement {
   this._handlePointerSchemeChange = this._handlePointerSchemeChange.bind(this);
   this._handleTouchChatToggle = this._handleTouchChatToggle.bind(this);
   this._handleTouchChatPointerEnd = this._handleTouchChatPointerEnd.bind(this);
+  this._handleTouchUiToggle = this._handleTouchUiToggle.bind(this);
+  this._handleTouchUiPointerEnd = this._handleTouchUiPointerEnd.bind(this);
 
     this.world = null;
     this.players = new Map();
@@ -1183,6 +1224,7 @@ class GameApp extends HTMLElement {
     this.touchControlsBound = false;
     this.touchEnabled = false;
     this.detectedTouch = false;
+  this.uiCollapsed = false;
     const coarseQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(pointer: coarse)') : null;
     this.coarsePointerQuery = coarseQuery;
     if ((typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) || (coarseQuery && coarseQuery.matches)) {
@@ -1256,6 +1298,7 @@ class GameApp extends HTMLElement {
     this._updatePortalHint(null, null);
     this._setMinimapVisible(true, false);
     this._loadMinimapPreference();
+    this._loadUiCollapsePreference();
   }
 
   connectedCallback() {
@@ -2459,6 +2502,38 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _setUICollapsed(collapsed, persist = true) {
+    const next = Boolean(collapsed);
+    this.uiCollapsed = next;
+    if (next) {
+      this.setAttribute('data-ui-collapsed', 'true');
+    } else {
+      this.removeAttribute('data-ui-collapsed');
+    }
+    this._syncTouchUiToggleButton();
+    if (persist) {
+      try {
+        window.localStorage?.setItem(UI_COLLAPSE_STORAGE_KEY, next ? '1' : '0');
+      } catch (err) {
+        // ignore storage failures
+      }
+    }
+  }
+
+  _loadUiCollapsePreference() {
+    let stored = null;
+    try {
+      stored = window.localStorage?.getItem(UI_COLLAPSE_STORAGE_KEY);
+    } catch (err) {
+      stored = null;
+    }
+    if (stored === '1') {
+      this._setUICollapsed(true, false);
+    } else {
+      this._setUICollapsed(false, false);
+    }
+  }
+
   _formatDistance(distance) {
     if (!Number.isFinite(distance)) return '0 tiles';
     const rounded = Math.max(0, Math.round(distance));
@@ -3566,6 +3641,7 @@ class GameApp extends HTMLElement {
     }
     this._bindTouchControls();
     this._syncTouchChatButton();
+    this._syncTouchUiToggleButton();
   }
 
   _bindTouchControls() {
@@ -3596,7 +3672,14 @@ class GameApp extends HTMLElement {
       this.touchChatButton.addEventListener('pointercancel', this._handleTouchChatPointerEnd);
       this.touchChatButton.addEventListener('pointerleave', this._handleTouchChatPointerEnd);
     }
+    if (this.touchUiToggleButton) {
+      this.touchUiToggleButton.addEventListener('pointerdown', this._handleTouchUiToggle);
+      this.touchUiToggleButton.addEventListener('pointerup', this._handleTouchUiPointerEnd);
+      this.touchUiToggleButton.addEventListener('pointercancel', this._handleTouchUiPointerEnd);
+      this.touchUiToggleButton.addEventListener('pointerleave', this._handleTouchUiPointerEnd);
+    }
     this._syncTouchChatButton();
+    this._syncTouchUiToggleButton();
   }
 
   _unbindTouchControls() {
@@ -3624,6 +3707,12 @@ class GameApp extends HTMLElement {
       this.touchChatButton.removeEventListener('pointerup', this._handleTouchChatPointerEnd);
       this.touchChatButton.removeEventListener('pointercancel', this._handleTouchChatPointerEnd);
       this.touchChatButton.removeEventListener('pointerleave', this._handleTouchChatPointerEnd);
+    }
+    if (this.touchUiToggleButton) {
+      this.touchUiToggleButton.removeEventListener('pointerdown', this._handleTouchUiToggle);
+      this.touchUiToggleButton.removeEventListener('pointerup', this._handleTouchUiPointerEnd);
+      this.touchUiToggleButton.removeEventListener('pointercancel', this._handleTouchUiPointerEnd);
+      this.touchUiToggleButton.removeEventListener('pointerleave', this._handleTouchUiPointerEnd);
     }
     this._clearTouchMovement();
   }
@@ -3723,6 +3812,19 @@ class GameApp extends HTMLElement {
     this.touchChatButton.classList.toggle('active', Boolean(this.chatActive));
   }
 
+  _syncTouchUiToggleButton() {
+    if (!this.touchUiToggleButton) return;
+    const label = this.uiCollapsed ? 'Show HUD' : 'Hide HUD';
+    if (this.touchUiToggleLabel) {
+      this.touchUiToggleLabel.textContent = label;
+    } else {
+      this.touchUiToggleButton.textContent = label;
+    }
+    this.touchUiToggleButton.classList.toggle('active', Boolean(this.uiCollapsed));
+    this.touchUiToggleButton.setAttribute('aria-pressed', this.uiCollapsed ? 'true' : 'false');
+    this.touchUiToggleButton.setAttribute('aria-label', label);
+  }
+
   _handleTouchChatToggle(event) {
     if (!this._isTouchLike(event)) return;
     event.preventDefault();
@@ -3741,6 +3843,21 @@ class GameApp extends HTMLElement {
     event.preventDefault();
     event.stopPropagation();
     this._syncTouchChatButton();
+  }
+
+  _handleTouchUiToggle(event) {
+    if (!this._isTouchLike(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this._enableTouchControls();
+    this._setUICollapsed(!this.uiCollapsed);
+  }
+
+  _handleTouchUiPointerEnd(event) {
+    if (!this._isTouchLike(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this._syncTouchUiToggleButton();
   }
 
   _handleTouchActionPress(event) {
