@@ -6,78 +6,15 @@ import { WorldWebGLRenderer } from '../renderers/world-webgl.js';
 
 const template = document.createElement('template');
 
-template.innerHTML = `
-  <style>
-    :host {
-      display: block;
-      position: relative;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
+    .utility-bar charge-meter {
+      flex: 1 1 140px;
+      min-width: 0;
     }
 
-    canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+    .utility-bar audio-toggle,
+    .utility-bar .visual-toggle {
+      flex: 0 0 auto;
     }
-
-    canvas[data-webgl-canvas] {
-      z-index: 2;
-      pointer-events: none;
-      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 70%);
-      mix-blend-mode: screen;
-    }
-
-    canvas[data-main-canvas] {
-      z-index: 1;
-      cursor: crosshair;
-      touch-action: none;
-      background: transparent;
-    }
-
-    .hud {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      grid-template-columns: minmax(0, clamp(220px, 24vw, 300px)) 1fr minmax(0, clamp(240px, 26vw, 340px));
-      grid-template-rows: auto 1fr auto;
-      grid-template-areas:
-        'top-left . top-right'
-        '. . .'
-        'bottom-left . bottom-right';
-      pointer-events: none;
-      padding: clamp(0.9rem, 1.4vw, 1.6rem);
-      column-gap: clamp(0.75rem, 2vw, 1.6rem);
-      row-gap: clamp(0.75rem, 1.8vw, 1.6rem);
-      align-items: start;
-      z-index: 3;
-    }
-
-    .hud > * {
-      pointer-events: auto;
-    }
-
-    .hud .top-left {
-      grid-area: top-left;
-      align-self: start;
-    }
-
-    .hud .top-right {
-      grid-area: top-right;
-      display: grid;
-      gap: 0.65rem;
-      justify-items: end;
-      width: min(100%, clamp(220px, 26vw, 320px));
-    }
-
-    .utility-bar {
-      display: flex;
-      flex-wrap: wrap;
-      width: 100%;
-      align-items: center;
-      justify-content: flex-end;
       gap: 0.45rem;
       padding: 0.45rem 0.65rem;
       border-radius: 0.8rem;
@@ -93,58 +30,65 @@ template.innerHTML = `
 
     .utility-bar charge-meter {
       flex: 1 1 140px;
-      min-width: 0;
-    }
+      @media (max-width: 1280px) {
+        :host {
+          --hud-gap: clamp(0.6rem, 0.8vw + 0.25rem, 0.9rem);
+        }
 
-    .utility-bar audio-toggle {
-      flex: 0 0 auto;
-    }
+        .hud .top-left {
+          width: clamp(200px, 28vw, 260px);
+        }
 
-    .utility-bar .visual-toggle {
-      flex: 0 0 auto;
-    }
+        .hud .top-right {
+          width: clamp(200px, 30vw, 270px);
+          gap: 0.5rem;
+        }
 
-    .hud .top-right .minimap-card {
-      width: min(100%, 240px);
-      display: grid;
-      gap: 0.5rem;
-      padding: 0.7rem;
-      border-radius: 0.85rem;
-      background: rgba(15, 23, 42, 0.82);
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      box-shadow: 0 1rem 2.2rem rgba(8, 15, 31, 0.38);
-      backdrop-filter: blur(6px);
-      transition: padding 150ms ease;
-    }
+        .hud .bottom-left,
+        .hud .bottom-right {
+          width: clamp(200px, 34vw, 280px);
+        }
 
-    .minimap-card.collapsed {
-      padding-bottom: 0.55rem;
-    }
+        .utility-bar {
+          justify-content: space-between;
+          gap: 0.4rem;
+        }
+      }
 
-    .minimap-card.collapsed .minimap-body {
-      display: none;
-    }
+      @media (max-width: 960px) {
+        :host {
+          font-size: 15px;
+          --hud-gap: 0.75rem;
+        }
 
-    .minimap-header {
-      display: flex;
-      align-items: center;
-      gap: 0.45rem;
-      font-size: 0.72rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: rgba(148, 163, 184, 0.85);
-    }
+        .hud {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+          gap: 0.75rem;
+          padding: 0.85rem;
+          pointer-events: auto;
+          overflow-y: auto;
+        }
 
-    .minimap-header .minimap-header-actions {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 0.45rem;
-    }
+        .hud .top-right,
+        .hud .top-left,
+        .hud .bottom-left,
+        .hud .bottom-right {
+          position: static;
+          width: 100%;
+          max-width: none;
+          max-height: none;
+          overflow: visible;
+        }
 
-    .minimap-header span[data-minimap-label] {
-      color: var(--minimap-accent, #38bdf8);
-      font-weight: 600;
+        :host([data-touch]) .hud .bottom-left,
+        :host([data-touch]) .hud .bottom-right {
+          bottom: auto;
+        }
+      }
     }
 
     .minimap-header button {
@@ -176,8 +120,8 @@ template.innerHTML = `
     }
 
     canvas[data-minimap] {
-      width: clamp(150px, 22vw, 188px);
-      height: clamp(150px, 22vw, 188px);
+      width: clamp(130px, 20vw, 168px);
+      height: clamp(130px, 20vw, 168px);
       max-width: 100%;
       background: rgba(15, 23, 42, 0.9);
       border-radius: 0.75rem;
@@ -241,27 +185,31 @@ template.innerHTML = `
     }
 
     .hud .bottom-left {
-      grid-area: bottom-left;
-      align-self: end;
-      width: min(100%, clamp(240px, 25vw, 320px));
+      bottom: var(--hud-gap);
+      left: var(--hud-gap);
+      width: clamp(210px, 26vw, 300px);
+      max-width: 320px;
+      max-height: calc(48vh - var(--hud-gap));
+      overflow-y: auto;
       color: rgba(226, 232, 240, 0.86);
-      font-size: 0.78rem;
+      font-size: 0.74rem;
       line-height: 1.35;
-      background: rgba(15, 23, 42, 0.66);
-      border-radius: 0.75rem;
-      padding: 0.65rem 0.85rem;
+      background: rgba(15, 23, 42, 0.64);
+      border-radius: 0.7rem;
+      padding: 0.6rem 0.8rem;
       border: 1px solid rgba(148, 163, 184, 0.22);
       backdrop-filter: blur(6px);
       display: grid;
-      gap: 0.6rem;
+      gap: 0.55rem;
     }
 
     .hud .bottom-right {
-      grid-area: bottom-right;
-      align-self: end;
+      bottom: var(--hud-gap);
+      right: var(--hud-gap);
+      width: clamp(210px, 26vw, 300px);
+      max-width: 320px;
       display: grid;
-      gap: 0.6rem;
-      width: min(100%, clamp(250px, 28vw, 340px));
+      gap: 0.55rem;
     }
 
     .identity-tools {
@@ -519,13 +467,12 @@ template.innerHTML = `
     }
 
     :host([data-touch]) .hud .bottom-left {
-      max-height: 42vh;
-      overflow-y: auto;
-      margin-bottom: clamp(120px, 20vh, 200px);
+      bottom: calc(var(--hud-gap) + clamp(110px, 18vh, 190px));
+      max-height: calc(48vh - var(--hud-gap));
     }
 
     :host([data-touch]) .hud .bottom-right {
-      margin-bottom: clamp(110px, 18vh, 190px);
+      bottom: calc(var(--hud-gap) + clamp(96px, 16vh, 176px));
     }
 
     .touch-controls {
