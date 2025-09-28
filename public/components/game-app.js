@@ -3845,6 +3845,7 @@ class GameApp extends HTMLElement {
       if (!restored && fallbackPosition) {
         this._applyMinimapFloatPosition(fallbackPosition.left, fallbackPosition.top);
       }
+  this._avoidMinimapOverlap(true);
     } else {
       this.minimapFloating = false;
       this.minimapCardEl.classList.remove('floating', 'dragging');
@@ -3923,7 +3924,7 @@ class GameApp extends HTMLElement {
       position = { left: fallbackPosition.left, top: fallbackPosition.top };
     }
     if (!position) {
-      const padding = this._getHudPadding();
+      const padding = Math.max(12, this._getHudPadding());
       const hudRect = this.hudEl?.getBoundingClientRect();
       const cardRect = this.minimapCardEl.getBoundingClientRect();
       if (hudRect && cardRect) {
@@ -3937,6 +3938,7 @@ class GameApp extends HTMLElement {
     }
     const clamped = this._clampMinimapFloatPosition(position.left, position.top);
     this._applyMinimapFloatPosition(clamped.left, clamped.top);
+  this._avoidMinimapOverlap(true);
     return Boolean(stored);
   }
 
@@ -3971,6 +3973,53 @@ class GameApp extends HTMLElement {
     };
   }
 
+  _rectsOverlap(a, b) {
+    if (!a || !b) return false;
+    return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+  }
+
+  _avoidMinimapOverlap(force = false) {
+    if (!this.minimapFloating || !this.minimapCardEl || !this.statPanel || !this.hudEl) return;
+    const hudRect = this.hudEl.getBoundingClientRect();
+    const cardRect = this.minimapCardEl.getBoundingClientRect();
+    const statsRect = this.statPanel.getBoundingClientRect();
+    if (!hudRect || !cardRect || !statsRect) return;
+    if (!this._rectsOverlap(cardRect, statsRect)) return;
+
+    const overlapWidth = Math.max(0, Math.min(cardRect.right, statsRect.right) - Math.max(cardRect.left, statsRect.left));
+    const overlapHeight = Math.max(0, Math.min(cardRect.bottom, statsRect.bottom) - Math.max(cardRect.top, statsRect.top));
+    const overlapArea = overlapWidth * overlapHeight;
+    const cardArea = cardRect.width * cardRect.height || 1;
+    if (!force && overlapArea <= cardArea * 0.35) {
+      return;
+    }
+
+    const padding = Math.max(12, this._getHudPadding());
+    const cardWidth = cardRect.width;
+    const cardHeight = cardRect.height;
+    const baseCandidates = [
+      { left: hudRect.width - cardWidth - padding, top: padding },
+      { left: hudRect.width - cardWidth - padding, top: hudRect.height - cardHeight - padding },
+      { left: padding, top: hudRect.height - cardHeight - padding },
+      { left: padding, top: padding },
+    ];
+
+    for (const candidate of baseCandidates) {
+      const clamped = this._clampMinimapFloatPosition(candidate.left, candidate.top);
+      const projected = {
+        left: hudRect.left + clamped.left,
+        top: hudRect.top + clamped.top,
+        right: hudRect.left + clamped.left + cardWidth,
+        bottom: hudRect.top + clamped.top + cardHeight,
+      };
+      if (!this._rectsOverlap(projected, statsRect)) {
+        this._applyMinimapFloatPosition(clamped.left, clamped.top);
+        this._persistMinimapFloatPosition();
+        return;
+      }
+    }
+  }
+
   _persistMinimapFloatPosition() {
     if (!this.minimapFloatPosition) return;
     try {
@@ -3998,11 +4047,17 @@ class GameApp extends HTMLElement {
   }
 
   _handleMinimapDragStart(event) {
-    if (!this.minimapFloating || !this.minimapCardEl) return;
+    if (!this.minimapCardEl) return;
     if (event && typeof event.button === 'number' && event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') {
       return;
     }
     if (event?.target?.closest?.('button')) {
+      return;
+    }
+    if (!this.minimapFloating) {
+      this._setMinimapFloating(true);
+    }
+    if (!this.minimapFloating) {
       return;
     }
     event.preventDefault?.();
@@ -4043,6 +4098,7 @@ class GameApp extends HTMLElement {
     window.removeEventListener('pointermove', this._handleMinimapDragMove);
     window.removeEventListener('pointerup', this._handleMinimapDragEnd);
     window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
+    this._avoidMinimapOverlap();
     this._persistMinimapFloatPosition();
   }
 
@@ -4053,6 +4109,7 @@ class GameApp extends HTMLElement {
     window.removeEventListener('pointermove', this._handleMinimapDragMove);
     window.removeEventListener('pointerup', this._handleMinimapDragEnd);
     window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
+    this._avoidMinimapOverlap();
     this._persistMinimapFloatPosition();
   }
 
