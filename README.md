@@ -18,6 +18,7 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Portal compass & collapsible minimap** &mdash; follow the HUD arrow and nearest-portals hint, or tuck the minimap away when you want an unobstructed view.
 - **Ambient recovery with safe haven boosts** &mdash; health slowly returns anywhere in the wild, but stepping into the safe zone accelerates regeneration about a thousand-fold.
 - **Battle Momentum streaks** &mdash; chain takedowns to ignite short-lived boosts to power, speed, and XP, all tracked right on your stat panel.
+- **Touch-first controls** &mdash; a virtual joystick and ability palette keep tablets and phones fully playable without a keyboard or mouse.
 
 ## Getting started
 
@@ -56,6 +57,7 @@ node .\server\server.js --self-test
 - Down enemies together to earn bonus XP aligned with the finishing attack type.
 - Chain kills quickly to build **Battle Momentum** for stacked speed, damage, and XP bonuses before the timer expires.
 - Keep an eye on the top-right minimap (or its HUD arrow when hidden): cyan rings mark the bank's safe zone, gold diamonds mark gateways, and orange dots show nearby allies.
+- **Touch devices:** drag the left pad to move, tap Slash/Volley/Spell to attack (hold to overcharge), and press Interact to gather, loot, or traverse portals. Tap the minimap or music buttons in the HUD as needed.
 
 ## Save & Continue
 

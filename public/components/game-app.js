@@ -22,6 +22,7 @@ template.innerHTML = `
       height: 100%;
       background: radial-gradient(circle at center, #1e293b 0%, #0f172a 70%);
       cursor: crosshair;
+      touch-action: none;
     }
 
     .hud {
@@ -371,6 +372,223 @@ template.innerHTML = `
       pointer-events: none;
     }
 
+    .desktop-help {
+      display: block;
+    }
+
+    .mobile-help {
+      display: none;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      letter-spacing: 0.04em;
+      color: rgba(226, 232, 240, 0.85);
+      background: rgba(15, 23, 42, 0.68);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 0.65rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.6rem;
+    }
+
+    :host([data-touch]) .desktop-help {
+      display: none;
+    }
+
+    :host([data-touch]) .mobile-help {
+      display: block;
+    }
+
+    :host([data-touch]) .hud .bottom-left {
+      max-height: 48vh;
+      overflow-y: auto;
+      margin-bottom: clamp(150px, 24vh, 240px);
+    }
+
+    :host([data-touch]) .hud .bottom-right {
+      margin-bottom: clamp(130px, 22vh, 220px);
+    }
+
+    .touch-controls {
+      position: absolute;
+      left: 1.2rem;
+      right: 1.2rem;
+      bottom: 1.2rem;
+      display: none;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1.5rem;
+      pointer-events: none;
+      z-index: 6;
+    }
+
+    .touch-controls > * {
+      pointer-events: auto;
+    }
+
+    .touch-pad {
+      position: relative;
+      width: clamp(120px, 28vw, 180px);
+      height: clamp(120px, 28vw, 180px);
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 1.1rem 2.4rem rgba(8, 15, 31, 0.45);
+      display: grid;
+      place-items: center;
+      touch-action: none;
+    }
+
+    .touch-pad::after {
+      content: "";
+      position: absolute;
+      inset: 18%;
+      border-radius: 50%;
+      border: 1px dashed rgba(148, 163, 184, 0.35);
+    }
+
+    .touch-thumb {
+      width: clamp(52px, 14vw, 68px);
+      height: clamp(52px, 14vw, 68px);
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.75), rgba(99, 102, 241, 0.8));
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      box-shadow: 0 0.6rem 1.2rem rgba(15, 23, 42, 0.55);
+      transform: translate3d(0, 0, 0);
+      transition: transform 90ms ease;
+    }
+
+    .touch-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem;
+      padding: 0.65rem;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 0.85rem;
+      box-shadow: 0 1.1rem 2.4rem rgba(8, 15, 31, 0.45);
+      min-width: clamp(180px, 42vw, 240px);
+    }
+
+    .touch-actions button {
+      all: unset;
+      cursor: pointer;
+      padding: 0.65rem 0.75rem;
+      border-radius: 0.75rem;
+      background: rgba(30, 41, 59, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: #f8fafc;
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-align: center;
+      box-shadow: 0 0.65rem 1.2rem rgba(15, 23, 42, 0.35);
+      transition: background 120ms ease, border 120ms ease, transform 80ms ease;
+      user-select: none;
+    }
+
+    .touch-actions button span {
+      display: block;
+      pointer-events: none;
+    }
+
+    .touch-actions button:active,
+    .touch-actions button.active {
+      background: rgba(251, 191, 36, 0.85);
+      border-color: rgba(253, 230, 138, 0.85);
+      color: #0f172a;
+      transform: translateY(1px);
+    }
+
+    .touch-actions .touch-interact {
+      grid-column: span 2;
+      background: rgba(34, 197, 94, 0.85);
+      border-color: rgba(134, 239, 172, 0.85);
+      color: #022c22;
+    }
+
+    .touch-actions .touch-interact:active,
+    .touch-actions .touch-interact.active {
+      background: rgba(16, 185, 129, 0.98);
+      border-color: rgba(45, 212, 191, 0.98);
+      color: #022c22;
+    }
+
+    .touch-actions .touch-hint {
+      grid-column: span 2;
+      margin: 0;
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.82);
+      text-align: center;
+    }
+
+    :host([data-touch]) .touch-controls {
+      display: flex;
+    }
+
+    @media (max-width: 1080px) {
+      .hud {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 1fr;
+        gap: 1rem;
+      }
+
+      .hud .top-right {
+        justify-self: end;
+        width: min(100%, 320px);
+        align-items: stretch;
+      }
+
+      .hud .bottom-left,
+      .hud .bottom-right {
+        justify-self: stretch;
+      }
+
+      .hud .bottom-right {
+        align-self: end;
+        width: min(100%, 360px);
+      }
+    }
+
+    @media (max-width: 720px) {
+      :host {
+        font-size: 15px;
+      }
+
+      .hud {
+        padding: 0.85rem;
+        gap: 0.85rem;
+      }
+
+      .hud .top-right {
+        justify-self: stretch;
+        align-items: flex-start;
+        width: 100%;
+      }
+
+      .hud .bottom-left {
+        background: rgba(15, 23, 42, 0.75);
+        border-radius: 0.8rem;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        padding: 0.7rem 0.85rem;
+        box-shadow: 0 0.9rem 1.8rem rgba(8, 15, 31, 0.45);
+        gap: 0.55rem;
+      }
+
+      .hud .bottom-right {
+        width: 100%;
+      }
+
+      .identity-tools button {
+        flex: 1 1 calc(50% - 0.45rem);
+        text-align: center;
+      }
+
+      .touch-actions {
+        min-width: min(260px, 60vw);
+      }
+    }
+
     .chat-entry {
       position: absolute;
       bottom: 1.5rem;
@@ -641,12 +859,15 @@ template.innerHTML = `
       </div>
     </div>
     <div class="bottom-left">
-      <div>
+      <div class="desktop-help">
         <strong>Explore &amp; grow:</strong><br />
   WASD to move. Left click to swing. Right click to shoot. Spacebar channels spells (or hold both mouse buttons). Hold any action to overcharge.<br />
   Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.<br />
   Follow the gold arrow or minimap marker to the nearest gateway—press E while inside its glow to enter a generated stronghold, and press E again atop the exit sigil to return.<br />
   Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Collapse or reopen the minimap from its header button. Music toggle: button or press M. Shift + N to forge a new hero.
+      </div>
+      <div class="mobile-help">
+        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Hit Interact to scoop loot, gather ore, or slip through glowing portals. The minimap toggle and music switch live up top when you need them.
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
@@ -689,6 +910,26 @@ template.innerHTML = `
     <div class="portal-prompt" hidden data-portal-prompt></div>
     <div class="level-banner" hidden data-level-banner></div>
     <div class="message" hidden data-message>Connecting...</div>
+    <div class="touch-controls" data-touch-controls>
+      <div class="touch-pad" data-joystick aria-label="Virtual joystick">
+        <div class="touch-thumb" data-joystick-thumb></div>
+      </div>
+      <div class="touch-actions">
+        <button type="button" data-touch-action="melee" aria-label="Melee">
+          <span>Slash</span>
+        </button>
+        <button type="button" data-touch-action="ranged" aria-label="Ranged">
+          <span>Volley</span>
+        </button>
+        <button type="button" data-touch-action="spell" aria-label="Spell">
+          <span>Spell</span>
+        </button>
+        <button type="button" class="touch-interact" data-touch-interact aria-label="Interact">
+          <span>Interact</span>
+        </button>
+        <p class="touch-hint">Drag left pad to move · Tap actions to attack · Interact for loot and portals</p>
+      </div>
+    </div>
   </div>
   <div class="chat-entry" hidden data-chat-entry>
     <input type="text" maxlength="140" placeholder="Type a message" data-chat-input />
@@ -875,6 +1116,11 @@ class GameApp extends HTMLElement {
   this.identityCancelButton = this.shadowRoot.querySelector('[data-identity-cancel]');
   this.chatEntry = this.shadowRoot.querySelector('[data-chat-entry]');
   this.chatInput = this.shadowRoot.querySelector('[data-chat-input]');
+    this.touchControlsEl = this.shadowRoot.querySelector('[data-touch-controls]');
+    this.joystickEl = this.shadowRoot.querySelector('[data-joystick]');
+    this.joystickThumbEl = this.shadowRoot.querySelector('[data-joystick-thumb]');
+    this.touchActionButtons = Array.from(this.shadowRoot.querySelectorAll('[data-touch-action]'));
+    this.touchInteractButton = this.shadowRoot.querySelector('[data-touch-interact]');
     this.inventoryPanel = this.shadowRoot.querySelector('[data-inventory-panel]');
     this.inventoryCurrencyEl = this.shadowRoot.querySelector('[data-inventory-currency]');
     this.inventoryItemsEl = this.shadowRoot.querySelector('[data-inventory-items]');
@@ -894,6 +1140,16 @@ class GameApp extends HTMLElement {
     this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
     this._submitChatMessage = this._submitChatMessage.bind(this);
     this._exitChatMode = this._exitChatMode.bind(this);
+  this._handleJoystickStart = this._handleJoystickStart.bind(this);
+  this._handleJoystickMove = this._handleJoystickMove.bind(this);
+  this._handleJoystickEnd = this._handleJoystickEnd.bind(this);
+  this._handleTouchActionPress = this._handleTouchActionPress.bind(this);
+  this._handleTouchActionRelease = this._handleTouchActionRelease.bind(this);
+  this._handleTouchActionCancel = this._handleTouchActionCancel.bind(this);
+  this._handleTouchInteract = this._handleTouchInteract.bind(this);
+  this._handleTouchInteractEnd = this._handleTouchInteractEnd.bind(this);
+  this._handleGlobalPointerDown = this._handleGlobalPointerDown.bind(this);
+  this._handlePointerSchemeChange = this._handlePointerSchemeChange.bind(this);
 
     this.world = null;
     this.players = new Map();
@@ -902,6 +1158,17 @@ class GameApp extends HTMLElement {
   this.levels = new Map();
   this.enemies = new Map();
   this.chats = new Map();
+    this.touchMoveVector = { x: 0, y: 0 };
+    this.joystickPointerId = null;
+    this.joystickActive = false;
+    this.touchControlsBound = false;
+    this.touchEnabled = false;
+    this.detectedTouch = false;
+    const coarseQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(pointer: coarse)') : null;
+    this.coarsePointerQuery = coarseQuery;
+    if ((typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) || (coarseQuery && coarseQuery.matches)) {
+      this.detectedTouch = true;
+    }
     this.oreNodes = new Map();
     this.lootDrops = new Map();
     this.youId = null;
@@ -1000,6 +1267,17 @@ class GameApp extends HTMLElement {
   this.bankDepositButton?.addEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.addEventListener('click', this._handleBankWithdraw);
   this.bankSellButton?.addEventListener('click', this._handleBankSell);
+    window.addEventListener('pointerdown', this._handleGlobalPointerDown, { passive: true });
+    if (this.coarsePointerQuery) {
+      if (this.coarsePointerQuery.addEventListener) {
+        this.coarsePointerQuery.addEventListener('change', this._handlePointerSchemeChange);
+      } else if (this.coarsePointerQuery.addListener) {
+        this.coarsePointerQuery.addListener(this._handlePointerSchemeChange);
+      }
+    }
+    if (this.detectedTouch) {
+      this._enableTouchControls();
+    }
     this._resizeCanvas();
     this._initializeIdentity();
     requestAnimationFrame(this._loop);
@@ -1010,6 +1288,14 @@ class GameApp extends HTMLElement {
     window.removeEventListener('resize', this._resizeCanvas);
     window.removeEventListener('keydown', this._handleKeyDown);
     window.removeEventListener('keyup', this._handleKeyUp);
+    window.removeEventListener('pointerdown', this._handleGlobalPointerDown);
+    if (this.coarsePointerQuery) {
+      if (this.coarsePointerQuery.removeEventListener) {
+        this.coarsePointerQuery.removeEventListener('change', this._handlePointerSchemeChange);
+      } else if (this.coarsePointerQuery.removeListener) {
+        this.coarsePointerQuery.removeListener(this._handlePointerSchemeChange);
+      }
+    }
     this.canvas.removeEventListener('pointerdown', this._handlePointerDown);
     this.canvas.removeEventListener('pointerup', this._handlePointerUp);
     this.canvas.removeEventListener('pointermove', this._handlePointerMove);
@@ -1028,6 +1314,7 @@ class GameApp extends HTMLElement {
   this.bankDepositButton?.removeEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.removeEventListener('click', this._handleBankWithdraw);
   this.bankSellButton?.removeEventListener('click', this._handleBankSell);
+    this._unbindTouchControls();
   if (this.bankFeedbackTimer) {
     clearTimeout(this.bankFeedbackTimer);
     this.bankFeedbackTimer = null;
@@ -1695,8 +1982,21 @@ class GameApp extends HTMLElement {
     if (!this.world) return;
     if (timestamp - this.lastInputSent < 50) return;
 
-    const moveX = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0);
-    const moveY = (this.keys.has('KeyS') ? 1 : 0) - (this.keys.has('KeyW') ? 1 : 0);
+    let moveX = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0);
+    let moveY = (this.keys.has('KeyS') ? 1 : 0) - (this.keys.has('KeyW') ? 1 : 0);
+
+    if (this.touchMoveVector) {
+      moveX += this.touchMoveVector.x;
+      moveY += this.touchMoveVector.y;
+    }
+
+    const magnitude = Math.hypot(moveX, moveY);
+    if (magnitude > 1) {
+      moveX /= magnitude;
+      moveY /= magnitude;
+    }
+    if (Math.abs(moveX) < 0.02) moveX = 0;
+    if (Math.abs(moveY) < 0.02) moveY = 0;
 
     this.socket.send(
       JSON.stringify({
@@ -3094,6 +3394,7 @@ class GameApp extends HTMLElement {
     this.portalPromptEl.hidden = true;
     this.portalPromptEl.textContent = '';
   }
+    this._clearTouchMovement();
     if (this.statPanel) {
       this.statPanel.data = {
         stats: { strength: 0, dexterity: 0, intellect: 0 },
@@ -3235,6 +3536,208 @@ class GameApp extends HTMLElement {
       event.preventDefault();
       this._handleIdentityCancel();
     }
+  }
+
+  _enableTouchControls() {
+    if (!this.touchEnabled) {
+      this.touchEnabled = true;
+      this.setAttribute('data-touch', 'true');
+    }
+    this._bindTouchControls();
+  }
+
+  _bindTouchControls() {
+    if (this.touchControlsBound) return;
+    if (!this.touchControlsEl) return;
+    this.touchControlsBound = true;
+    this._clearTouchMovement();
+    this.joystickEl?.addEventListener('pointerdown', this._handleJoystickStart);
+    this.joystickEl?.addEventListener('pointermove', this._handleJoystickMove);
+    this.joystickEl?.addEventListener('pointerup', this._handleJoystickEnd);
+    this.joystickEl?.addEventListener('pointercancel', this._handleJoystickEnd);
+    this.joystickEl?.addEventListener('pointerleave', this._handleJoystickEnd);
+    for (const button of this.touchActionButtons) {
+      button.addEventListener('pointerdown', this._handleTouchActionPress);
+      button.addEventListener('pointerup', this._handleTouchActionRelease);
+      button.addEventListener('pointercancel', this._handleTouchActionCancel);
+      button.addEventListener('pointerleave', this._handleTouchActionCancel);
+    }
+    if (this.touchInteractButton) {
+      this.touchInteractButton.addEventListener('pointerdown', this._handleTouchInteract);
+      this.touchInteractButton.addEventListener('pointerup', this._handleTouchInteractEnd);
+      this.touchInteractButton.addEventListener('pointercancel', this._handleTouchInteractEnd);
+      this.touchInteractButton.addEventListener('pointerleave', this._handleTouchInteractEnd);
+    }
+  }
+
+  _unbindTouchControls() {
+    if (!this.touchControlsBound) return;
+    this.touchControlsBound = false;
+    this.joystickEl?.removeEventListener('pointerdown', this._handleJoystickStart);
+    this.joystickEl?.removeEventListener('pointermove', this._handleJoystickMove);
+    this.joystickEl?.removeEventListener('pointerup', this._handleJoystickEnd);
+    this.joystickEl?.removeEventListener('pointercancel', this._handleJoystickEnd);
+    this.joystickEl?.removeEventListener('pointerleave', this._handleJoystickEnd);
+    for (const button of this.touchActionButtons) {
+      button.removeEventListener('pointerdown', this._handleTouchActionPress);
+      button.removeEventListener('pointerup', this._handleTouchActionRelease);
+      button.removeEventListener('pointercancel', this._handleTouchActionCancel);
+      button.removeEventListener('pointerleave', this._handleTouchActionCancel);
+    }
+    if (this.touchInteractButton) {
+      this.touchInteractButton.removeEventListener('pointerdown', this._handleTouchInteract);
+      this.touchInteractButton.removeEventListener('pointerup', this._handleTouchInteractEnd);
+      this.touchInteractButton.removeEventListener('pointercancel', this._handleTouchInteractEnd);
+      this.touchInteractButton.removeEventListener('pointerleave', this._handleTouchInteractEnd);
+    }
+    this._clearTouchMovement();
+  }
+
+  _handlePointerSchemeChange(event) {
+    if (event?.matches) {
+      this.detectedTouch = true;
+      this._enableTouchControls();
+    }
+  }
+
+  _handleGlobalPointerDown(event) {
+    if (this._isTouchLike(event)) {
+      this.detectedTouch = true;
+      this._enableTouchControls();
+    }
+  }
+
+  _isTouchLike(event) {
+    if (!event) return false;
+    const type = event.pointerType;
+    return type === 'touch' || type === 'pen' || type === '' || type === undefined;
+  }
+
+  _handleJoystickStart(event) {
+    if (!this._isTouchLike(event)) return;
+    this._enableTouchControls();
+    this.joystickActive = true;
+    this.joystickPointerId = event.pointerId;
+    this.joystickEl?.setPointerCapture?.(event.pointerId);
+    this._updateJoystickVector(event);
+    event.preventDefault();
+  }
+
+  _handleJoystickMove(event) {
+    if (!this.joystickActive) return;
+    if (event.pointerId !== this.joystickPointerId) return;
+    this._updateJoystickVector(event);
+    event.preventDefault();
+  }
+
+  _handleJoystickEnd(event) {
+    if (event.pointerId !== this.joystickPointerId) return;
+    this.joystickActive = false;
+    this.joystickPointerId = null;
+    if (this.joystickEl?.hasPointerCapture?.(event.pointerId)) {
+      this.joystickEl?.releasePointerCapture?.(event.pointerId);
+    }
+    this._clearTouchMovement();
+    event.preventDefault();
+  }
+
+  _updateJoystickVector(event) {
+    if (!this.joystickEl) return;
+    const rect = this.joystickEl.getBoundingClientRect();
+    const radius = rect.width / 2;
+    if (!radius) return;
+    const maxRadius = radius * 0.85;
+    const centerX = rect.left + radius;
+    const centerY = rect.top + radius;
+    const dx = event.clientX - centerX;
+    const dy = event.clientY - centerY;
+    let vx = dx / maxRadius;
+    let vy = dy / maxRadius;
+    const length = Math.hypot(vx, vy);
+    if (length > 1) {
+      vx /= length;
+      vy /= length;
+    }
+    vx = Math.max(-1, Math.min(1, vx));
+    vy = Math.max(-1, Math.min(1, vy));
+    this.touchMoveVector = { x: vx, y: vy };
+    this._updateJoystickThumb(this.touchMoveVector, radius * 0.55);
+    const moveMagnitude = Math.hypot(this.touchMoveVector.x, this.touchMoveVector.y);
+    if (moveMagnitude > 0.1) {
+      this.pointerAim = this._normalize({ x: this.touchMoveVector.x, y: this.touchMoveVector.y });
+    }
+  }
+
+  _updateJoystickThumb(vector, travel) {
+    if (!this.joystickThumbEl) return;
+    const range = travel ?? (this.joystickEl ? (this.joystickEl.offsetWidth || 0) * 0.25 : 36);
+    const tx = vector.x * range;
+    const ty = vector.y * range;
+    this.joystickThumbEl.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+  }
+
+  _clearTouchMovement() {
+    this.touchMoveVector = { x: 0, y: 0 };
+    if (this.joystickThumbEl) {
+      this.joystickThumbEl.style.transform = 'translate3d(0, 0, 0)';
+    }
+  }
+
+  _handleTouchActionPress(event) {
+    if (!this._isTouchLike(event)) return;
+    const button = event.currentTarget;
+    const action = button?.dataset?.touchAction;
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this._enableTouchControls();
+    if (this.activeAction && this.activeAction !== action) {
+      this._cancelAction();
+    }
+    this._startAction(action);
+    button.classList.add('active');
+  }
+
+  _handleTouchActionRelease(event) {
+    if (!this._isTouchLike(event)) return;
+    const button = event.currentTarget;
+    event.preventDefault();
+    event.stopPropagation();
+    button?.classList.remove('active');
+    this._releaseAction();
+  }
+
+  _handleTouchActionCancel(event) {
+    if (!this._isTouchLike(event)) return;
+    const button = event.currentTarget;
+    event.preventDefault();
+    event.stopPropagation();
+    button?.classList.remove('active');
+    this._cancelAction();
+  }
+
+  _handleTouchInteract(event) {
+    if (!this._isTouchLike(event)) return;
+    const button = event.currentTarget;
+    event.preventDefault();
+    event.stopPropagation();
+    button?.classList.add('active');
+    this._enableTouchControls();
+    const portalUsed = this._attemptPortalInteraction();
+    this._requestGatherLoot();
+    if (!portalUsed) {
+      setTimeout(() => {
+        button?.classList.remove('active');
+      }, 160);
+    }
+  }
+
+  _handleTouchInteractEnd(event) {
+    if (!this._isTouchLike(event)) return;
+    const button = event.currentTarget;
+    event.preventDefault();
+    event.stopPropagation();
+    button?.classList.remove('active');
   }
 
   _maskFromButton(button) {
