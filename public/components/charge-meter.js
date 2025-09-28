@@ -5,19 +5,20 @@ template.innerHTML = `
     :host {
       display: grid;
       grid-template-columns: auto;
-      gap: 0.4rem;
-      background: rgba(15, 23, 42, 0.75);
-      border-radius: 0.75rem;
-      padding: 0.5rem 0.75rem;
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      min-width: 160px;
+      gap: 0.35rem;
+      background: rgba(15, 23, 42, 0.72);
+      border-radius: 0.7rem;
+      padding: 0.4rem 0.6rem;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      min-width: 0;
+      width: 100%;
       backdrop-filter: blur(6px);
     }
 
     .label {
       text-transform: uppercase;
-      font-size: 0.7rem;
-      letter-spacing: 0.18em;
+      font-size: 0.64rem;
+      letter-spacing: 0.16em;
       color: #94a3b8;
     }
 
@@ -37,7 +38,7 @@ template.innerHTML = `
     }
 
     .action {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 600;
       color: #e2e8f0;
     }

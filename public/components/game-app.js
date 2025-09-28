@@ -41,10 +41,17 @@ template.innerHTML = `
       position: absolute;
       inset: 0;
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
+      grid-template-columns: minmax(0, clamp(220px, 24vw, 300px)) 1fr minmax(0, clamp(240px, 26vw, 340px));
+      grid-template-rows: auto 1fr auto;
+      grid-template-areas:
+        'top-left . top-right'
+        '. . .'
+        'bottom-left . bottom-right';
       pointer-events: none;
-      padding: 1.5rem;
+      padding: clamp(0.9rem, 1.4vw, 1.6rem);
+      column-gap: clamp(0.75rem, 2vw, 1.6rem);
+      row-gap: clamp(0.75rem, 1.8vw, 1.6rem);
+      align-items: start;
       z-index: 3;
     }
 
@@ -53,29 +60,59 @@ template.innerHTML = `
     }
 
     .hud .top-left {
-      justify-self: start;
+      grid-area: top-left;
       align-self: start;
     }
 
     .hud .top-right {
-      justify-self: end;
-      align-self: start;
+      grid-area: top-right;
+      display: grid;
+      gap: 0.65rem;
+      justify-items: end;
+      width: min(100%, clamp(220px, 26vw, 320px));
+    }
+
+    .utility-bar {
       display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 0.75rem;
+      flex-wrap: wrap;
+      width: 100%;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.45rem;
+      padding: 0.45rem 0.65rem;
+      border-radius: 0.8rem;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      box-shadow: 0 0.9rem 2rem rgba(8, 15, 31, 0.38);
+      backdrop-filter: blur(6px);
+    }
+
+    .utility-bar > * {
+      pointer-events: auto;
+    }
+
+    .utility-bar charge-meter {
+      flex: 1 1 140px;
+      min-width: 0;
+    }
+
+    .utility-bar audio-toggle {
+      flex: 0 0 auto;
+    }
+
+    .utility-bar .visual-toggle {
+      flex: 0 0 auto;
     }
 
     .hud .top-right .minimap-card {
-      width: 190px;
-      max-width: 48vw;
+      width: min(100%, 240px);
       display: grid;
-      gap: 0.55rem;
-      padding: 0.75rem;
+      gap: 0.5rem;
+      padding: 0.7rem;
       border-radius: 0.85rem;
       background: rgba(15, 23, 42, 0.82);
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      box-shadow: 0 1.1rem 2.4rem rgba(8, 15, 31, 0.45);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      box-shadow: 0 1rem 2.2rem rgba(8, 15, 31, 0.38);
       backdrop-filter: blur(6px);
       transition: padding 150ms ease;
     }
@@ -139,13 +176,13 @@ template.innerHTML = `
     }
 
     canvas[data-minimap] {
-      width: 176px;
-      height: 176px;
+      width: clamp(150px, 22vw, 188px);
+      height: clamp(150px, 22vw, 188px);
       max-width: 100%;
       background: rgba(15, 23, 42, 0.9);
       border-radius: 0.75rem;
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      box-shadow: inset 0 0 1.2rem rgba(8, 15, 31, 0.45);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      box-shadow: inset 0 0 1.1rem rgba(8, 15, 31, 0.42);
     }
 
     .minimap-legend {
@@ -204,28 +241,27 @@ template.innerHTML = `
     }
 
     .hud .bottom-left {
-      justify-self: start;
+      grid-area: bottom-left;
       align-self: end;
-      color: rgba(226, 232, 240, 0.85);
-      font-size: 0.8rem;
-      line-height: 1.4;
-      max-width: 320px;
-      background: rgba(15, 23, 42, 0.65);
+      width: min(100%, clamp(240px, 25vw, 320px));
+      color: rgba(226, 232, 240, 0.86);
+      font-size: 0.78rem;
+      line-height: 1.35;
+      background: rgba(15, 23, 42, 0.66);
       border-radius: 0.75rem;
-      padding: 0.65rem 0.9rem;
-      border: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 0.65rem 0.85rem;
+      border: 1px solid rgba(148, 163, 184, 0.22);
       backdrop-filter: blur(6px);
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
+      display: grid;
+      gap: 0.6rem;
     }
 
     .hud .bottom-right {
-      justify-self: end;
+      grid-area: bottom-right;
       align-self: end;
-      display: flex;
-      flex-direction: column;
-      gap: 0.65rem;
+      display: grid;
+      gap: 0.6rem;
+      width: min(100%, clamp(250px, 28vw, 340px));
     }
 
     .identity-tools {
@@ -260,12 +296,15 @@ template.innerHTML = `
     .visual-toggle {
       all: unset;
       cursor: pointer;
-      padding: 0.35rem 0.65rem;
-      border-radius: 0.55rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.32rem 0.6rem;
+      border-radius: 0.6rem;
       background: rgba(30, 41, 59, 0.82);
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      font-size: 0.72rem;
-      letter-spacing: 0.06em;
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
       color: #f8fafc;
       transition: background 150ms ease, border 150ms ease, transform 150ms ease, color 150ms ease;
@@ -417,20 +456,58 @@ template.innerHTML = `
     }
 
     .desktop-help {
-      display: block;
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .desktop-help h4 {
+      margin: 0;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.8);
+    }
+
+    .help-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.3rem;
+    }
+
+    .help-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.45rem;
+      font-size: 0.74rem;
+      color: rgba(226, 232, 240, 0.85);
+    }
+
+    .help-list li span:first-child {
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.9);
+    }
+
+    .help-footnote {
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.75);
     }
 
     .mobile-help {
       display: none;
-      font-size: 0.78rem;
-      line-height: 1.5;
+      font-size: 0.76rem;
+      line-height: 1.4;
       letter-spacing: 0.04em;
       color: rgba(226, 232, 240, 0.85);
       background: rgba(15, 23, 42, 0.68);
       border: 1px solid rgba(148, 163, 184, 0.25);
       border-radius: 0.65rem;
-      padding: 0.5rem 0.65rem;
-      margin-bottom: 0.6rem;
+      padding: 0.45rem 0.6rem;
     }
 
     :host([data-touch]) .desktop-help {
@@ -442,13 +519,13 @@ template.innerHTML = `
     }
 
     :host([data-touch]) .hud .bottom-left {
-      max-height: 48vh;
+      max-height: 42vh;
       overflow-y: auto;
-      margin-bottom: clamp(150px, 24vh, 240px);
+      margin-bottom: clamp(120px, 20vh, 200px);
     }
 
     :host([data-touch]) .hud .bottom-right {
-      margin-bottom: clamp(130px, 22vh, 220px);
+      margin-bottom: clamp(110px, 18vh, 190px);
     }
 
     .touch-controls {
@@ -730,44 +807,56 @@ template.innerHTML = `
       background: linear-gradient(90deg, #f97316, #fb7185);
     }
 
-    @media (max-width: 1080px) {
+    @media (max-width: 1280px) {
       .hud {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto 1fr;
-        gap: 1rem;
+        grid-template-columns: minmax(0, clamp(220px, 46vw, 320px)) minmax(0, clamp(240px, 48vw, 340px));
+        grid-template-rows: auto auto auto;
+        grid-template-areas:
+          'top-left top-right'
+          'bottom-left top-right'
+          'bottom-left bottom-right';
+        column-gap: clamp(0.6rem, 1.4vw, 1.1rem);
+        row-gap: clamp(0.7rem, 1.6vw, 1.2rem);
       }
 
-      .hud .top-right {
-        justify-self: end;
-        width: min(100%, 320px);
-        align-items: stretch;
-      }
-
+      .hud .top-left,
+      .hud .top-right,
       .hud .bottom-left,
       .hud .bottom-right {
+        width: 100%;
         justify-self: stretch;
       }
 
-      .hud .bottom-right {
-        align-self: end;
-        width: min(100%, 360px);
+      .utility-bar {
+        justify-content: space-between;
+        gap: 0.45rem;
       }
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 960px) {
       :host {
         font-size: 15px;
       }
 
       .hud {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: repeat(4, auto);
+        grid-template-areas:
+          'top-right'
+          'top-left'
+          'bottom-right'
+          'bottom-left';
         padding: 0.85rem;
-        gap: 0.85rem;
+        column-gap: 0;
+        row-gap: 0.85rem;
       }
 
-      .hud .top-right {
-        justify-self: stretch;
-        align-items: flex-start;
+      .hud .top-right,
+      .hud .top-left,
+      .hud .bottom-left,
+      .hud .bottom-right {
         width: 100%;
+        justify-self: stretch;
       }
 
       .hud .bottom-left {
@@ -829,19 +918,20 @@ template.innerHTML = `
     }
 
     .resource-panel {
-      min-width: 220px;
-      max-width: 360px;
-      background: rgba(15, 23, 42, 0.82);
+      width: 100%;
+      background: rgba(15, 23, 42, 0.8);
       border-radius: 0.85rem;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      padding: 0.75rem 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      padding: 0.65rem 0.8rem;
       color: #e2e8f0;
-      font-size: 0.78rem;
-      line-height: 1.4;
-      box-shadow: 0 0.85rem 2.4rem rgba(8, 15, 31, 0.45);
+      font-size: 0.76rem;
+      line-height: 1.35;
+      box-shadow: 0 0.8rem 2rem rgba(8, 15, 31, 0.4);
       backdrop-filter: blur(6px);
       display: grid;
-      gap: 0.65rem;
+      gap: 0.55rem;
+      max-height: min(46vh, 340px);
+      overflow: hidden;
     }
 
     .resource-panel.flash {
@@ -859,9 +949,9 @@ template.innerHTML = `
     .resource-panel .totals {
       display: flex;
       justify-content: space-between;
-      gap: 0.5rem;
+      gap: 0.45rem;
       font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: #f8fafc;
     }
 
@@ -871,8 +961,9 @@ template.innerHTML = `
       padding: 0;
       display: grid;
       gap: 0.35rem;
-      max-height: 9rem;
+      max-height: 8.5rem;
       overflow-y: auto;
+      padding-right: 0.1rem;
     }
 
     .resource-panel ul li {
@@ -1023,7 +1114,9 @@ template.innerHTML = `
     }
 
     .gear-panel {
-      gap: 0.75rem;
+      gap: 0.6rem;
+      max-height: min(46vh, 360px);
+      overflow: hidden;
     }
 
     .gear-panel .gear-head h4 {
@@ -1032,18 +1125,21 @@ template.innerHTML = `
 
     .gear-panel .gear-head p {
       margin: 0;
-      color: rgba(148, 163, 184, 0.78);
-      font-size: 0.75rem;
-      line-height: 1.5;
+      color: rgba(148, 163, 184, 0.75);
+      font-size: 0.72rem;
+      line-height: 1.45;
     }
 
     .gear-slots {
       display: grid;
-      gap: 0.65rem;
+      gap: 0.55rem;
+      max-height: 14rem;
+      overflow-y: auto;
+      padding-right: 0.1rem;
     }
 
     .gear-slot {
-      padding: 0.65rem;
+      padding: 0.6rem;
       border-radius: 0.65rem;
       background: rgba(30, 41, 59, 0.68);
       border: 1px solid rgba(148, 163, 184, 0.28);
@@ -1067,7 +1163,7 @@ template.innerHTML = `
 
     .gear-slot header .slot-equipped {
       font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
-      font-size: 0.78rem;
+      font-size: 0.74rem;
       color: #f8fafc;
     }
 
@@ -1157,9 +1253,11 @@ template.innerHTML = `
   <div class="hud">
     <div class="top-left"><stat-panel></stat-panel></div>
     <div class="top-right">
-      <charge-meter></charge-meter>
-      <audio-toggle></audio-toggle>
-      <button type="button" class="visual-toggle" data-visual-toggle aria-pressed="true">Glow On</button>
+      <div class="utility-bar">
+        <charge-meter></charge-meter>
+        <audio-toggle></audio-toggle>
+        <button type="button" class="visual-toggle" data-visual-toggle aria-pressed="true">Glow On</button>
+      </div>
       <div class="minimap-card" data-minimap-card>
         <div class="minimap-header" data-minimap-header>
           <span>Minimap</span>
@@ -1182,14 +1280,19 @@ template.innerHTML = `
     </div>
     <div class="bottom-left">
       <div class="desktop-help">
-        <strong>Explore &amp; grow:</strong><br />
-  WASD to move. Left click to swing. Right click to shoot. Spacebar channels spells (or hold both mouse buttons). Hold any action to overcharge.<br />
-  Press Enter to chat with nearby heroes. Tap E to gather resources or scoop up loose loot.<br />
-  Follow the gold arrow or minimap marker to the nearest gateway—press E while inside its glow to enter a generated stronghold, and press E again atop the exit sigil to return.<br />
-  Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Collapse or reopen the minimap from its header button. Music toggle: button or press M. Shift + N to forge a new hero.
+        <h4>Core controls</h4>
+        <ul class="help-list">
+          <li><span>Move</span><span>WASD · Hold any attack to charge</span></li>
+          <li><span>Melee</span><span>Left click · builds Strength</span></li>
+          <li><span>Ranged</span><span>Right click · builds Dexterity</span></li>
+          <li><span>Spell</span><span>Space or both buttons</span></li>
+          <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
+        </ul>
+        <div class="help-footnote">Enter chats nearby · M toggles music · Shift+N starts a fresh hero.</div>
+        
       </div>
       <div class="mobile-help">
-        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Chat opens the message bar, HUD hides or reveals the big panels, and Interact scoops loot, ore, or portals. On smaller screens the HUD stays tucked away—tap HUD whenever you need the minimap, glow, or music toggles.
+        Use the left pad to move, Slash/Volley/Spell to act, Interact for loot and portals, Chat to speak, and tap HUD anytime to reveal the panels.
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
@@ -1354,7 +1457,7 @@ const ACTION_LABEL = {
 
 const EFFECT_FADE_MS = 600;
 
-const COMPACT_BREAKPOINT = 420;
+const COMPACT_BREAKPOINT = 820;
 
 const EQUIPMENT_ORDER = ['melee', 'ranged', 'spell', 'armor'];
 

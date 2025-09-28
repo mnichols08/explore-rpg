@@ -11,14 +11,14 @@ template.innerHTML = `
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.45rem 0.75rem;
+      gap: 0.35rem;
+      padding: 0.32rem 0.6rem;
       border-radius: 999px;
-      background: rgba(15, 23, 42, 0.75);
-      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.74);
+      border: 1px solid rgba(148, 163, 184, 0.28);
       color: #e2e8f0;
-      font-size: 0.8rem;
-      letter-spacing: 0.05em;
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       transition: background 150ms ease, border 150ms ease, transform 150ms ease;
     }
@@ -33,8 +33,8 @@ template.innerHTML = `
     }
 
     .dot {
-      width: 0.55rem;
-      height: 0.55rem;
+      width: 0.45rem;
+      height: 0.45rem;
       border-radius: 999px;
       background: #ef4444;
       box-shadow: 0 0 0.4rem rgba(239, 68, 68, 0.5);

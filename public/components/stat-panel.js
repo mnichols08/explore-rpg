@@ -4,21 +4,22 @@ template.innerHTML = `
   <style>
     :host {
       display: grid;
-      gap: 0.35rem;
-      padding: 0.75rem 1rem;
-      background: linear-gradient(135deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.85));
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      border-radius: 0.75rem;
-      min-width: 220px;
+      gap: 0.45rem;
+      padding: clamp(0.6rem, 1vw + 0.35rem, 0.85rem) clamp(0.7rem, 1vw + 0.4rem, 1rem);
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.82));
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 0.8rem;
+      min-width: min(260px, 28vw);
+      max-width: 320px;
       color: #e2e8f0;
-      backdrop-filter: blur(6px);
+      backdrop-filter: blur(8px);
     }
 
     h2 {
       margin: 0;
       text-transform: uppercase;
-      font-size: 0.8rem;
-      letter-spacing: 0.12em;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
       color: #94a3b8;
     }
 
@@ -38,35 +39,35 @@ template.innerHTML = `
 
     .grid {
       display: grid;
-      grid-template-columns: auto auto;
-      gap: 0.4rem 0.75rem;
-      font-size: 0.85rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.3rem 0.65rem;
+      font-size: 0.8rem;
     }
 
     .label {
       color: #cbd5f5;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
     }
 
     .value {
       font-weight: 600;
+      font-size: 0.86rem;
     }
 
     .health {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      margin-top: 0.4rem;
+      display: grid;
+      gap: 0.3rem;
+      margin-top: 0.3rem;
     }
 
     .momentum {
       display: grid;
-      gap: 0.35rem;
-      margin-top: 0.6rem;
-      padding-top: 0.6rem;
-      border-top: 1px solid rgba(148, 163, 184, 0.25);
+      gap: 0.3rem;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(148, 163, 184, 0.22);
     }
 
     .momentum-head {
@@ -77,7 +78,7 @@ template.innerHTML = `
 
     .momentum-head .value {
       font-weight: 700;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: #fbbf24;
     }
 
@@ -97,10 +98,10 @@ template.innerHTML = `
     }
 
     .momentum-status {
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       letter-spacing: 0.05em;
       text-transform: uppercase;
-      color: rgba(250, 204, 21, 0.82);
+      color: rgba(250, 204, 21, 0.8);
     }
 
     .momentum:not(.active) .momentum-head .value {
