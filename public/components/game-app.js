@@ -626,6 +626,18 @@ template.innerHTML = `
       color: rgba(226, 232, 240, 0.88);
     }
 
+    .admin-profile .admin-field {
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .admin-profile .admin-field-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08rem;
+      color: rgba(148, 163, 184, 0.72);
+    }
+
     .admin-profile .admin-actions {
       display: flex;
       flex-wrap: wrap;
@@ -3223,10 +3235,14 @@ class GameApp extends HTMLElement {
       ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-      ctx.font = 'bold 10px "Segoe UI"';
-      ctx.textAlign = 'center';
-      ctx.fillText(player.id, offsetX, offsetY - radius - 6);
+      if (!isSelf) {
+        const rawName = typeof player.name === 'string' ? player.name.trim() : '';
+        const displayName = rawName || player.id;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+        ctx.font = 'bold 10px "Segoe UI"';
+        ctx.textAlign = 'center';
+        ctx.fillText(displayName, offsetX, offsetY - radius - 6);
+      }
 
       // Health bar
       const hpRatio = player.maxHealth ? player.health / player.maxHealth : 0;
@@ -6453,6 +6469,11 @@ class GameApp extends HTMLElement {
     const bannedAttr = profile.banned ? 'true' : 'false';
     const adminAttr = profile.admin ? 'true' : 'false';
     const tutorialAttr = profile.tutorialCompleted ? 'true' : 'false';
+    const slug = profileId ? profileId.replace(/[^a-zA-Z0-9_-]/g, '').slice(-8) || 'hero' : 'hero';
+    const renameLabelId = `admin-${slug}-rename`;
+    const xpLabelId = `admin-${slug}-xp`;
+    const currencyLabelId = `admin-${slug}-currency`;
+    const actionsLabelId = `admin-${slug}-actions`;
     const position = profile?.position
       ? `(${profile.position.x?.toFixed?.(1) ?? '─'}, ${profile.position.y?.toFixed?.(1) ?? '─'})`
       : 'Unknown';
@@ -6469,27 +6490,45 @@ class GameApp extends HTMLElement {
           <div>Coins — Inventory ${this._formatNumber(inventoryCoins)}, Bank ${this._formatNumber(bankCoins)}</div>
           <div>Location — ${this._escapeHtml(position)}</div>
         </div>
-        <div class="admin-actions">
-          <input type="text" maxlength="24" data-admin-input="hero-name" placeholder="Rename hero" value="${this._escapeHtml(profile.name || '')}" />
-          <button type="button" data-admin-action="set-name">Save Name</button>
+        <div class="admin-field">
+          <span class="admin-field-label" id="${renameLabelId}">Rename Hero</span>
+          <div class="admin-actions" role="group" aria-labelledby="${renameLabelId}">
+            <input type="text" maxlength="24" data-admin-input="hero-name" placeholder="Hero name"
+              aria-label="Hero name" value="${this._escapeHtml(profile.name || '')}" />
+            <button type="button" data-admin-action="set-name" aria-label="Save hero name">Save Name</button>
+          </div>
         </div>
-        <div class="admin-actions">
-          <input type="number" min="0" data-admin-input="xp-melee" placeholder="Melee XP" value="${meleeXp}" />
-          <input type="number" min="0" data-admin-input="xp-ranged" placeholder="Ranged XP" value="${rangedXp}" />
-          <input type="number" min="0" data-admin-input="xp-magic" placeholder="Magic XP" value="${magicXp}" />
-          <button type="button" data-admin-action="set-xp">Save Stats</button>
+        <div class="admin-field">
+          <span class="admin-field-label" id="${xpLabelId}">Adjust Experience</span>
+          <div class="admin-actions" role="group" aria-labelledby="${xpLabelId}">
+            <input type="number" min="0" data-admin-input="xp-melee" placeholder="Melee XP"
+              aria-label="Melee experience" value="${meleeXp}" />
+            <input type="number" min="0" data-admin-input="xp-ranged" placeholder="Ranged XP"
+              aria-label="Ranged experience" value="${rangedXp}" />
+            <input type="number" min="0" data-admin-input="xp-magic" placeholder="Magic XP"
+              aria-label="Magic experience" value="${magicXp}" />
+            <button type="button" data-admin-action="set-xp" aria-label="Save experience values">Save Stats</button>
+          </div>
         </div>
-        <div class="admin-actions">
-          <input type="number" data-admin-input="grant-inventory" placeholder="Inventory Δ" value="0" />
-          <input type="number" data-admin-input="grant-bank" placeholder="Bank Δ" value="0" />
-          <button type="button" data-admin-action="grant-currency">Apply Currency</button>
+        <div class="admin-field">
+          <span class="admin-field-label" id="${currencyLabelId}">Adjust Currency</span>
+          <div class="admin-actions" role="group" aria-labelledby="${currencyLabelId}">
+            <input type="number" data-admin-input="grant-inventory" placeholder="Inventory delta"
+              aria-label="Inventory currency adjustment" value="0" />
+            <input type="number" data-admin-input="grant-bank" placeholder="Bank delta"
+              aria-label="Bank currency adjustment" value="0" />
+            <button type="button" data-admin-action="grant-currency" aria-label="Apply currency changes">Apply Currency</button>
+          </div>
         </div>
-        <div class="admin-actions">
-          <button type="button" data-admin-action="teleport-safe" ${onlineDisabled}>Teleport Safe</button>
-          <button type="button" data-admin-action="kick" ${onlineDisabled}>Force Logout</button>
-          <button type="button" data-admin-action="toggle-ban" data-current="${bannedAttr}">${profile?.banned ? 'Unban' : 'Ban'}</button>
-          <button type="button" data-admin-action="toggle-admin" data-current="${adminAttr}">${profile?.admin ? 'Revoke Admin' : 'Grant Admin'}</button>
-          <button type="button" data-admin-action="toggle-tutorial" data-current="${tutorialAttr}">${profile?.tutorialCompleted ? 'Reset Tutorial' : 'Mark Tutorial Done'}</button>
+        <div class="admin-field">
+          <span class="admin-field-label" id="${actionsLabelId}">Admin Actions</span>
+          <div class="admin-actions" role="group" aria-labelledby="${actionsLabelId}">
+            <button type="button" data-admin-action="teleport-safe" ${onlineDisabled} aria-label="Teleport hero to safe zone">Teleport Safe</button>
+            <button type="button" data-admin-action="kick" ${onlineDisabled} aria-label="Force hero logout">Force Logout</button>
+            <button type="button" data-admin-action="toggle-ban" data-current="${bannedAttr}" aria-label="${profile?.banned ? 'Unban hero' : 'Ban hero'}">${profile?.banned ? 'Unban' : 'Ban'}</button>
+            <button type="button" data-admin-action="toggle-admin" data-current="${adminAttr}" aria-label="${profile?.admin ? 'Revoke admin status' : 'Grant admin status'}">${profile?.admin ? 'Revoke Admin' : 'Grant Admin'}</button>
+            <button type="button" data-admin-action="toggle-tutorial" data-current="${tutorialAttr}" aria-label="${profile?.tutorialCompleted ? 'Reset tutorial progress' : 'Mark tutorial complete'}">${profile?.tutorialCompleted ? 'Reset Tutorial' : 'Mark Tutorial Done'}</button>
+          </div>
         </div>
       </div>
     `;
