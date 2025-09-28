@@ -213,6 +213,37 @@ template.innerHTML = `
       cursor: grabbing;
     }
 
+    .minimap-ghost {
+      all: unset;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: auto;
+      margin-bottom: 0.45rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      color: rgba(226, 232, 240, 0.85);
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      box-shadow: 0 0.9rem 1.8rem rgba(15, 23, 42, 0.35);
+      pointer-events: auto;
+      transition: background 140ms ease, border 140ms ease, transform 80ms ease;
+    }
+
+    .minimap-ghost:hover {
+      background: rgba(30, 41, 59, 0.88);
+      border-color: rgba(148, 163, 184, 0.6);
+      transform: translateY(-1px);
+    }
+
+    .minimap-ghost:active {
+      transform: translateY(0);
+    }
+
     canvas[data-minimap] {
       width: clamp(120px, 20vw, 160px);
       height: clamp(120px, 20vw, 160px);
@@ -1517,6 +1548,16 @@ template.innerHTML = `
         <audio-toggle></audio-toggle>
         <button type="button" class="visual-toggle" data-visual-toggle aria-pressed="true">Glow On</button>
       </div>
+      <button
+        type="button"
+        class="minimap-ghost"
+        data-minimap-ghost
+        hidden
+        aria-hidden="true"
+        aria-label="Show minimap"
+      >
+        Show Minimap
+      </button>
       <div class="minimap-card" data-minimap-card>
         <div class="minimap-header" data-minimap-header>
           <span>Minimap</span>
@@ -2082,6 +2123,7 @@ class GameApp extends HTMLElement {
     this.minimapToggleButton = this.shadowRoot.querySelector('[data-minimap-toggle]');
     this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
   this.minimapFloatButton = this.shadowRoot.querySelector('[data-minimap-float]');
+    this.minimapGhostButton = this.shadowRoot.querySelector('[data-minimap-ghost]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
   this.toastStackEl = this.shadowRoot.querySelector('[data-toast-stack]');
     this.mapOverlayEl = this.shadowRoot.querySelector('[data-map-overlay]');
@@ -2386,6 +2428,7 @@ class GameApp extends HTMLElement {
     }
     this.visualToggleButton?.addEventListener('click', this._handleVisualToggle);
     this.minimapToggleButton?.addEventListener('click', this._toggleMinimapVisibility);
+    this.minimapGhostButton?.addEventListener('click', this._toggleMinimapVisibility);
   this.minimapExpandButton?.addEventListener('click', this._toggleMapOverlay);
     this.minimapFloatButton?.addEventListener('click', this._handleMinimapFloatToggle);
     this.minimapHeaderEl?.addEventListener('pointerdown', this._handleMinimapDragStart);
@@ -2456,6 +2499,7 @@ class GameApp extends HTMLElement {
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
   this.visualToggleButton?.removeEventListener('click', this._handleVisualToggle);
   this.minimapToggleButton?.removeEventListener('click', this._toggleMinimapVisibility);
+  this.minimapGhostButton?.removeEventListener('click', this._toggleMinimapVisibility);
   this.minimapExpandButton?.removeEventListener('click', this._toggleMapOverlay);
   this.minimapFloatButton?.removeEventListener('click', this._handleMinimapFloatToggle);
   this.minimapHeaderEl?.removeEventListener('pointerdown', this._handleMinimapDragStart);
@@ -3235,6 +3279,7 @@ class GameApp extends HTMLElement {
       ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
       ctx.fill();
 
+      const isSelf = player.id === this.youId;
       if (!isSelf) {
         const rawName = typeof player.name === 'string' ? player.name.trim() : '';
         const displayName = rawName || player.id;
@@ -4202,16 +4247,42 @@ class GameApp extends HTMLElement {
 
   _setMinimapVisible(visible, persist = true) {
     const next = Boolean(visible);
+    const previous = this.minimapVisible;
     this.minimapVisible = next;
     if (this.minimapCardEl) {
       this.minimapCardEl.classList.toggle('collapsed', !next);
+      this.minimapCardEl.hidden = !next;
+      this.minimapCardEl.setAttribute('aria-hidden', next ? 'false' : 'true');
     }
     if (this.minimapBodyEl) {
       this.minimapBodyEl.style.display = next ? '' : 'none';
     }
+    if (this.minimapGhostButton) {
+      this.minimapGhostButton.hidden = next;
+      this.minimapGhostButton.setAttribute('aria-hidden', next ? 'true' : 'false');
+    }
     if (this.minimapToggleButton) {
       this.minimapToggleButton.textContent = next ? 'Hide' : 'Show';
       this.minimapToggleButton.setAttribute('aria-pressed', next ? 'true' : 'false');
+    }
+    if (previous !== next) {
+      if (!next && this.minimapGhostButton) {
+        setTimeout(() => {
+          try {
+            this.minimapGhostButton.focus({ preventScroll: true });
+          } catch (err) {
+            // ignore focus errors
+          }
+        }, 0);
+      } else if (next && this.minimapToggleButton) {
+        setTimeout(() => {
+          try {
+            this.minimapToggleButton.focus({ preventScroll: true });
+          } catch (err) {
+            // ignore focus errors
+          }
+        }, 0);
+      }
     }
     if (persist) {
       try {
@@ -5832,6 +5903,9 @@ class GameApp extends HTMLElement {
   _hideIdentityOverlay() {
     if (!this.identityOverlay) return;
     this.identityOverlay.hidden = true;
+    if (this.identityInput) {
+      this.identityInput.blur();
+    }
   }
 
   _updateHeroIdDisplay() {
@@ -6038,6 +6112,9 @@ class GameApp extends HTMLElement {
   _hideOnboarding(silent = false) {
     if (!this.onboardingOverlay) return;
     this.onboardingOverlay.hidden = true;
+    if (this.heroNameInput) {
+      this.heroNameInput.blur();
+    }
     if (!silent && this.heroNameInput) {
       this.heroNameInput.value = '';
     }
