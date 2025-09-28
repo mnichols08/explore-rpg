@@ -46,11 +46,17 @@ const ENEMY_VARIANTS = [
 const PLAYER_HIT_RADIUS = 0.45;
 const MELEE_CONE_HALF_ANGLE = Math.PI / 3; // 60° frontal swing
 const PROJECTILE_HALF_WIDTH = 0.35;
+const SPELL_PROJECTILE_HALF_WIDTH = 0.45;
 const CHARGE_TIME_BONUS = 0.75;
+const MELEE_BASE_RANGE = 2.05;
+const RANGED_BASE_RANGE = 3.8;
+const RANGED_RANGE_PER_DEX = 0.14;
+const SPELL_BASE_RANGE = 3.7;
+const SPELL_RANGE_PER_INT = 0.22;
 const CHARGE_RANGE_SCALE = {
-  melee: 0.35,
+  melee: 0,
   ranged: 0.5,
-  spell: 0.7,
+  spell: 0,
 };
 const CHAT_LIFETIME_MS = 6000;
 const CHAT_MAX_LENGTH = 140;
@@ -79,6 +85,177 @@ const MOMENTUM_XP_SCALE = 0.08;
 const PORTAL_DISTANCE_THRESHOLD = 1.6;
 const LEVEL_PORTAL_MIN_DISTANCE = 14;
 const LEVEL_SAFEZONE_BUFFER = SAFE_ZONE_RADIUS + 6;
+
+const EQUIPMENT_SLOTS = ['melee', 'ranged', 'spell', 'armor'];
+
+const STARTING_EQUIPMENT = {
+  melee: 'melee-fist',
+  ranged: 'ranged-rock',
+  spell: 'spell-air',
+  armor: 'armor-cloth',
+};
+
+const GEAR_PROGRESSIONS = {
+  melee: ['melee-fist', 'melee-stick', 'melee-sword'],
+  ranged: ['ranged-rock', 'ranged-sling', 'ranged-bow'],
+  spell: ['spell-air', 'spell-fire', 'spell-ice', 'spell-lightning'],
+  armor: ['armor-cloth', 'armor-leather', 'armor-mail'],
+};
+
+const ITEM_DEFINITIONS = {
+  'melee-fist': {
+    id: 'melee-fist',
+    slot: 'melee',
+    label: 'Bare Fists',
+    description: 'Just your hands—close range and light impact.',
+    damageMultiplier: 0.85,
+    rangeBonus: -0.4,
+    knockback: 0.4,
+  },
+  'melee-stick': {
+    id: 'melee-stick',
+    slot: 'melee',
+    label: 'Forager Stick',
+    description: 'A sturdy branch that extends your reach a little.',
+    damageMultiplier: 1.1,
+    rangeBonus: 0.2,
+    knockback: 0.6,
+  },
+  'melee-sword': {
+    id: 'melee-sword',
+    slot: 'melee',
+    label: 'Steel Sword',
+    description: 'Reliable steel with solid reach and cutting power.',
+    damageMultiplier: 1.35,
+    rangeBonus: 0.55,
+    knockback: 0.8,
+  },
+  'ranged-rock': {
+    id: 'ranged-rock',
+    slot: 'ranged',
+    label: 'Throwing Rocks',
+    description: 'Improvised stones; heavy arc and slow travel.',
+    damageMultiplier: 0.9,
+    rangeBonus: -0.3,
+    projectile: {
+      travelMs: 900,
+      widthScale: 1.1,
+      variant: 'ranged-rock',
+    },
+  },
+  'ranged-sling': {
+    id: 'ranged-sling',
+    slot: 'ranged',
+    label: 'Simple Sling',
+    description: 'Woven cord that launches pebbles faster.',
+    damageMultiplier: 1.05,
+    rangeBonus: 0.2,
+    hitBonus: 0.05,
+    projectile: {
+      travelMs: 700,
+      widthScale: 1,
+      variant: 'ranged-sling',
+    },
+  },
+  'ranged-bow': {
+    id: 'ranged-bow',
+    slot: 'ranged',
+    label: 'Hunter Bow',
+    description: 'A balanced bow with quick arrows and reach.',
+    damageMultiplier: 1.3,
+    rangeBonus: 0.8,
+    hitBonus: 0.08,
+    projectile: {
+      travelMs: 520,
+      widthScale: 0.85,
+      variant: 'ranged-bow',
+    },
+  },
+  'spell-air': {
+    id: 'spell-air',
+    slot: 'spell',
+    label: 'Zephyr Primer',
+    description: 'A gust that shoves enemies away without harm.',
+    damageMultiplier: 0,
+    rangeBonus: 0.3,
+    chargeBonus: 0.1,
+    spell: {
+      effect: 'knockback',
+      magnitude: 2.4,
+      variant: 'spell-air',
+      travelMs: 640,
+    },
+  },
+  'spell-fire': {
+    id: 'spell-fire',
+    slot: 'spell',
+    label: 'Ember Grimoire',
+    description: 'Ignites foes with an intense bolt of flame.',
+    damageMultiplier: 1.25,
+    rangeBonus: 0.2,
+    chargeBonus: 0.15,
+    spell: {
+      effect: 'burn',
+      burnDamage: 8,
+      variant: 'spell-fire',
+      travelMs: 560,
+    },
+  },
+  'spell-ice': {
+    id: 'spell-ice',
+    slot: 'spell',
+    label: 'Frost Codex',
+    description: 'Crystallizes the air to slow anything it touches.',
+    damageMultiplier: 0.95,
+    rangeBonus: 0.5,
+    spell: {
+      effect: 'slow',
+      slowFactor: 0.55,
+      durationMs: 2800,
+      variant: 'spell-ice',
+      travelMs: 720,
+    },
+  },
+  'spell-lightning': {
+    id: 'spell-lightning',
+    slot: 'spell',
+    label: 'Storm Scroll',
+    description: 'A crackling bolt that can arc between foes.',
+    damageMultiplier: 1.45,
+    rangeBonus: 0.3,
+    chargeBonus: 0.2,
+    spell: {
+      effect: 'chain',
+      chainRadius: 2.6,
+      chainScale: 0.55,
+      variant: 'spell-lightning',
+      travelMs: 480,
+    },
+  },
+  'armor-cloth': {
+    id: 'armor-cloth',
+    slot: 'armor',
+    label: 'Traveler Cloth',
+    description: 'Light wraps with no additional protection.',
+    maxHealthBonus: 0,
+  },
+  'armor-leather': {
+    id: 'armor-leather',
+    slot: 'armor',
+    label: 'Scout Leathers',
+    description: 'Layered hide that blunts incoming strikes.',
+    maxHealthBonus: 25,
+  },
+  'armor-mail': {
+    id: 'armor-mail',
+    slot: 'armor',
+    label: 'Tempered Mail',
+    description: 'Interlocking plates for stalwart defenders.',
+    maxHealthBonus: 60,
+  },
+};
+
+const STARTING_GEAR_SET = new Set(Object.values(STARTING_EQUIPMENT));
 
 const clients = new Map();
 let nextPlayerId = 1;
@@ -586,13 +763,15 @@ function createPlayer(connection, requestedProfileId) {
     spawn = findSpawn();
   }
   const xp = cloneXP(profileData?.xp);
-  const maxHealth = Number(profileData?.maxHealth) || 100;
+  const baseMaxHealth = Number(profileData?.maxHealth) || 100;
   let savedHealth = Number(profileData?.health);
   if (!Number.isFinite(savedHealth) || savedHealth <= 0) {
-    savedHealth = maxHealth;
+    savedHealth = baseMaxHealth;
   }
   const inventory = ensureInventoryData(profileData?.inventory);
   const bank = ensureBankData(profileData?.bank);
+  const gear = ensureGearData(profileData?.gear);
+  const equipment = ensureEquipmentData(profileData?.equipment, gear);
   const player = {
     id: alias,
     profileId,
@@ -600,16 +779,19 @@ function createPlayer(connection, requestedProfileId) {
     x: spawn.x,
     y: spawn.y,
     move: { x: 0, y: 0 },
-    aim: { x: 1, y: 0 },
-    health: clamp(savedHealth, 1, maxHealth),
-    maxHealth,
+  aim: { x: 1, y: 0 },
+  health: clamp(savedHealth, 1, baseMaxHealth),
+    maxHealth: baseMaxHealth,
+    baseMaxHealth,
     lastUpdate: timestamp,
     action: null,
     xp,
     stats: baseStats(),
-    bonuses: computeBonuses(baseStats()),
+    bonuses: {},
     inventory,
     bank,
+    gear,
+    equipment,
     levelId: null,
     levelReturn: null,
     momentum: createMomentumState(),
@@ -622,6 +804,7 @@ function createPlayer(connection, requestedProfileId) {
   applyStats(player);
   player.health = clamp(savedHealth, 1, player.maxHealth);
   profileData.health = player.health;
+  profileData.maxHealth = player.baseMaxHealth;
   syncProfile(player);
   return player;
 }
@@ -648,6 +831,7 @@ function createEnemy(options = {}) {
     attack: variant.attack ? { ...variant.attack } : null,
     attackCooldown: variant.attack ? variant.attack.cooldown * (0.5 + Math.random() * 0.6) : 0,
     levelId: level ? level.id : null,
+    status: { slowUntil: 0, slowFactor: 1 },
   };
   return enemy;
 }
@@ -720,7 +904,17 @@ function updateEnemies(dt) {
       speedBoost = 0.5;
     }
 
-    const speed = enemy.speed + speedBoost;
+    if (!enemy.status) {
+      enemy.status = { slowUntil: 0, slowFactor: 1 };
+    }
+    const now = Date.now();
+    const slowActive = enemy.status.slowUntil && enemy.status.slowUntil > now;
+    if (!slowActive) {
+      enemy.status.slowFactor = 1;
+    }
+    const slowFactor = slowActive ? clamp(enemy.status.slowFactor || 1, 0.15, 1) : 1;
+
+    const speed = enemy.speed * slowFactor + speedBoost;
     const dx = direction.x * speed * dt;
     const dy = direction.y * speed * dt;
 
@@ -922,6 +1116,7 @@ function lootNearestDrop(player) {
   }
   if (!best) return null;
   const collectedItems = {};
+  const collectedGear = {};
   let collectedCurrency = 0;
   if (best.currency > 0) {
     collectedCurrency = best.currency;
@@ -931,8 +1126,21 @@ function lootNearestDrop(player) {
   for (const [key, qty] of Object.entries(best.items || {})) {
     const amount = Math.max(0, Math.floor(Number(qty) || 0));
     if (amount <= 0) continue;
-    addInventoryItem(player.inventory, key, amount);
-    collectedItems[key] = (collectedItems[key] || 0) + amount;
+    if (typeof key === 'string' && key.startsWith('gear:')) {
+      const gearId = key.slice(5);
+      let gained = 0;
+      for (let i = 0; i < amount; i += 1) {
+        if (unlockGear(player, gearId, { autoEquip: true, silent: true })) {
+          gained += 1;
+        }
+      }
+      if (gained > 0) {
+        collectedGear[gearId] = (collectedGear[gearId] || 0) + gained;
+      }
+    } else {
+      addInventoryItem(player.inventory, key, amount);
+      collectedItems[key] = (collectedItems[key] || 0) + amount;
+    }
   }
   best.items = {};
   best.expiresAt = Date.now() + 1000;
@@ -941,6 +1149,7 @@ function lootNearestDrop(player) {
     pickup: {
       currency: collectedCurrency,
       items: collectedItems,
+      gear: collectedGear,
     },
   };
 }
@@ -959,6 +1168,45 @@ function dropPlayerInventory(player) {
 function damageEnemy(enemy, amount) {
   enemy.health = clamp(enemy.health - amount, 0, enemy.maxHealth);
   return enemy.health <= 0;
+}
+
+function rollEnemyLoot(enemy, killer) {
+  const loot = {
+    currency: 0,
+    items: {},
+  };
+  const healthValue = Math.max(enemy.maxHealth || 0, 30);
+  loot.currency = Math.max(0, Math.floor(4 + Math.random() * (healthValue * 0.18)));
+  if (Math.random() < 0.28) {
+    const ore = randomOreType();
+    loot.items[ore.id] = (loot.items[ore.id] || 0) + 1;
+  }
+  if (killer) {
+    const candidates = [];
+    for (const slot of EQUIPMENT_SLOTS) {
+      const nextId = nextLockedGearId(killer, slot);
+      if (nextId) candidates.push({ slot, id: nextId });
+    }
+    if (candidates.length) {
+      const baseChance = 0.35;
+      const bonus = Math.min(0.2, candidates.length * 0.06);
+      if (Math.random() < baseChance + bonus) {
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        loot.items[`gear:${pick.id}`] = 1;
+      }
+    }
+  }
+  if (loot.currency <= 0 && Object.keys(loot.items).length === 0) {
+    return null;
+  }
+  return loot;
+}
+
+function handleEnemyDeath(enemy, killer) {
+  const loot = rollEnemyLoot(enemy, killer);
+  if (loot) {
+    createLootDrop(enemy.x, enemy.y, loot, enemy.levelId || null);
+  }
 }
 
 function awardKillXP(player, actionType, enemy) {
@@ -1018,16 +1266,16 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
   if (attack.type === 'melee') {
     shape = 'cone';
     effectAngle = MELEE_CONE_HALF_ANGLE * 2;
-  } else if (attack.type === 'ranged') {
-    shape = 'beam';
-    effectWidth = (attack.width ?? (PROJECTILE_HALF_WIDTH + 0.15)) * 2;
-  } else if (attack.type === 'spell') {
-    const splash = attack.splash ?? 1.2;
-    effectRange = splash;
-    effectLength = splash;
-    effectX = targetPlayer.x;
-    effectY = targetPlayer.y;
+  } else if (attack.type === 'ranged' || attack.type === 'spell') {
+    shape = 'projectile';
+    const splashRadius = attack.splash != null ? Math.max(0.2, attack.splash * 0.5) : null;
+    const baseHalfWidth = attack.width ?? (attack.type === 'spell'
+      ? Math.max(SPELL_PROJECTILE_HALF_WIDTH, splashRadius ?? (SPELL_PROJECTILE_HALF_WIDTH + 0.05))
+      : PROJECTILE_HALF_WIDTH + 0.15);
+    effectWidth = baseHalfWidth * 2;
   }
+
+  const effectLifetime = EFFECT_LIFETIME * 0.6;
 
   const effect = {
     id: `fx${effectCounter++}`,
@@ -1041,7 +1289,8 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     angle: effectAngle,
     width: effectWidth,
     shape,
-    expiresAt: now + EFFECT_LIFETIME * 0.6,
+    lifetime: effectLifetime,
+    expiresAt: now + effectLifetime,
     levelId: enemy.levelId || null,
   };
   world.effects.push(effect);
@@ -1057,8 +1306,11 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
         damagePlayer(player, attack.damage);
       }
     }
-  } else if (attack.type === 'ranged') {
-    const halfWidth = attack.width ?? (PROJECTILE_HALF_WIDTH + 0.15);
+  } else if (attack.type === 'ranged' || attack.type === 'spell') {
+    const splashRadius = attack.splash != null ? Math.max(0.2, attack.splash * 0.5) : null;
+    const halfWidth = attack.width ?? (attack.type === 'spell'
+      ? Math.max(SPELL_PROJECTILE_HALF_WIDTH, splashRadius ?? (SPELL_PROJECTILE_HALF_WIDTH + 0.05))
+      : PROJECTILE_HALF_WIDTH + 0.15);
     let victim = null;
     let bestTravel = Infinity;
     for (const player of clients.values()) {
@@ -1072,16 +1324,6 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     }
     if (victim && !playerInSafeZone(victim) && Math.random() <= hitChance) {
       damagePlayer(victim, attack.damage);
-    }
-  } else if (attack.type === 'spell') {
-    const splash = attack.splash ?? 1.2;
-    for (const player of clients.values()) {
-      if ((player.levelId || null) !== (enemy.levelId || null)) continue;
-      if (playerInSafeZone(player)) continue;
-      const dist = Math.hypot(player.x - effectX, player.y - effectY);
-      if (dist <= splash + PLAYER_HIT_RADIUS && Math.random() <= hitChance) {
-        damagePlayer(player, attack.damage);
-      }
     }
   }
 }
@@ -1103,17 +1345,26 @@ function computeStatsFromXP(player) {
   };
 }
 
-function computeBonuses(stats) {
+function computeBonuses(player) {
+  const stats = player?.stats || baseStats();
+  const melee = getEquippedItem(player, 'melee');
+  const ranged = getEquippedItem(player, 'ranged');
+  const spell = getEquippedItem(player, 'spell');
+  const armor = getEquippedItem(player, 'armor');
   return {
-    maxCharge: 1.2 + stats.intellect * 0.1,
-    hitChance: 0.5 + stats.dexterity * 0.025,
-    range: 2.5 + stats.strength * 0.18,
+    maxCharge: 1.2 + stats.intellect * 0.1 + (spell?.chargeBonus ?? 0),
+    hitChance: 0.5 + stats.dexterity * 0.025 + (ranged?.hitBonus ?? 0),
+    meleeRange: MELEE_BASE_RANGE + (melee?.rangeBonus ?? 0),
+    projectileRange: RANGED_BASE_RANGE + stats.dexterity * RANGED_RANGE_PER_DEX + (ranged?.rangeBonus ?? 0),
+    spellRange: SPELL_BASE_RANGE + stats.intellect * SPELL_RANGE_PER_INT + (spell?.rangeBonus ?? 0),
+    armorBonus: armor?.maxHealthBonus ?? 0,
   };
 }
 
 function applyStats(player) {
   player.stats = computeStatsFromXP(player);
-  player.bonuses = computeBonuses(player.stats);
+  player.bonuses = computeBonuses(player);
+  applyArmorBonus(player);
 }
 
 function clamp(value, min, max) {
@@ -1183,6 +1434,269 @@ function ensureBankData(source) {
     items: base.items,
     currency: base.currency,
   };
+}
+
+function getItemDefinition(id) {
+  if (!id) return null;
+  return ITEM_DEFINITIONS[id] || null;
+}
+
+function getProgressionForSlot(slot) {
+  if (!slot) return [];
+  return GEAR_PROGRESSIONS[slot] || [];
+}
+
+function ensureGearData(source) {
+  const owned = new Set();
+  if (Array.isArray(source)) {
+    for (const id of source) {
+      if (typeof id === 'string') owned.add(id);
+    }
+  } else if (source && typeof source === 'object') {
+    if (Array.isArray(source.owned)) {
+      for (const id of source.owned) {
+        if (typeof id === 'string') owned.add(id);
+      }
+    } else {
+      for (const key of Object.keys(source)) {
+        if (typeof key === 'string') owned.add(key);
+      }
+    }
+  }
+  for (const id of STARTING_GEAR_SET) {
+    owned.add(id);
+  }
+  const normalized = new Set();
+  for (const id of owned) {
+    const def = getItemDefinition(id);
+    if (def) normalized.add(def.id);
+  }
+  return {
+    owned: normalized,
+  };
+}
+
+function ensureGear(player) {
+  if (!player.gear || !(player.gear.owned instanceof Set)) {
+    player.gear = ensureGearData(player.gear);
+  }
+  return player.gear;
+}
+
+function ensureEquipmentData(source, gear) {
+  const equipment = {};
+  const owned = gear?.owned instanceof Set ? gear.owned : ensureGearData(gear).owned;
+  for (const slot of EQUIPMENT_SLOTS) {
+    const requested = typeof source?.[slot] === 'string' ? source[slot] : null;
+    const def = requested ? getItemDefinition(requested) : null;
+    if (def && def.slot === slot && owned.has(def.id)) {
+      equipment[slot] = def.id;
+    } else {
+      const fallback = getItemDefinition(STARTING_EQUIPMENT[slot]);
+      equipment[slot] = fallback ? fallback.id : null;
+    }
+  }
+  return equipment;
+}
+
+function ensureEquipment(player) {
+  const gear = ensureGear(player);
+  if (!player.equipment) {
+    player.equipment = ensureEquipmentData(null, gear);
+  } else {
+    player.equipment = ensureEquipmentData(player.equipment, gear);
+  }
+  return player.equipment;
+}
+
+function serializeGear(gear) {
+  const owned = gear?.owned instanceof Set ? Array.from(gear.owned) : [];
+  owned.sort();
+  return {
+    owned,
+  };
+}
+
+function serializeEquipment(equipment) {
+  const normalized = {};
+  for (const slot of EQUIPMENT_SLOTS) {
+    const value = typeof equipment?.[slot] === 'string' ? equipment[slot] : null;
+    const def = value ? getItemDefinition(value) : null;
+    normalized[slot] = def ? def.id : STARTING_EQUIPMENT[slot];
+  }
+  return normalized;
+}
+
+function getEquippedItem(player, slot) {
+  const equipment = ensureEquipment(player);
+  const id = equipment?.[slot];
+  const def = id ? getItemDefinition(id) : null;
+  if (def && def.slot === slot) return def;
+  return getItemDefinition(STARTING_EQUIPMENT[slot]);
+}
+
+function applyArmorBonus(player) {
+  const armor = getEquippedItem(player, 'armor');
+  const armorBonus = armor?.maxHealthBonus ?? 0;
+  const base = Number(player.baseMaxHealth || player.maxHealth || 100) || 100;
+  player.maxHealth = Math.max(40, base + armorBonus);
+  player.health = clamp(player.health, 0, player.maxHealth);
+}
+
+function canOccupyPosition(x, y, levelId = null) {
+  if (!walkable(x, y)) return false;
+  if (!levelId) return true;
+  const level = world.levels.get(levelId);
+  if (!level) return true;
+  return (
+    x >= level.bounds.minX &&
+    x <= level.bounds.maxX &&
+    y >= level.bounds.minY &&
+    y <= level.bounds.maxY
+  );
+}
+
+function applyKnockbackEntity(entity, magnitude, aim, levelId = null) {
+  if (!entity || !aim || magnitude <= 0) return false;
+  const steps = Math.max(1, Math.ceil(magnitude * 3));
+  const stepX = (aim.x || 0) * (magnitude / steps);
+  const stepY = (aim.y || 0) * (magnitude / steps);
+  let moved = false;
+  for (let i = 0; i < steps; i += 1) {
+    const nextX = clamp(entity.x + stepX, 0.5, world.width - 0.5);
+    const nextY = clamp(entity.y + stepY, 0.5, world.height - 0.5);
+    if (!canOccupyPosition(nextX, nextY, levelId)) break;
+    entity.x = nextX;
+    entity.y = nextY;
+    moved = true;
+  }
+  return moved;
+}
+
+function applyEnemySlow(enemy, factor, durationMs) {
+  if (!enemy) return;
+  const now = Date.now();
+  const magnitude = clamp(Number(factor) || 0.5, 0.15, 1);
+  const duration = Math.max(300, Number(durationMs) || 2000);
+  if (!enemy.status) {
+    enemy.status = { slowUntil: 0, slowFactor: 1 };
+  }
+  if (!enemy.status.slowUntil || enemy.status.slowUntil < now) {
+    enemy.status.slowFactor = magnitude;
+  } else {
+    enemy.status.slowFactor = Math.min(enemy.status.slowFactor, magnitude);
+  }
+  enemy.status.slowUntil = now + duration;
+}
+
+function applySpellImpact(player, spellItem, enemy, damageAmount, aim) {
+  if (!enemy) return false;
+  const config = spellItem?.spell || {};
+  const effectType = config.effect || null;
+  let killed = false;
+  if (effectType === 'knockback') {
+    if (config.magnitude) {
+      applyKnockbackEntity(enemy, config.magnitude, aim, enemy.levelId || null);
+    }
+    if (damageAmount > 0) {
+      killed = damageEnemy(enemy, damageAmount);
+    }
+  } else if (effectType === 'burn') {
+    const total = damageAmount + Math.max(0, config.burnDamage || 0);
+    killed = damageEnemy(enemy, total);
+  } else if (effectType === 'slow') {
+    applyEnemySlow(enemy, config.slowFactor ?? 0.5, config.durationMs ?? 2400);
+    if (damageAmount > 0) {
+      killed = damageEnemy(enemy, damageAmount);
+    }
+  } else if (effectType === 'chain') {
+    killed = damageEnemy(enemy, damageAmount);
+    if (!killed) {
+      const radius = Math.max(0.5, Number(config.chainRadius) || 2.5);
+      const scale = clamp(Number(config.chainScale) || 0.5, 0.1, 1);
+      const playerLevel = player.levelId || null;
+      let secondary = null;
+      let bestDist = Infinity;
+      for (const other of world.enemies) {
+        if (other === enemy) continue;
+        if ((other.levelId || null) !== playerLevel) continue;
+        const dist = Math.hypot(other.x - enemy.x, other.y - enemy.y);
+        if (dist <= radius && dist < bestDist) {
+          bestDist = dist;
+          secondary = other;
+        }
+      }
+      if (secondary) {
+        const chainDamage = damageAmount * scale;
+        const chainKilled = damageEnemy(secondary, chainDamage);
+        if (chainKilled) {
+          awardKillXP(player, 'spell', secondary);
+          handleEnemyDeath(secondary, player);
+        }
+      }
+    }
+  } else {
+    if (damageAmount > 0) {
+      killed = damageEnemy(enemy, damageAmount);
+    }
+  }
+  return killed;
+}
+
+function nextLockedGearId(player, slot) {
+  const progression = getProgressionForSlot(slot);
+  if (!progression.length) return null;
+  const gear = ensureGear(player);
+  for (const id of progression) {
+    if (!gear.owned.has(id)) return id;
+  }
+  return null;
+}
+
+function unlockGear(player, gearId, { autoEquip = true, silent = false } = {}) {
+  const def = getItemDefinition(gearId);
+  if (!def) return false;
+  const gear = ensureGear(player);
+  if (gear.owned.has(def.id)) return false;
+  gear.owned.add(def.id);
+  if (autoEquip) {
+    const current = ensureEquipment(player)[def.slot];
+    if (!current || current === STARTING_EQUIPMENT[def.slot]) {
+      equipItem(player, def.slot, def.id, false, true);
+    }
+  }
+  if (!silent) {
+    sendInventoryUpdate(player);
+  } else {
+    syncProfile(player);
+  }
+  return true;
+}
+
+function equipItem(player, slot, itemId, broadcastUpdate = true, suppressMessage = false) {
+  if (!EQUIPMENT_SLOTS.includes(slot)) {
+    return { ok: false, message: 'Unknown equipment slot.' };
+  }
+  const def = getItemDefinition(itemId);
+  if (!def || def.slot !== slot) {
+    return { ok: false, message: 'That item cannot go in that slot.' };
+  }
+  const gear = ensureGear(player);
+  if (!gear.owned.has(def.id)) {
+    return { ok: false, message: 'You have not unlocked that item yet.' };
+  }
+  const equipment = ensureEquipment(player);
+  if (equipment[slot] === def.id) {
+    return { ok: true, slot, itemId: def.id, message: suppressMessage ? undefined : 'Already equipped.' };
+  }
+  equipment[slot] = def.id;
+  applyStats(player);
+  if (broadcastUpdate) {
+    sendInventoryUpdate(player);
+  } else {
+    syncProfile(player);
+  }
+  return { ok: true, slot, itemId: def.id };
 }
 
 function createMomentumState() {
@@ -1486,6 +2000,8 @@ function sendInventoryUpdate(player) {
     type: 'inventory',
     inventory: serializeInventory(player.inventory),
     bank: serializeInventory(player.bank),
+    gear: serializeGear(player.gear),
+    equipment: serializeEquipment(player.equipment),
   });
   syncProfile(player);
 }
@@ -1573,7 +2089,8 @@ function damagePlayer(target, amount) {
 
 function resolveAction(player, actionType, aimVector, chargeSeconds) {
   const now = Date.now();
-  const bonuses = player.bonuses;
+  ensureEquipment(player);
+  const bonuses = player.bonuses || computeBonuses(player);
   const baseChargeCap = clamp(bonuses.maxCharge, 0.5, 5);
   const maxChargeTime = baseChargeCap + CHARGE_TIME_BONUS;
   const charge = clamp(chargeSeconds, 0.1, maxChargeTime);
@@ -1589,31 +2106,60 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     aim = { x: 1, y: 0 };
   }
 
+  const meleeItem = getEquippedItem(player, 'melee');
+  const rangedItem = getEquippedItem(player, 'ranged');
+  const spellItem = getEquippedItem(player, 'spell');
+
   let xpGain = 0;
-  let damageBase = 12;
-  let range = bonuses.range;
+  let damageBase = 0;
+  let range = 0;
+  let projectileHalfWidth = null;
+  let effectLifetime = EFFECT_LIFETIME;
+  let effectVariant = null;
+  const meleeKnockback = meleeItem?.knockback ?? 0.5;
 
   if (actionType === 'melee') {
     xpGain = 6 * potency;
-    damageBase = 18 * potency * (player.stats.strength / 10);
-    range *= 0.6;
+    damageBase = 18 * potency * (player.stats.strength / 10) * (meleeItem?.damageMultiplier ?? 1);
+    range = bonuses.meleeRange ?? MELEE_BASE_RANGE;
   } else if (actionType === 'ranged') {
     xpGain = 5 * potency;
-    damageBase = 16 * potency * (player.stats.dexterity / 10);
-    range *= 1.1;
+    damageBase = 16 * potency * (player.stats.dexterity / 10) * (rangedItem?.damageMultiplier ?? 1);
+    range = bonuses.projectileRange ?? (RANGED_BASE_RANGE + player.stats.dexterity * RANGED_RANGE_PER_DEX);
+    projectileHalfWidth = (PROJECTILE_HALF_WIDTH + potency * 0.2) * (rangedItem?.projectile?.widthScale ?? 1);
+    effectLifetime = rangedItem?.projectile?.travelMs ?? EFFECT_LIFETIME;
+    effectVariant = rangedItem?.projectile?.variant ?? null;
   } else if (actionType === 'spell') {
     xpGain = 7 * potency;
-    damageBase = 14 * potency * (player.stats.intellect / 10);
-    range *= 1.4;
+    damageBase = 14 * potency * (player.stats.intellect / 10) * (spellItem?.damageMultiplier ?? 1);
+    range = bonuses.spellRange ?? (SPELL_BASE_RANGE + player.stats.intellect * SPELL_RANGE_PER_INT);
+    projectileHalfWidth = (SPELL_PROJECTILE_HALF_WIDTH + potency * 0.25);
+    if (spellItem?.spell?.travelMs) {
+      effectLifetime = spellItem.spell.travelMs;
+    }
+    effectVariant = spellItem?.spell?.variant ?? null;
+    if ((spellItem?.damageMultiplier ?? 1) === 0) {
+      damageBase = 0;
+    }
   } else {
     return;
   }
 
-  const rangeBonusFactor = CHARGE_RANGE_SCALE[actionType] ?? 0.4;
+  if (projectileHalfWidth != null) {
+    projectileHalfWidth = Math.max(0.12, projectileHalfWidth);
+  }
+
+  const rangeBonusFactor = CHARGE_RANGE_SCALE[actionType] ?? 0;
   const normalizedCharge = Math.max(0, charge - 0.1);
-  range *= 1 + normalizedCharge * rangeBonusFactor;
+  if (rangeBonusFactor > 0) {
+    range *= 1 + normalizedCharge * rangeBonusFactor;
+  }
   xpGain *= xpMultiplier;
   damageBase *= damageMultiplier;
+
+  if (!effectVariant && actionType === 'melee') {
+    effectVariant = meleeItem?.id ?? null;
+  }
 
   const effect = {
     id: `fx${effectCounter++}`,
@@ -1625,18 +2171,19 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     range,
     length: range,
     angle: actionType === 'melee' ? MELEE_CONE_HALF_ANGLE * 2 : null,
-    width: actionType === 'ranged' ? (PROJECTILE_HALF_WIDTH + potency * 0.2) * 2 : null,
-    shape: actionType === 'melee' ? 'cone' : actionType === 'ranged' ? 'beam' : 'burst',
-    expiresAt: now + EFFECT_LIFETIME,
+    width: projectileHalfWidth != null ? projectileHalfWidth * 2 : null,
+    shape: actionType === 'melee' ? 'cone' : projectileHalfWidth != null ? 'projectile' : 'burst',
+    lifetime: effectLifetime,
+    variant: effectVariant,
+    expiresAt: now + effectLifetime,
     levelId: player.levelId || null,
   };
   world.effects.push(effect);
 
-  const hitChance = clamp(player.bonuses.hitChance, 0.1, 0.95);
+  const hitChance = clamp(bonuses.hitChance, 0.1, 0.97);
   const coneCosHalfAngle = Math.cos(MELEE_CONE_HALF_ANGLE);
-  const projectileHalfWidth = PROJECTILE_HALF_WIDTH + potency * 0.2;
 
-  if (actionType === 'ranged') {
+  if (projectileHalfWidth != null) {
     let candidatePlayer = null;
     let candidateDistance = Infinity;
     for (const target of clients.values()) {
@@ -1651,7 +2198,15 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     }
     if (candidatePlayer && Math.random() <= hitChance) {
       if (!playerInSafeZone(candidatePlayer)) {
-        damagePlayer(candidatePlayer, damageBase);
+        if (actionType === 'spell') {
+          const config = spellItem?.spell;
+          if (config?.effect === 'knockback' && config.magnitude) {
+            applyKnockbackEntity(candidatePlayer, config.magnitude, aim, candidatePlayer.levelId || null);
+          }
+        }
+        if (damageBase > 0) {
+          damagePlayer(candidatePlayer, damageBase);
+        }
       }
     }
   } else {
@@ -1659,16 +2214,13 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
       if (target.id === player.id) continue;
       if ((target.levelId || null) !== (player.levelId || null)) continue;
       if (playerInSafeZone(target)) continue;
-      let within = false;
-      if (actionType === 'melee') {
-        within = isWithinCone(player, aim, target, range + PLAYER_HIT_RADIUS, coneCosHalfAngle, PLAYER_HIT_RADIUS);
-      } else {
-        const distance = Math.hypot(target.x - player.x, target.y - player.y);
-        within = distance <= range + PLAYER_HIT_RADIUS;
-      }
+      const within = isWithinCone(player, aim, target, range + PLAYER_HIT_RADIUS, coneCosHalfAngle, PLAYER_HIT_RADIUS);
       if (!within) continue;
       if (Math.random() <= hitChance) {
         damagePlayer(target, damageBase);
+        if (actionType === 'melee' && meleeKnockback > 0) {
+          applyKnockbackEntity(target, meleeKnockback, aim, target.levelId || null);
+        }
       }
     }
   }
@@ -1676,7 +2228,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   if (world.enemies.length) {
     let xpApplied = false;
     const playerLevelId = player.levelId || null;
-    if (actionType === 'ranged') {
+    if (projectileHalfWidth != null) {
       let candidateEnemy = null;
       let bestDistance = Infinity;
       for (const enemy of world.enemies) {
@@ -1694,17 +2246,27 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
           survivors.push(enemy);
           continue;
         }
+        let enemyKilled = false;
         if (enemy === candidateEnemy && Math.random() <= hitChance) {
           if (!xpApplied && grantSkillXP(player, actionType, xpGain)) {
             xpApplied = true;
           }
-          const killed = damageEnemy(enemy, damageBase);
-          if (killed) {
+          if (actionType === 'spell') {
+            enemyKilled = applySpellImpact(player, spellItem, enemy, damageBase, aim);
+          } else {
+            enemyKilled = damageEnemy(enemy, damageBase);
+            if (!enemyKilled) {
+              applyKnockbackEntity(enemy, 0.45 + potency * 0.25, aim, enemy.levelId || null);
+            }
+          }
+          if (enemyKilled) {
             awardKillXP(player, actionType, enemy);
-            continue;
+            handleEnemyDeath(enemy, player);
           }
         }
-        survivors.push(enemy);
+        if (!enemyKilled && enemy.health > 0) {
+          survivors.push(enemy);
+        }
       }
       world.enemies = survivors;
     } else {
@@ -1714,24 +2276,24 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
           survivors.push(enemy);
           continue;
         }
-        let within = false;
-        if (actionType === 'melee') {
-          within = isWithinCone(player, aim, enemy, range + enemy.radius, coneCosHalfAngle, enemy.radius);
-        } else {
-          const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-          within = distance <= range + enemy.radius;
-        }
+        const within = isWithinCone(player, aim, enemy, range + enemy.radius, coneCosHalfAngle, enemy.radius);
+        let enemyKilled = false;
         if (within && Math.random() <= hitChance) {
           if (!xpApplied && grantSkillXP(player, actionType, xpGain)) {
             xpApplied = true;
           }
-          const killed = damageEnemy(enemy, damageBase);
-          if (killed) {
+          enemyKilled = damageEnemy(enemy, damageBase);
+          if (!enemyKilled && meleeKnockback > 0) {
+            applyKnockbackEntity(enemy, meleeKnockback, aim, enemy.levelId || null);
+          }
+          if (enemyKilled) {
             awardKillXP(player, actionType, enemy);
-            continue;
+            handleEnemyDeath(enemy, player);
           }
         }
-        survivors.push(enemy);
+        if (!enemyKilled && enemy.health > 0) {
+          survivors.push(enemy);
+        }
       }
       world.enemies = survivors;
     }
@@ -1817,6 +2379,7 @@ function gameTick(now, dt) {
       maxHealth: player.maxHealth,
       stats: player.stats,
       bonuses: player.bonuses,
+      equipment: serializeEquipment(player.equipment),
       charging: player.action ? true : false,
       actionKind: player.action?.kind ?? null,
       chargeRatio: player.action
@@ -1837,7 +2400,9 @@ function gameTick(now, dt) {
       shape: effect.shape ?? null,
       aim: effect.aim ?? { x: 1, y: 0 },
       owner: effect.owner,
+      lifetime: effect.lifetime ?? EFFECT_LIFETIME,
       ttl: Math.max(0, effect.expiresAt - now),
+      variant: effect.variant ?? null,
       levelId: effect.levelId || null,
     })),
     enemies: world.enemies.map((enemy) => ({
@@ -2027,6 +2592,18 @@ function handleMessage(player, message) {
     } else if (action === 'exit') {
       handlePortalExit(player);
     }
+  } else if (payload.type === 'equip') {
+    const slot = typeof payload.slot === 'string' ? payload.slot.toLowerCase() : '';
+    const itemId = typeof payload.itemId === 'string' ? payload.itemId : null;
+    const result = equipItem(player, slot, itemId, true, false);
+    sendTo(player, {
+      type: 'equip-result',
+      ok: Boolean(result?.ok),
+      slot,
+      itemId: result?.itemId ?? null,
+      message: result?.message ?? null,
+      equipment: serializeEquipment(player.equipment),
+    });
   }
 }
 
@@ -2210,7 +2787,7 @@ function syncProfile(player) {
   if (!player?.profileId) return;
   profiles.set(player.profileId, {
     xp: cloneXP(player.xp),
-    maxHealth: Number(player.maxHealth) || 100,
+    maxHealth: Number(player.baseMaxHealth) || 100,
     lastSeen: Date.now(),
     alias: player.id,
     position: {
@@ -2230,6 +2807,8 @@ function syncProfile(player) {
         Object.entries(player.bank.items || {}).filter(([, value]) => value > 0).map(([key, value]) => [key, Math.floor(value)])
       ),
     },
+    gear: serializeGear(player.gear),
+    equipment: serializeEquipment(player.equipment),
   });
   queueSaveProfiles();
 }
@@ -2266,6 +2845,8 @@ function loadProfiles() {
       }
       const inventory = ensureInventoryData(value?.inventory);
       const bank = ensureBankData(value?.bank);
+      const gear = ensureGearData(value?.gear);
+      const equipment = ensureEquipmentData(value?.equipment, gear);
       map.set(normalized, {
         xp: cloneXP(value?.xp),
         maxHealth,
@@ -2275,6 +2856,8 @@ function loadProfiles() {
         health,
         inventory,
         bank,
+        gear,
+        equipment,
       });
     }
     return { map, nextPlayerId: maxAliasIndex + 1 };

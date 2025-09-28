@@ -616,6 +616,120 @@ template.innerHTML = `
       color: #022c22;
     }
 
+    :host([data-compact]) .hud {
+      padding: 0.65rem;
+      gap: 0.65rem;
+    }
+
+    :host([data-compact]) .touch-controls {
+      left: 0.6rem;
+      right: 0.6rem;
+      bottom: 0.6rem;
+      gap: 1rem;
+    }
+
+    :host([data-compact]) .touch-pad {
+      width: clamp(96px, 32vw, 136px);
+      height: clamp(96px, 32vw, 136px);
+    }
+
+    :host([data-compact]) .touch-thumb {
+      width: clamp(44px, 12vw, 58px);
+      height: clamp(44px, 12vw, 58px);
+    }
+
+    :host([data-compact]) .touch-actions {
+      min-width: min(220px, 72vw);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.4rem;
+      padding: 0.5rem;
+    }
+
+    :host([data-compact]) .touch-actions button {
+      padding: 0.5rem 0.55rem;
+      font-size: 0.72rem;
+    }
+
+    :host([data-compact]) .touch-actions .touch-hint {
+      display: none;
+    }
+
+    :host([data-compact]) .gear-slot {
+      padding: 0.55rem;
+    }
+
+    :host([data-compact]) .gear-slot header .slot-equipped {
+      font-size: 0.74rem;
+    }
+
+    :host([data-compact]) .gear-options button {
+      font-size: 0.7rem;
+      padding: 0.35rem 0.45rem;
+    }
+
+    .compact-status {
+      position: absolute;
+      top: 0.85rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.4rem;
+      padding: 0.4rem 0.55rem;
+      border-radius: 0.65rem;
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: #e2e8f0;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      box-shadow: 0 0.65rem 1.4rem rgba(15, 23, 42, 0.45);
+      z-index: 6;
+      pointer-events: none;
+    }
+
+    .compact-status[hidden] {
+      display: none;
+    }
+
+    .compact-status .metric {
+      display: grid;
+      gap: 0.25rem;
+      min-width: 94px;
+    }
+
+    .compact-status .metric .label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      color: rgba(226, 232, 240, 0.85);
+    }
+
+    .compact-status .metric .label-row span:last-child {
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+      font-size: 0.7rem;
+      color: #f8fafc;
+    }
+
+    .compact-status .metric .bar {
+      height: 0.35rem;
+      border-radius: 999px;
+      background: rgba(71, 85, 105, 0.45);
+      overflow: hidden;
+    }
+
+    .compact-status .metric .bar span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #38bdf8, #6366f1);
+      transition: width 160ms ease;
+    }
+
+    .compact-status .metric[data-kind="momentum"] .bar span {
+      background: linear-gradient(90deg, #f97316, #fb7185);
+    }
+
     @media (max-width: 1080px) {
       .hud {
         grid-template-columns: 1fr;
@@ -908,6 +1022,122 @@ template.innerHTML = `
       transform: translateY(1px);
     }
 
+    .gear-panel {
+      gap: 0.75rem;
+    }
+
+    .gear-panel .gear-head h4 {
+      margin-bottom: 0.35rem;
+    }
+
+    .gear-panel .gear-head p {
+      margin: 0;
+      color: rgba(148, 163, 184, 0.78);
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .gear-slots {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .gear-slot {
+      padding: 0.65rem;
+      border-radius: 0.65rem;
+      background: rgba(30, 41, 59, 0.68);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .gear-slot header {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      align-items: baseline;
+    }
+
+    .gear-slot header .slot-label {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.82);
+    }
+
+    .gear-slot header .slot-equipped {
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+      font-size: 0.78rem;
+      color: #f8fafc;
+    }
+
+    .gear-options {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .gear-options li {
+      display: grid;
+      gap: 0.2rem;
+    }
+
+    .gear-options li.locked {
+      padding: 0.35rem 0.45rem;
+      border-radius: 0.5rem;
+      border: 1px dashed rgba(148, 163, 184, 0.35);
+      background: rgba(30, 41, 59, 0.45);
+      color: rgba(148, 163, 184, 0.65);
+    }
+
+    .gear-options li.locked .summary {
+      color: rgba(148, 163, 184, 0.55);
+    }
+
+    .gear-options button {
+      all: unset;
+      cursor: pointer;
+      padding: 0.4rem 0.55rem;
+      border-radius: 0.55rem;
+      background: rgba(56, 189, 248, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #e0f2fe;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      transition: background 140ms ease, border 140ms ease, color 140ms ease, transform 80ms ease;
+    }
+
+    .gear-options button:hover {
+      background: rgba(56, 189, 248, 0.3);
+      border-color: rgba(125, 211, 252, 0.6);
+    }
+
+    .gear-options button:active {
+      transform: translateY(1px);
+    }
+
+    .gear-options button.active {
+      background: rgba(56, 189, 248, 0.4);
+      border-color: rgba(125, 211, 252, 0.75);
+      color: #0f172a;
+    }
+
+    .gear-options .summary {
+      font-size: 0.7rem;
+      letter-spacing: 0.03em;
+      color: rgba(148, 163, 184, 0.72);
+      line-height: 1.45;
+    }
+
+    .gear-feedback {
+      font-size: 0.72rem;
+      color: rgba(148, 163, 184, 0.85);
+      min-height: 1.1rem;
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+    }
+
     .bank-actions button[disabled] {
       cursor: default;
       background: rgba(71, 85, 105, 0.35);
@@ -959,7 +1189,7 @@ template.innerHTML = `
   Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Collapse or reopen the minimap from its header button. Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div class="mobile-help">
-        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Tap Chat to open the message bar, HUD to hide or reveal panels, and Interact to scoop loot, gather ore, or slip through glowing portals. The minimap, glow, and music toggles live up top when you need them.
+        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Chat opens the message bar, HUD hides or reveals the big panels, and Interact scoops loot, ore, or portals. On smaller screens the HUD stays tucked away—tap HUD whenever you need the minimap, glow, or music toggles.
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
@@ -998,6 +1228,43 @@ template.innerHTML = `
         </div>
         <div class="bank-feedback" data-bank-feedback></div>
       </div>
+      <div class="resource-panel gear-panel" data-gear-panel>
+        <div class="gear-head">
+          <h4>Equipment</h4>
+          <p>Swap between weapons, spellbooks, and armor you have found.</p>
+        </div>
+        <div class="gear-slots">
+          <div class="gear-slot" data-gear-slot="melee">
+            <header>
+              <span class="slot-label">Melee Weapon</span>
+              <span class="slot-equipped" data-equipped-label="melee">Bare Fists</span>
+            </header>
+            <ul class="gear-options" data-gear-options="melee"></ul>
+          </div>
+          <div class="gear-slot" data-gear-slot="ranged">
+            <header>
+              <span class="slot-label">Ranged Weapon</span>
+              <span class="slot-equipped" data-equipped-label="ranged">Throwing Rocks</span>
+            </header>
+            <ul class="gear-options" data-gear-options="ranged"></ul>
+          </div>
+          <div class="gear-slot" data-gear-slot="spell">
+            <header>
+              <span class="slot-label">Spellbook</span>
+              <span class="slot-equipped" data-equipped-label="spell">Zephyr Primer</span>
+            </header>
+            <ul class="gear-options" data-gear-options="spell"></ul>
+          </div>
+          <div class="gear-slot" data-gear-slot="armor">
+            <header>
+              <span class="slot-label">Armor</span>
+              <span class="slot-equipped" data-equipped-label="armor">Traveler Cloth</span>
+            </header>
+            <ul class="gear-options" data-gear-options="armor"></ul>
+          </div>
+        </div>
+        <div class="gear-feedback" data-gear-feedback></div>
+      </div>
     </div>
     <div class="portal-prompt" hidden data-portal-prompt></div>
     <div class="level-banner" hidden data-level-banner></div>
@@ -1025,7 +1292,27 @@ template.innerHTML = `
         <button type="button" class="touch-interact" data-touch-interact aria-label="Interact">
           <span>Interact</span>
         </button>
-  <p class="touch-hint">Drag left pad to move · Tap actions to attack · Chat to talk · Glow to swap visuals · HUD to clear panels · Interact for loot and portals</p>
+        <p class="touch-hint">Move with the pad · Slash, Volley, Spell attack · Chat to talk · HUD reveals panels · Interact scoops loot and portals</p>
+      </div>
+    </div>
+    <div class="compact-status" hidden data-compact-status>
+      <div class="metric" data-kind="health">
+        <div class="label-row">
+          <span>HP</span>
+          <span data-compact-health-text>0 / 0</span>
+        </div>
+        <div class="bar">
+          <span data-compact-health-bar></span>
+        </div>
+      </div>
+      <div class="metric" data-kind="momentum">
+        <div class="label-row">
+          <span>Momentum</span>
+          <span data-compact-momentum-label>Ready</span>
+        </div>
+        <div class="bar">
+          <span data-compact-momentum-bar></span>
+        </div>
       </div>
     </div>
   </div>
@@ -1060,9 +1347,143 @@ const TILE_STYLE = {
 };
 
 const ACTION_LABEL = {
-  melee: 'Melee Charge',
-  ranged: 'Arrow Charge',
-  spell: 'Spell Charge',
+  melee: 'Slash',
+  ranged: 'Volley',
+  spell: 'Spell',
+};
+
+const EFFECT_FADE_MS = 600;
+
+const COMPACT_BREAKPOINT = 420;
+
+const EQUIPMENT_ORDER = ['melee', 'ranged', 'spell', 'armor'];
+
+const EQUIPMENT_SLOT_META = {
+  melee: { label: 'Melee Weapon', actionFallback: 'Slash' },
+  ranged: { label: 'Ranged Weapon', actionFallback: 'Volley' },
+  spell: { label: 'Spellbook', actionFallback: 'Spell' },
+  armor: { label: 'Armor', actionFallback: 'Armor' },
+};
+
+const STARTING_EQUIPMENT = {
+  melee: 'melee-fist',
+  ranged: 'ranged-rock',
+  spell: 'spell-air',
+  armor: 'armor-cloth',
+};
+
+const GEAR_PROGRESSION = {
+  melee: ['melee-fist', 'melee-stick', 'melee-sword'],
+  ranged: ['ranged-rock', 'ranged-sling', 'ranged-bow'],
+  spell: ['spell-air', 'spell-fire', 'spell-ice', 'spell-lightning'],
+  armor: ['armor-cloth', 'armor-leather', 'armor-mail'],
+};
+
+const GEAR_LIBRARY = {
+  'melee-fist': {
+    id: 'melee-fist',
+    slot: 'melee',
+    name: 'Bare Fists',
+    shortLabel: 'Fists',
+    summary: 'Baseline damage with minimal reach.',
+  },
+  'melee-stick': {
+    id: 'melee-stick',
+    slot: 'melee',
+    name: 'Forager Stick',
+    shortLabel: 'Stick',
+    summary: '+10% damage · extra reach.',
+  },
+  'melee-sword': {
+    id: 'melee-sword',
+    slot: 'melee',
+    name: 'Steel Sword',
+    shortLabel: 'Sword',
+    summary: '+35% damage · wide arc swing.',
+  },
+  'ranged-rock': {
+    id: 'ranged-rock',
+    slot: 'ranged',
+    name: 'Throwing Rocks',
+    shortLabel: 'Rocks',
+    summary: 'Slow but hefty projectiles.',
+  },
+  'ranged-sling': {
+    id: 'ranged-sling',
+    slot: 'ranged',
+    name: 'Simple Sling',
+    shortLabel: 'Sling',
+    summary: '+5% damage · faster travel.',
+  },
+  'ranged-bow': {
+    id: 'ranged-bow',
+    slot: 'ranged',
+    name: 'Hunter Bow',
+    shortLabel: 'Bow',
+    summary: '+30% damage · long reach.',
+  },
+  'spell-air': {
+    id: 'spell-air',
+    slot: 'spell',
+    name: 'Zephyr Primer',
+    shortLabel: 'Gust',
+    summary: 'Pushes foes back without damage.',
+  },
+  'spell-fire': {
+    id: 'spell-fire',
+    slot: 'spell',
+    name: 'Ember Grimoire',
+    shortLabel: 'Fire',
+    summary: 'High damage bolt with extra burn.',
+  },
+  'spell-ice': {
+    id: 'spell-ice',
+    slot: 'spell',
+    name: 'Frost Codex',
+    shortLabel: 'Frost',
+    summary: 'Chills enemies, slowing movement.',
+  },
+  'spell-lightning': {
+    id: 'spell-lightning',
+    slot: 'spell',
+    name: 'Storm Scroll',
+    shortLabel: 'Storm',
+    summary: 'Arcs to a nearby foe with heavy damage.',
+  },
+  'armor-cloth': {
+    id: 'armor-cloth',
+    slot: 'armor',
+    name: 'Traveler Cloth',
+    shortLabel: 'Cloth',
+    summary: 'No bonus — light and breezy.',
+  },
+  'armor-leather': {
+    id: 'armor-leather',
+    slot: 'armor',
+    name: 'Scout Leathers',
+    shortLabel: 'Leather',
+    summary: '+25 max HP for adventurous runs.',
+  },
+  'armor-mail': {
+    id: 'armor-mail',
+    slot: 'armor',
+    name: 'Tempered Mail',
+    shortLabel: 'Mail',
+    summary: '+60 max HP for hardened defenders.',
+  },
+};
+
+const EFFECT_VARIANT_COLORS = {
+  'melee-fist': '#f97316',
+  'melee-stick': '#fbbf24',
+  'melee-sword': '#fb7185',
+  'ranged-rock': '#f97316',
+  'ranged-sling': '#fb923c',
+  'ranged-bow': '#fde68a',
+  'spell-air': '#38bdf8',
+  'spell-fire': '#f97316',
+  'spell-ice': '#38bdf8',
+  'spell-lightning': '#fde68a',
 };
 
 const PROFILE_STORAGE_KEY = 'explore-rpg-profile-id';
@@ -1230,6 +1651,11 @@ class GameApp extends HTMLElement {
   this.touchChatButton = this.shadowRoot.querySelector('[data-touch-chat]');
     this.touchUiToggleButton = this.shadowRoot.querySelector('[data-touch-ui-toggle]');
     this.touchUiToggleLabel = this.shadowRoot.querySelector('[data-touch-ui-label]');
+    this.compactStatusEl = this.shadowRoot.querySelector('[data-compact-status]');
+    this.compactHealthBar = this.shadowRoot.querySelector('[data-compact-health-bar]');
+    this.compactHealthText = this.shadowRoot.querySelector('[data-compact-health-text]');
+    this.compactMomentumBar = this.shadowRoot.querySelector('[data-compact-momentum-bar]');
+    this.compactMomentumLabel = this.shadowRoot.querySelector('[data-compact-momentum-label]');
     this.inventoryPanel = this.shadowRoot.querySelector('[data-inventory-panel]');
     this.inventoryCurrencyEl = this.shadowRoot.querySelector('[data-inventory-currency]');
     this.inventoryItemsEl = this.shadowRoot.querySelector('[data-inventory-items]');
@@ -1246,6 +1672,14 @@ class GameApp extends HTMLElement {
   this.bankWithdrawButton = this.shadowRoot.querySelector('[data-bank-withdraw]');
   this.bankSellButton = this.shadowRoot.querySelector('[data-bank-sell]');
   this.bankFeedbackEl = this.shadowRoot.querySelector('[data-bank-feedback]');
+    this.gearPanel = this.shadowRoot.querySelector('[data-gear-panel]');
+    this.gearFeedbackEl = this.shadowRoot.querySelector('[data-gear-feedback]');
+    this.equipmentLabels = {};
+    this.equipmentOptionLists = {};
+    for (const slot of EQUIPMENT_ORDER) {
+      this.equipmentLabels[slot] = this.shadowRoot.querySelector(`[data-equipped-label="${slot}"]`);
+      this.equipmentOptionLists[slot] = this.shadowRoot.querySelector(`[data-gear-options="${slot}"]`);
+    }
     this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
     this._submitChatMessage = this._submitChatMessage.bind(this);
     this._exitChatMode = this._exitChatMode.bind(this);
@@ -1264,6 +1698,7 @@ class GameApp extends HTMLElement {
   this._handleVisualToggle = this._handleVisualToggle.bind(this);
   this._handleTouchUiToggle = this._handleTouchUiToggle.bind(this);
   this._handleTouchUiPointerEnd = this._handleTouchUiPointerEnd.bind(this);
+  this._handleGearPanelClick = this._handleGearPanelClick.bind(this);
 
     this.world = null;
     this.players = new Map();
@@ -1278,6 +1713,9 @@ class GameApp extends HTMLElement {
     this.touchControlsBound = false;
     this.touchEnabled = false;
     this.detectedTouch = false;
+    this.compactMode = false;
+    this.compactAutoCollapse = false;
+    this.hasStoredUiPreference = false;
   this.uiCollapsed = false;
   this.viewportWidth = 0;
   this.viewportHeight = 0;
@@ -1297,6 +1735,8 @@ class GameApp extends HTMLElement {
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
+  this.ownedGear = new Set(Object.values(STARTING_EQUIPMENT));
+  this.equipment = { ...STARTING_EQUIPMENT };
   this.minimapBase = null;
   this.minimapScaleX = 1;
   this.minimapScaleY = 1;
@@ -1349,6 +1789,8 @@ class GameApp extends HTMLElement {
     this.bankFeedbackTimer = null;
     this._updateBankButtons(false);
     this._showBankFeedback('');
+  this.gearFeedbackTimer = null;
+  this._showGearFeedback('');
     this._updateInventoryPanel();
     this._updateLevelStatus(null);
     this._updateMinimapLabel(null);
@@ -1357,6 +1799,9 @@ class GameApp extends HTMLElement {
     this._loadMinimapPreference();
     this._loadUiCollapsePreference();
     this._loadVisualPreference();
+    this._evaluateCompactLayout();
+    this._updateCompactStatus();
+    this._syncCompactOverlayVisibility();
   }
 
   connectedCallback() {
@@ -1388,6 +1833,7 @@ class GameApp extends HTMLElement {
   this.bankDepositButton?.addEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.addEventListener('click', this._handleBankWithdraw);
   this.bankSellButton?.addEventListener('click', this._handleBankSell);
+    this.gearPanel?.addEventListener('click', this._handleGearPanelClick);
     window.addEventListener('pointerdown', this._handleGlobalPointerDown, { passive: true });
     if (this.coarsePointerQuery) {
       if (this.coarsePointerQuery.addEventListener) {
@@ -1436,10 +1882,15 @@ class GameApp extends HTMLElement {
   this.bankDepositButton?.removeEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.removeEventListener('click', this._handleBankWithdraw);
   this.bankSellButton?.removeEventListener('click', this._handleBankSell);
+  this.gearPanel?.removeEventListener('click', this._handleGearPanelClick);
     this._unbindTouchControls();
   if (this.bankFeedbackTimer) {
     clearTimeout(this.bankFeedbackTimer);
     this.bankFeedbackTimer = null;
+  }
+  if (this.gearFeedbackTimer) {
+    clearTimeout(this.gearFeedbackTimer);
+    this.gearFeedbackTimer = null;
   }
   if (this.levelBannerTimer) {
     clearTimeout(this.levelBannerTimer);
@@ -1531,6 +1982,8 @@ class GameApp extends HTMLElement {
           maxHealth: this.localHealth.maxHealth,
           momentum: this.localMomentum,
         };
+        this._updateCompactStatus();
+        this._syncCompactOverlayVisibility();
         this.chargeMeter.actionName = 'Idle';
       } else if (data.type === 'state') {
         if (Array.isArray(data.levels)) {
@@ -1572,13 +2025,20 @@ class GameApp extends HTMLElement {
             maxHealth: me.maxHealth,
             momentum: this.localMomentum,
           };
+          if (me.equipment) {
+            this.equipment = this._normalizeEquipmentPayload(me.equipment);
+            this._syncEquipmentOwnership();
+            this._updateEquipmentPanel();
+          }
+          this._updateCompactStatus();
+          this._syncCompactOverlayVisibility();
           const ratio = me.chargeRatio ?? 0;
           if (!this.activeAction) {
             this.chargeMeter.value = ratio;
           }
           if (!this.activeAction) {
             if (me.charging) {
-              this.chargeMeter.actionName = ACTION_LABEL[me.actionKind] || 'Charging';
+              this.chargeMeter.actionName = this._resolveActionLabel(me.actionKind) || 'Charging';
             } else {
               this.chargeMeter.actionName = 'Idle';
             }
@@ -1599,8 +2059,18 @@ class GameApp extends HTMLElement {
             items: { ...(data.bank.items || {}) },
           };
         }
+        if (data.gear) {
+          this._applyGearPayload(data.gear);
+        }
+        if (data.equipment) {
+          this.equipment = this._normalizeEquipmentPayload(data.equipment);
+        }
+        this._syncEquipmentOwnership();
         this._updateInventoryPanel();
         this._flashInventoryPanel();
+        if (data.gear || data.equipment) {
+          this._flashEquipmentPanel();
+        }
       } else if (data.type === 'ore-update') {
         if (data.node) {
           this._applyOreNodeUpdate(data.node);
@@ -1624,6 +2094,42 @@ class GameApp extends HTMLElement {
         if (ok) {
           this._flashInventoryPanel();
         }
+      } else if (data.type === 'equip-result') {
+        const ok = data.ok !== false;
+        if (data.equipment) {
+          this.equipment = this._normalizeEquipmentPayload(data.equipment);
+          this._syncEquipmentOwnership();
+          this._updateEquipmentPanel();
+          if (ok) {
+            this._flashEquipmentPanel();
+          }
+        } else if (ok && data.slot && data.itemId) {
+          if (!this.equipment) {
+            this.equipment = { ...STARTING_EQUIPMENT };
+          }
+          if (EQUIPMENT_SLOT_META[data.slot] && GEAR_LIBRARY[data.itemId]) {
+            this.equipment[data.slot] = data.itemId;
+            this._syncEquipmentOwnership();
+            this._updateEquipmentPanel();
+            this._flashEquipmentPanel();
+          }
+        }
+        let message = typeof data.message === 'string' ? data.message : null;
+        if (!message) {
+          const def = data.itemId ? GEAR_LIBRARY[data.itemId] : null;
+          if (ok && def?.name) {
+            message = `${def.name} equipped.`;
+          } else {
+            const slotMeta = data.slot ? EQUIPMENT_SLOT_META[data.slot] : null;
+            const slotLabel = slotMeta?.label || (data.slot ? data.slot.charAt(0).toUpperCase() + data.slot.slice(1) : 'Item');
+            if (ok) {
+              message = `${slotLabel} updated.`;
+            } else {
+              message = `Unable to equip ${slotLabel.toLowerCase()}.`;
+            }
+          }
+        }
+        this._showGearFeedback(message, ok);
       } else if (data.type === 'portal-event') {
         this._handlePortalEvent(data);
       } else if (data.type === 'disconnect') {
@@ -1935,11 +2441,15 @@ class GameApp extends HTMLElement {
       if ((effect.levelId || null) !== (currentLevelId || null)) continue;
       const offsetX = (effect.x - cameraX) * this.tileSize;
       const offsetY = (effect.y - cameraY) * this.tileSize;
-      const alpha = Math.max(0, Math.min(1, effect.ttl / 600));
-      const color = effect.type === 'spell' ? '#2563eb' : effect.type === 'ranged' ? '#f97316' : '#ef4444';
+  const lifetime = Math.max(16, Number(effect.lifetime) || EFFECT_FADE_MS);
+  const ttl = Math.max(0, Math.min(lifetime, Number(effect.ttl) || 0));
+  const alpha = lifetime > 0 ? Math.max(0, Math.min(1, ttl / lifetime)) : 0;
+  const travelProgress = lifetime > 0 ? 1 - Math.max(0, Math.min(1, ttl / lifetime)) : 1;
+  const color = this._resolveEffectColor(effect);
+  const highlight = effect.type === 'spell' ? '#e0f2fe' : '#fff7ed';
       const aim = effect.aim ?? { x: 1, y: 0 };
       const aimAngle = Math.atan2(aim.y || 0, aim.x || 1);
-      const shape = effect.shape || (effect.type === 'spell' ? 'burst' : effect.type === 'ranged' ? 'beam' : 'cone');
+  const shape = effect.shape || (effect.type === 'spell' || effect.type === 'ranged' ? 'projectile' : effect.type === 'melee' ? 'cone' : 'burst');
       ctx.save();
       ctx.translate(offsetX, offsetY);
       ctx.globalAlpha = alpha;
@@ -1975,6 +2485,45 @@ class GameApp extends HTMLElement {
           ctx.lineWidth = 1.6;
           ctx.strokeStyle = color;
           ctx.strokeRect(0, -widthPx / 2, lengthPx, widthPx);
+        }
+      } else if (shape === 'projectile') {
+        const lengthTiles = effect.length ?? effect.range ?? 0;
+        const lengthPx = lengthTiles * this.tileSize;
+        if (lengthPx > 0) {
+          const widthTiles = effect.width != null ? effect.width / 2 : 0.4;
+          const radiusPx = Math.max(this.tileSize * 0.14, widthTiles * this.tileSize);
+          const travel = lengthPx * travelProgress;
+          ctx.rotate(aimAngle);
+          const tailLength = Math.max(radiusPx * 3, lengthPx * 0.25);
+          const tailStart = Math.max(0, travel - tailLength);
+          const headRadius = radiusPx * 1.15;
+
+          const gradient = ctx.createLinearGradient(tailStart, 0, travel + headRadius, 0);
+          gradient.addColorStop(0, this._withAlpha(color, 0));
+          gradient.addColorStop(0.35, this._withAlpha(color, 0.35));
+          gradient.addColorStop(0.75, this._withAlpha(color, 0.85));
+          gradient.addColorStop(1, highlight);
+
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.moveTo(tailStart, -radiusPx);
+          ctx.lineTo(travel, -radiusPx * 0.55);
+          ctx.lineTo(travel, radiusPx * 0.55);
+          ctx.lineTo(tailStart, radiusPx);
+          ctx.closePath();
+          ctx.fill();
+          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = this._withAlpha(color, 0.7);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.fillStyle = highlight;
+          ctx.arc(travel, 0, headRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = this._withAlpha(color, 0.9);
+          ctx.stroke();
         }
       } else {
         const radius = (effect.range ?? effect.length ?? 0) * this.tileSize;
@@ -2473,6 +3022,18 @@ class GameApp extends HTMLElement {
     this.knownEffects = nextIds;
   }
 
+  _resolveEffectColor(effect) {
+    if (!effect) return '#f97316';
+    const variantKey = effect.variant || effect.itemId || null;
+    if (variantKey && EFFECT_VARIANT_COLORS[variantKey]) {
+      return EFFECT_VARIANT_COLORS[variantKey];
+    }
+    if (effect.type === 'spell') return '#2563eb';
+    if (effect.type === 'ranged') return '#f97316';
+    if (effect.type === 'melee') return '#ef4444';
+    return '#f97316';
+  }
+
   _replaceChats(chats) {
     const now = performance.now();
     const map = new Map();
@@ -2715,12 +3276,20 @@ class GameApp extends HTMLElement {
       this.removeAttribute('data-ui-collapsed');
     }
     this._syncTouchUiToggleButton();
+    this._syncCompactOverlayVisibility();
+    this._updateCompactStatus();
     if (persist) {
       try {
         window.localStorage?.setItem(UI_COLLAPSE_STORAGE_KEY, next ? '1' : '0');
       } catch (err) {
         // ignore storage failures
       }
+      this.hasStoredUiPreference = true;
+      if (!next) {
+        this.compactAutoCollapse = false;
+      }
+    } else if (!next) {
+      this.compactAutoCollapse = false;
     }
   }
 
@@ -2731,10 +3300,120 @@ class GameApp extends HTMLElement {
     } catch (err) {
       stored = null;
     }
+    const hasPref = stored === '0' || stored === '1';
+    this.hasStoredUiPreference = hasPref;
     if (stored === '1') {
+      this.compactAutoCollapse = false;
       this._setUICollapsed(true, false);
-    } else {
+    } else if (stored === '0') {
+      this.compactAutoCollapse = false;
       this._setUICollapsed(false, false);
+    } else {
+      const autoCollapse = this._shouldAutoCollapseHud();
+      this.compactAutoCollapse = autoCollapse;
+      this._setUICollapsed(autoCollapse, false);
+    }
+    this._syncCompactOverlayVisibility();
+  }
+
+  _evaluateCompactLayout() {
+    const rectWidth = this.viewportWidth || (typeof this.getBoundingClientRect === 'function' ? this.getBoundingClientRect().width : 0);
+    const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
+    const width = rectWidth || fallbackWidth;
+    const coarsePointer = this.detectedTouch || Boolean(this.coarsePointerQuery?.matches) || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+    const shouldCompact = coarsePointer && width > 0 && width <= COMPACT_BREAKPOINT;
+    if (this.compactMode === shouldCompact) {
+      if (shouldCompact) {
+        this.setAttribute('data-compact', 'true');
+        this._maybeAutoCollapseForCompact();
+      } else {
+        this.removeAttribute('data-compact');
+      }
+      this._syncCompactOverlayVisibility();
+      return shouldCompact;
+    }
+    this.compactMode = shouldCompact;
+    if (shouldCompact) {
+      this.setAttribute('data-compact', 'true');
+    } else {
+      this.removeAttribute('data-compact');
+    }
+    this._syncTouchUiToggleButton();
+    this._syncCompactOverlayVisibility();
+    this._updateCompactStatus();
+    if (shouldCompact) {
+      this._maybeAutoCollapseForCompact();
+    } else if (this.compactAutoCollapse && !this.hasStoredUiPreference) {
+      this.compactAutoCollapse = false;
+      if (this.uiCollapsed) {
+        this._setUICollapsed(false, false);
+      } else {
+        this._syncCompactOverlayVisibility();
+        this._updateCompactStatus();
+      }
+    }
+    return shouldCompact;
+  }
+
+  _syncCompactOverlayVisibility() {
+    if (!this.compactStatusEl) return;
+    const maxHealth = Math.max(0, this.localHealth?.maxHealth ?? 0);
+    const shouldShow = (this.compactMode || this.uiCollapsed) && maxHealth > 0;
+    this.compactStatusEl.hidden = !shouldShow;
+  }
+
+  _updateCompactStatus() {
+    if (!this.compactStatusEl) return;
+    const health = Math.max(0, Math.round(this.localHealth?.health ?? 0));
+    const maxHealth = Math.max(0, Math.round(this.localHealth?.maxHealth ?? 0));
+    const healthRatio = maxHealth > 0 ? Math.max(0, Math.min(1, health / maxHealth)) : 0;
+    if (this.compactHealthText) {
+      this.compactHealthText.textContent = maxHealth > 0 ? `${health} / ${maxHealth}` : `${health}`;
+    }
+    if (this.compactHealthBar) {
+      this.compactHealthBar.style.width = `${Math.round(healthRatio * 100)}%`;
+    }
+    const momentum = this.localMomentum || null;
+    let momentumRatio = 0;
+    let momentumLabel = 'Ready';
+    if (momentum) {
+      const stacks = Math.max(0, Number(momentum.stacks) || 0);
+      const remaining = Math.max(0, Number(momentum.remaining) || 0);
+      const duration = Math.max(1, Number(momentum.duration) || 1);
+      momentumRatio = Math.max(0, Math.min(1, duration > 0 ? remaining / duration : 0));
+      if (stacks > 0) {
+        momentumLabel = `${stacks} stack${stacks === 1 ? '' : 's'}`;
+      } else if (momentumRatio > 0) {
+        momentumLabel = 'Active';
+      } else {
+        momentumLabel = 'Ready';
+      }
+    }
+    if (this.compactMomentumLabel) {
+      this.compactMomentumLabel.textContent = momentumLabel;
+    }
+    if (this.compactMomentumBar) {
+      this.compactMomentumBar.style.width = `${Math.round(momentumRatio * 100)}%`;
+    }
+  }
+
+  _shouldAutoCollapseHud() {
+    const rectWidth = this.viewportWidth || (typeof this.getBoundingClientRect === 'function' ? this.getBoundingClientRect().width : 0);
+    const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
+    const width = rectWidth || fallbackWidth;
+    if (!width) return false;
+    const coarsePointer = this.detectedTouch || Boolean(this.coarsePointerQuery?.matches) || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+    return coarsePointer && width <= COMPACT_BREAKPOINT;
+  }
+
+  _maybeAutoCollapseForCompact() {
+    if (!this.compactMode) return;
+    if (this.uiCollapsed) return;
+    if (this.hasStoredUiPreference) return;
+    if (this.compactAutoCollapse) return;
+    if (this._shouldAutoCollapseHud()) {
+      this.compactAutoCollapse = true;
+      this._setUICollapsed(true, false);
     }
   }
 
@@ -3581,6 +4260,7 @@ class GameApp extends HTMLElement {
     }
     this._populateItemsList(this.inventoryItemsEl, this.inventory.items);
     this._populateItemsList(this.bankItemsEl, this.bankInventory.items);
+    this._updateEquipmentPanel();
   }
 
   _flashInventoryPanel() {
@@ -3589,6 +4269,181 @@ class GameApp extends HTMLElement {
     // Force reflow to restart animation
     void this.inventoryPanel.offsetWidth;
     this.inventoryPanel.classList.add('flash');
+  }
+
+  _flashEquipmentPanel() {
+    if (!this.gearPanel) return;
+    this.gearPanel.classList.remove('flash');
+    void this.gearPanel.offsetWidth;
+    this.gearPanel.classList.add('flash');
+  }
+
+  _applyGearPayload(payload) {
+    const owned = new Set(Object.values(STARTING_EQUIPMENT));
+    if (!payload) {
+      this.ownedGear = owned;
+      return;
+    }
+    const source = Array.isArray(payload?.owned)
+      ? payload.owned
+      : Array.isArray(payload)
+      ? payload
+      : Object.keys(payload || {});
+    for (const id of source) {
+      if (GEAR_LIBRARY[id]) {
+        owned.add(id);
+      }
+    }
+    this.ownedGear = owned;
+  }
+
+  _normalizeEquipmentPayload(payload) {
+    const equipment = { ...STARTING_EQUIPMENT };
+    if (payload && typeof payload === 'object') {
+      for (const slot of EQUIPMENT_ORDER) {
+        const candidate = payload[slot];
+        if (typeof candidate === 'string' && GEAR_LIBRARY[candidate]) {
+          equipment[slot] = candidate;
+        }
+      }
+    }
+    return equipment;
+  }
+
+  _syncEquipmentOwnership() {
+    if (!this.equipment) {
+      this.equipment = { ...STARTING_EQUIPMENT };
+    }
+    const owned = this.ownedGear instanceof Set ? this.ownedGear : new Set(Object.values(STARTING_EQUIPMENT));
+    for (const slot of EQUIPMENT_ORDER) {
+      const current = this.equipment[slot];
+      if (!current || !GEAR_LIBRARY[current] || !owned.has(current)) {
+        this.equipment[slot] = STARTING_EQUIPMENT[slot];
+      }
+    }
+  }
+
+  _updateEquipmentPanel() {
+    if (!this.gearPanel) return;
+    this._syncEquipmentOwnership();
+    const owned = this.ownedGear || new Set();
+    for (const slot of EQUIPMENT_ORDER) {
+      const labelEl = this.equipmentLabels?.[slot];
+      const listEl = this.equipmentOptionLists?.[slot];
+      const equippedId = this.equipment?.[slot] || STARTING_EQUIPMENT[slot];
+      const equippedDef = GEAR_LIBRARY[equippedId] || GEAR_LIBRARY[STARTING_EQUIPMENT[slot]];
+      if (labelEl) {
+        labelEl.textContent = equippedDef ? equippedDef.name : equippedId;
+      }
+      if (!listEl) continue;
+      listEl.innerHTML = '';
+      const order = GEAR_PROGRESSION[slot] || [];
+      for (const id of order) {
+        const def = GEAR_LIBRARY[id];
+        if (!def) continue;
+        const ownedItem = owned.has(id);
+        const isEquipped = equippedId === id;
+        const li = document.createElement('li');
+        if (!ownedItem) {
+          li.classList.add('locked');
+          const label = document.createElement('span');
+          label.textContent = `${def.name} — Locked`;
+          li.appendChild(label);
+          if (def.summary) {
+            const summary = document.createElement('span');
+            summary.className = 'summary';
+            summary.textContent = def.summary;
+            li.appendChild(summary);
+          }
+        } else {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.equipOption = slot;
+          button.dataset.itemId = id;
+          button.textContent = def.name;
+          if (isEquipped) {
+            button.classList.add('active');
+          }
+          li.appendChild(button);
+          if (def.summary) {
+            const summary = document.createElement('span');
+            summary.className = 'summary';
+            summary.textContent = def.summary;
+            li.appendChild(summary);
+          }
+        }
+        listEl.appendChild(li);
+      }
+    }
+    this._syncActionButtonLabels();
+    if (this.activeAction) {
+      this.chargeMeter.actionName = this._resolveActionLabel(this.activeAction);
+    }
+  }
+
+  _handleGearPanelClick(event) {
+    const button = event.target.closest('[data-equip-option]');
+    if (!button) return;
+    const slot = button.dataset.equipOption;
+    const itemId = button.dataset.itemId;
+    if (!slot || !itemId) return;
+    if (this.equipment?.[slot] === itemId) return;
+    this._requestEquip(slot, itemId);
+  }
+
+  _requestEquip(slot, itemId) {
+    if (!EQUIPMENT_SLOT_META[slot]) return;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    this.socket.send(
+      JSON.stringify({
+        type: 'equip',
+        slot,
+        itemId,
+      }),
+    );
+  }
+
+  _resolveActionLabel(kind) {
+    const slot = kind === 'spell' ? 'spell' : kind;
+    const equippedId = this.equipment?.[slot] || STARTING_EQUIPMENT[slot];
+    const def = GEAR_LIBRARY[equippedId];
+    if (def?.shortLabel) return def.shortLabel;
+    const meta = EQUIPMENT_SLOT_META[slot];
+    if (meta?.actionFallback) return meta.actionFallback;
+    return ACTION_LABEL[kind] || 'Charging';
+  }
+
+  _syncActionButtonLabels() {
+    if (!Array.isArray(this.touchActionButtons)) return;
+    for (const button of this.touchActionButtons) {
+      const kind = button?.dataset?.touchAction;
+      if (!kind) continue;
+      const span = button.querySelector('span');
+      if (!span) continue;
+      span.textContent = this._resolveActionLabel(kind);
+    }
+    if (!this.activeAction) {
+      this.chargeMeter.actionName = 'Idle';
+    }
+  }
+
+  _showGearFeedback(message, ok = true) {
+    if (!this.gearFeedbackEl) return;
+    this.gearFeedbackEl.textContent = message || '';
+    this.gearFeedbackEl.style.color = ok ? '#bae6fd' : '#fca5a5';
+    if (this.gearFeedbackTimer) {
+      clearTimeout(this.gearFeedbackTimer);
+    }
+    if (message) {
+      this.gearFeedbackTimer = setTimeout(() => {
+        if (this.gearFeedbackEl) {
+          this.gearFeedbackEl.textContent = '';
+        }
+        this.gearFeedbackTimer = null;
+      }, 3200);
+    } else {
+      this.gearFeedbackTimer = null;
+    }
   }
 
   _updateBankButtons(enabled) {
@@ -3664,7 +4519,7 @@ class GameApp extends HTMLElement {
     this.audio.onActionStart(kind);
     this.activeAction = kind;
     this.actionStart = Date.now();
-    this.chargeMeter.actionName = ACTION_LABEL[kind] || 'Charging';
+  this.chargeMeter.actionName = this._resolveActionLabel(kind);
     this.socket.send(
       JSON.stringify({
         type: 'action',
@@ -3747,6 +4602,8 @@ class GameApp extends HTMLElement {
     this.localBonuses = null;
     this.localHealth = { health: 0, maxHealth: 0 };
   this.localMomentum = null;
+    this._updateCompactStatus();
+    this._syncCompactOverlayVisibility();
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
@@ -3916,6 +4773,8 @@ class GameApp extends HTMLElement {
     this._bindTouchControls();
     this._syncTouchChatButton();
     this._syncTouchUiToggleButton();
+    this._evaluateCompactLayout();
+    this._syncCompactOverlayVisibility();
   }
 
   _bindTouchControls() {
@@ -3996,6 +4855,8 @@ class GameApp extends HTMLElement {
       this.detectedTouch = true;
       this._enableTouchControls();
     }
+    this._evaluateCompactLayout();
+    this._syncCompactOverlayVisibility();
   }
 
   _handleGlobalPointerDown(event) {
@@ -4003,6 +4864,8 @@ class GameApp extends HTMLElement {
       this.detectedTouch = true;
       this._enableTouchControls();
     }
+    this._evaluateCompactLayout();
+    this._syncCompactOverlayVisibility();
   }
 
   _isTouchLike(event) {
@@ -4279,6 +5142,8 @@ class GameApp extends HTMLElement {
         this.webglCanvas.style.height = `${rect.height}px`;
       }
     }
+    this._evaluateCompactLayout();
+    this._syncCompactOverlayVisibility();
   }
 }
 
