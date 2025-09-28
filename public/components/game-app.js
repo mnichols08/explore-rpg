@@ -1923,7 +1923,8 @@ class GameApp extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
-    this.webglCanvas = this.shadowRoot.querySelector('[data-webgl-canvas]');
+  this.hudEl = this.shadowRoot.querySelector('.hud');
+  this.webglCanvas = this.shadowRoot.querySelector('[data-webgl-canvas]');
     this.canvas = this.shadowRoot.querySelector('[data-main-canvas]');
     this.ctx = this.canvas.getContext('2d');
     this.webglRenderer = this.webglCanvas ? new WorldWebGLRenderer(this.webglCanvas) : null;
@@ -1943,7 +1944,10 @@ class GameApp extends HTMLElement {
     this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
     this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
     this.minimapToggleButton = this.shadowRoot.querySelector('[data-minimap-toggle]');
+  this.minimapFloatButton = this.shadowRoot.querySelector('[data-minimap-float]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
+  this.toastStackEl = this.shadowRoot.querySelector('[data-toast-stack]');
+  this.minimapDockParent = this.minimapCardEl?.parentElement ?? null;
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
     this.visualToggleButton = this.shadowRoot.querySelector('[data-visual-toggle]');
   this.heroNameEl = this.shadowRoot.querySelector('[data-hero-name]');
@@ -2081,6 +2085,10 @@ class GameApp extends HTMLElement {
   this.minimapScaleX = 1;
   this.minimapScaleY = 1;
     this.minimapVisible = true;
+  this.minimapFloating = false;
+  this.minimapFloatPosition = null;
+  this.minimapDragPointerId = null;
+  this.minimapDragOffset = { x: 0, y: 0 };
     this.currentLevelId = null;
     this.currentLevelExit = null;
     this.currentLevelInfo = null;
@@ -2153,6 +2161,11 @@ class GameApp extends HTMLElement {
     this._handlePointerCancel = this._handlePointerCancel.bind(this);
     this._handleMusicToggle = this._handleMusicToggle.bind(this);
   this._toggleMinimapVisibility = this._toggleMinimapVisibility.bind(this);
+    this._handleMinimapFloatToggle = this._handleMinimapFloatToggle.bind(this);
+    this._handleMinimapDragStart = this._handleMinimapDragStart.bind(this);
+    this._handleMinimapDragMove = this._handleMinimapDragMove.bind(this);
+    this._handleMinimapDragEnd = this._handleMinimapDragEnd.bind(this);
+    this._handleMinimapDragCancel = this._handleMinimapDragCancel.bind(this);
   this._handleCopyHeroId = this._handleCopyHeroId.bind(this);
   this._handleNewHeroRequest = this._handleNewHeroRequest.bind(this);
   this._handleUseHeroRequest = this._handleUseHeroRequest.bind(this);
@@ -2186,9 +2199,11 @@ class GameApp extends HTMLElement {
     this._updateInventoryPanel();
     this._updateLevelStatus(null);
     this._updateMinimapLabel(null);
+  this._syncMinimapFloatButton();
     this._updatePortalHint(null, null);
     this._setMinimapVisible(true, false);
     this._loadMinimapPreference();
+  this._loadMinimapFloatPreference();
     this._loadUiCollapsePreference();
     this._loadVisualPreference();
     this._evaluateCompactLayout();
@@ -2214,6 +2229,8 @@ class GameApp extends HTMLElement {
     }
     this.visualToggleButton?.addEventListener('click', this._handleVisualToggle);
     this.minimapToggleButton?.addEventListener('click', this._toggleMinimapVisibility);
+    this.minimapFloatButton?.addEventListener('click', this._handleMinimapFloatToggle);
+    this.minimapHeaderEl?.addEventListener('pointerdown', this._handleMinimapDragStart);
     this.copyHeroButton?.addEventListener('click', this._handleCopyHeroId);
     this.newHeroButton?.addEventListener('click', this._handleNewHeroRequest);
     this.useHeroButton?.addEventListener('click', this._handleUseHeroRequest);
@@ -2277,6 +2294,8 @@ class GameApp extends HTMLElement {
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
   this.visualToggleButton?.removeEventListener('click', this._handleVisualToggle);
   this.minimapToggleButton?.removeEventListener('click', this._toggleMinimapVisibility);
+  this.minimapFloatButton?.removeEventListener('click', this._handleMinimapFloatToggle);
+  this.minimapHeaderEl?.removeEventListener('pointerdown', this._handleMinimapDragStart);
   this.copyHeroButton?.removeEventListener('click', this._handleCopyHeroId);
   this.newHeroButton?.removeEventListener('click', this._handleNewHeroRequest);
   this.useHeroButton?.removeEventListener('click', this._handleUseHeroRequest);
@@ -2322,6 +2341,9 @@ class GameApp extends HTMLElement {
     clearTimeout(this.levelBannerTimer);
     this.levelBannerTimer = null;
   }
+  window.removeEventListener('pointermove', this._handleMinimapDragMove);
+  window.removeEventListener('pointerup', this._handleMinimapDragEnd);
+  window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
     this.audio.setMusicEnabled(false);
     this.webglRenderer?.dispose?.();
     this.webglRenderer = null;
@@ -3604,6 +3626,261 @@ class GameApp extends HTMLElement {
       }
     }
     this.portals = map;
+  }
+
+  _handleMinimapFloatToggle(event) {
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+    this._setMinimapFloating(!this.minimapFloating);
+  }
+
+  _setMinimapFloating(floating, persist = true) {
+    if (!this.minimapCardEl) return;
+    const next = Boolean(floating);
+    if (this.minimapFloating === next) {
+      if (next) {
+        this._restoreMinimapFloatPosition();
+      }
+      if (persist) {
+        try {
+          window.localStorage?.setItem(MINIMAP_FLOAT_STORAGE_KEY, next ? '1' : '0');
+        } catch (err) {
+          // ignore storage write failures
+        }
+      }
+      return;
+    }
+    if (!this.minimapDockParent && this.minimapCardEl.parentElement) {
+      this.minimapDockParent = this.minimapCardEl.parentElement;
+    }
+    if (next) {
+      let fallbackPosition = null;
+      if (this.hudEl) {
+        const hudRect = this.hudEl.getBoundingClientRect();
+        const cardRect = this.minimapCardEl.getBoundingClientRect();
+        fallbackPosition = {
+          left: cardRect.left - hudRect.left,
+          top: cardRect.top - hudRect.top,
+        };
+      }
+      this.hudEl?.appendChild(this.minimapCardEl);
+      this.minimapCardEl.classList.add('floating');
+      this.minimapFloating = true;
+      const restored = this._restoreMinimapFloatPosition(fallbackPosition);
+      if (!restored && fallbackPosition) {
+        this._applyMinimapFloatPosition(fallbackPosition.left, fallbackPosition.top);
+      }
+    } else {
+      this.minimapFloating = false;
+      this.minimapCardEl.classList.remove('floating', 'dragging');
+      this.minimapCardEl.style.left = '';
+      this.minimapCardEl.style.top = '';
+      this.minimapCardEl.style.right = '';
+      this.minimapCardEl.style.bottom = '';
+      if (this.minimapDockParent) {
+        const anchor = this.minimapDockParent.querySelector('.utility-bar');
+        if (anchor) {
+          anchor.insertAdjacentElement('afterend', this.minimapCardEl);
+        } else {
+          this.minimapDockParent.appendChild(this.minimapCardEl);
+        }
+      }
+      this.minimapDragPointerId = null;
+      window.removeEventListener('pointermove', this._handleMinimapDragMove);
+      window.removeEventListener('pointerup', this._handleMinimapDragEnd);
+      window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
+    }
+    this._syncMinimapFloatButton();
+    if (persist) {
+      try {
+        window.localStorage?.setItem(MINIMAP_FLOAT_STORAGE_KEY, next ? '1' : '0');
+      } catch (err) {
+        // ignore storage write failures
+      }
+      if (next) {
+        this._persistMinimapFloatPosition();
+      }
+    }
+  }
+
+  _syncMinimapFloatButton() {
+    if (!this.minimapFloatButton) return;
+    const label = this.minimapFloating ? 'Dock' : 'Float';
+    this.minimapFloatButton.textContent = label;
+    this.minimapFloatButton.setAttribute('aria-pressed', this.minimapFloating ? 'true' : 'false');
+    this.minimapFloatButton.setAttribute('aria-label', `${label} minimap`);
+  }
+
+  _loadMinimapFloatPreference() {
+    let stored = null;
+    try {
+      stored = window.localStorage?.getItem(MINIMAP_FLOAT_STORAGE_KEY);
+    } catch (err) {
+      stored = null;
+    }
+    if (stored === '1') {
+      this._setMinimapFloating(true, false);
+    } else {
+      this._setMinimapFloating(false, false);
+    }
+  }
+
+  _restoreMinimapFloatPosition(fallbackPosition = null) {
+    if (!this.minimapCardEl || !this.minimapFloating) return false;
+    let stored = null;
+    try {
+      stored = window.localStorage?.getItem(MINIMAP_FLOAT_POSITION_KEY);
+    } catch (err) {
+      stored = null;
+    }
+    let position = null;
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed && Number.isFinite(parsed.left) && Number.isFinite(parsed.top)) {
+          position = { left: Number(parsed.left), top: Number(parsed.top) };
+        }
+      } catch (err) {
+        position = null;
+      }
+    }
+    if (!position && fallbackPosition) {
+      position = { left: fallbackPosition.left, top: fallbackPosition.top };
+    }
+    if (!position) {
+      const padding = this._getHudPadding();
+      const hudRect = this.hudEl?.getBoundingClientRect();
+      const cardRect = this.minimapCardEl.getBoundingClientRect();
+      if (hudRect && cardRect) {
+        position = {
+          left: Math.max(padding, hudRect.width - cardRect.width - padding),
+          top: padding,
+        };
+      } else {
+        position = { left: 0, top: 0 };
+      }
+    }
+    const clamped = this._clampMinimapFloatPosition(position.left, position.top);
+    this._applyMinimapFloatPosition(clamped.left, clamped.top);
+    return Boolean(stored);
+  }
+
+  _applyMinimapFloatPosition(left, top) {
+    if (!this.minimapCardEl) return;
+    const clamped = this._clampMinimapFloatPosition(left, top);
+    this.minimapCardEl.style.left = `${Math.round(clamped.left)}px`;
+    this.minimapCardEl.style.top = `${Math.round(clamped.top)}px`;
+    this.minimapCardEl.style.right = 'auto';
+    this.minimapCardEl.style.bottom = 'auto';
+    this.minimapFloatPosition = { left: clamped.left, top: clamped.top };
+  }
+
+  _clampMinimapFloatPosition(left, top) {
+    const hudRect = this.hudEl?.getBoundingClientRect();
+    if (!hudRect || !this.minimapCardEl) {
+      const safeLeft = Number.isFinite(left) ? Number(left) : 0;
+      const safeTop = Number.isFinite(top) ? Number(top) : 0;
+      return {
+        left: Math.max(0, safeLeft || 0),
+        top: Math.max(0, safeTop || 0),
+      };
+    }
+    const cardRect = this.minimapCardEl.getBoundingClientRect();
+    const maxLeft = Math.max(0, hudRect.width - cardRect.width);
+    const maxTop = Math.max(0, hudRect.height - cardRect.height);
+    const safeLeft = Number.isFinite(left) ? Number(left) : 0;
+    const safeTop = Number.isFinite(top) ? Number(top) : 0;
+    return {
+      left: Math.min(Math.max(safeLeft, 0), maxLeft),
+      top: Math.min(Math.max(safeTop, 0), maxTop),
+    };
+  }
+
+  _persistMinimapFloatPosition() {
+    if (!this.minimapFloatPosition) return;
+    try {
+      window.localStorage?.setItem(
+        MINIMAP_FLOAT_POSITION_KEY,
+        JSON.stringify({
+          left: Math.round(this.minimapFloatPosition.left),
+          top: Math.round(this.minimapFloatPosition.top),
+        })
+      );
+    } catch (err) {
+      // ignore storage write failures
+    }
+  }
+
+  _getHudPadding() {
+    if (!this.hudEl || typeof window === 'undefined' || !window.getComputedStyle) return 0;
+    try {
+      const styles = window.getComputedStyle(this.hudEl);
+      const value = parseFloat(styles?.paddingLeft || '0');
+      return Number.isFinite(value) ? value : 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  _handleMinimapDragStart(event) {
+    if (!this.minimapFloating || !this.minimapCardEl) return;
+    if (event && typeof event.button === 'number' && event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') {
+      return;
+    }
+    if (event?.target?.closest?.('button')) {
+      return;
+    }
+    event.preventDefault?.();
+    const cardRect = this.minimapCardEl.getBoundingClientRect();
+    this.minimapDragPointerId = event.pointerId;
+    this.minimapDragOffset = {
+      x: event.clientX - cardRect.left,
+      y: event.clientY - cardRect.top,
+    };
+    this.minimapCardEl.classList.add('dragging');
+    window.addEventListener('pointermove', this._handleMinimapDragMove);
+    window.addEventListener('pointerup', this._handleMinimapDragEnd);
+    window.addEventListener('pointercancel', this._handleMinimapDragCancel);
+  }
+
+  _handleMinimapDragMove(event) {
+    if (!this.minimapFloating || event.pointerId !== this.minimapDragPointerId || !this.minimapCardEl) {
+      return;
+    }
+    const hudRect = this.hudEl?.getBoundingClientRect();
+    if (!hudRect) return;
+    event.preventDefault?.();
+    const proposedLeft = event.clientX - hudRect.left - this.minimapDragOffset.x;
+    const proposedTop = event.clientY - hudRect.top - this.minimapDragOffset.y;
+    const clamped = this._clampMinimapFloatPosition(proposedLeft, proposedTop);
+    this.minimapCardEl.style.left = `${Math.round(clamped.left)}px`;
+    this.minimapCardEl.style.top = `${Math.round(clamped.top)}px`;
+    this.minimapCardEl.style.right = 'auto';
+    this.minimapCardEl.style.bottom = 'auto';
+    this.minimapFloatPosition = { left: clamped.left, top: clamped.top };
+  }
+
+  _handleMinimapDragEnd(event) {
+    if (event.pointerId !== this.minimapDragPointerId) return;
+    event.preventDefault?.();
+    this.minimapDragPointerId = null;
+    this.minimapCardEl?.classList.remove('dragging');
+    window.removeEventListener('pointermove', this._handleMinimapDragMove);
+    window.removeEventListener('pointerup', this._handleMinimapDragEnd);
+    window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
+    this._persistMinimapFloatPosition();
+  }
+
+  _handleMinimapDragCancel(event) {
+    if (event.pointerId !== this.minimapDragPointerId) return;
+    this.minimapDragPointerId = null;
+    this.minimapCardEl?.classList.remove('dragging');
+    window.removeEventListener('pointermove', this._handleMinimapDragMove);
+    window.removeEventListener('pointerup', this._handleMinimapDragEnd);
+    window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
+    this._persistMinimapFloatPosition();
   }
 
   _toggleMinimapVisibility(event) {
@@ -6402,6 +6679,9 @@ class GameApp extends HTMLElement {
         this.webglCanvas.style.width = `${rect.width}px`;
         this.webglCanvas.style.height = `${rect.height}px`;
       }
+    }
+    if (this.minimapFloating && this.minimapFloatPosition) {
+      this._applyMinimapFloatPosition(this.minimapFloatPosition.left, this.minimapFloatPosition.top);
     }
     this._evaluateCompactLayout();
     this._syncCompactOverlayVisibility();
