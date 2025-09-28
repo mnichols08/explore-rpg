@@ -1,4 +1,4 @@
-import './stat-panel.js';
+﻿import './stat-panel.js';
 import './charge-meter.js';
 import './audio-toggle.js';
 import { AudioEngine } from '../audio/audio-engine.js';
@@ -6,89 +6,66 @@ import { WorldWebGLRenderer } from '../renderers/world-webgl.js';
 
 const template = document.createElement('template');
 
-    .utility-bar charge-meter {
-      flex: 1 1 140px;
-      min-width: 0;
+template.innerHTML = `
+  <style>
+    :host {
+      display: block;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      --hud-gap: clamp(0.85rem, 1.1vw + 0.2rem, 1.35rem);
+      --hud-panel-max-width: clamp(200px, 21vw, 260px);
+      --hud-panel-background: rgba(15, 23, 42, 0.72);
+      --hud-panel-border: rgba(148, 163, 184, 0.28);
     }
 
-    .utility-bar audio-toggle,
-    .utility-bar .visual-toggle {
-      flex: 0 0 auto;
-    }
-      gap: 0.45rem;
-      padding: 0.45rem 0.65rem;
-      border-radius: 0.8rem;
-      background: rgba(15, 23, 42, 0.72);
-      border: 1px solid rgba(148, 163, 184, 0.28);
-      box-shadow: 0 0.9rem 2rem rgba(8, 15, 31, 0.38);
-      backdrop-filter: blur(6px);
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
     }
 
-    .utility-bar > * {
+    canvas[data-webgl-canvas] {
+      z-index: 2;
+      pointer-events: none;
+      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 70%);
+      mix-blend-mode: screen;
+    }
+
+    canvas[data-main-canvas] {
+      z-index: 1;
+      cursor: crosshair;
+      touch-action: none;
+      background: transparent;
+    }
+
+    .hud {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      padding: var(--hud-gap);
+      z-index: 3;
+    }
+
+    .hud > * {
+      position: absolute;
       pointer-events: auto;
+      max-width: min(var(--hud-panel-max-width), calc(100% - (var(--hud-gap) * 2)));
+    }
+
+    .hud .top-left {
+      top: var(--hud-gap);
+      left: var(--hud-gap);
+      width: min(var(--hud-panel-max-width), calc(48vw - var(--hud-gap)));
+      display: grid;
+      gap: 0.6rem;
     }
 
     .utility-bar charge-meter {
-      flex: 1 1 140px;
-      @media (max-width: 1280px) {
-        :host {
-          --hud-gap: clamp(0.6rem, 0.8vw + 0.25rem, 0.9rem);
-        }
-
-        .hud .top-left {
-          width: clamp(200px, 28vw, 260px);
-        }
-
-        .hud .top-right {
-          width: clamp(200px, 30vw, 270px);
-          gap: 0.5rem;
-        }
-
-        .hud .bottom-left,
-        .hud .bottom-right {
-          width: clamp(200px, 34vw, 280px);
-        }
-
-        .utility-bar {
-          justify-content: space-between;
-          gap: 0.4rem;
-        }
-      }
-
-      @media (max-width: 960px) {
-        :host {
-          font-size: 15px;
-          --hud-gap: 0.75rem;
-        }
-
-        .hud {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
-          gap: 0.75rem;
-          padding: 0.85rem;
-          pointer-events: auto;
-          overflow-y: auto;
-        }
-
-        .hud .top-right,
-        .hud .top-left,
-        .hud .bottom-left,
-        .hud .bottom-right {
-          position: static;
-          width: 100%;
-          max-width: none;
-          max-height: none;
-          overflow: visible;
-        }
-
-        :host([data-touch]) .hud .bottom-left,
-        :host([data-touch]) .hud .bottom-right {
-          bottom: auto;
-        }
-      }
+      flex: 1 1 150px;
+      min-width: 0;
     }
 
     .minimap-header button {
@@ -120,8 +97,8 @@ const template = document.createElement('template');
     }
 
     canvas[data-minimap] {
-      width: clamp(130px, 20vw, 168px);
-      height: clamp(130px, 20vw, 168px);
+      width: clamp(120px, 20vw, 160px);
+      height: clamp(120px, 20vw, 160px);
       max-width: 100%;
       background: rgba(15, 23, 42, 0.9);
       border-radius: 0.75rem;
@@ -187,8 +164,8 @@ const template = document.createElement('template');
     .hud .bottom-left {
       bottom: var(--hud-gap);
       left: var(--hud-gap);
-      width: clamp(210px, 26vw, 300px);
-      max-width: 320px;
+      width: clamp(210px, 24vw, 280px);
+      max-width: min(var(--hud-panel-max-width), calc(48vw - var(--hud-gap)));
       max-height: calc(48vh - var(--hud-gap));
       overflow-y: auto;
       color: rgba(226, 232, 240, 0.86);
@@ -206,10 +183,10 @@ const template = document.createElement('template');
     .hud .bottom-right {
       bottom: var(--hud-gap);
       right: var(--hud-gap);
-      width: clamp(210px, 26vw, 300px);
-      max-width: 320px;
+      width: clamp(210px, 24vw, 280px);
+      max-width: min(var(--hud-panel-max-width), calc(48vw - var(--hud-gap)));
       display: grid;
-      gap: 0.55rem;
+      gap: 0.5rem;
     }
 
     .identity-tools {
@@ -640,9 +617,14 @@ const template = document.createElement('template');
       color: #022c22;
     }
 
-    :host([data-compact]) .hud {
-      padding: 0.65rem;
-      gap: 0.65rem;
+    :host([data-compact]) {
+      --hud-gap: clamp(0.55rem, 0.8vw, 0.75rem);
+      --hud-panel-max-width: clamp(190px, 24vw, 240px);
+    }
+
+    :host([data-compact]) .hud .bottom-left,
+    :host([data-compact]) .hud .bottom-right {
+      font-size: 0.7rem;
     }
 
     :host([data-compact]) .touch-controls {
@@ -755,68 +737,51 @@ const template = document.createElement('template');
     }
 
     @media (max-width: 1280px) {
-      .hud {
-        grid-template-columns: minmax(0, clamp(220px, 46vw, 320px)) minmax(0, clamp(240px, 48vw, 340px));
-        grid-template-rows: auto auto auto;
-        grid-template-areas:
-          'top-left top-right'
-          'bottom-left top-right'
-          'bottom-left bottom-right';
-        column-gap: clamp(0.6rem, 1.4vw, 1.1rem);
-        row-gap: clamp(0.7rem, 1.6vw, 1.2rem);
+      :host {
+        --hud-gap: clamp(0.6rem, 0.9vw, 1rem);
+        --hud-panel-max-width: clamp(190px, 28vw, 260px);
       }
 
-      .hud .top-left,
       .hud .top-right,
+      .hud .top-left {
+        gap: 0.5rem;
+      }
+
       .hud .bottom-left,
       .hud .bottom-right {
-        width: 100%;
-        justify-self: stretch;
+        width: clamp(190px, 32vw, 260px);
       }
 
       .utility-bar {
-        justify-content: space-between;
-        gap: 0.45rem;
+        gap: 0.35rem;
       }
     }
 
     @media (max-width: 960px) {
       :host {
         font-size: 15px;
+        --hud-gap: 0.8rem;
+        --hud-panel-max-width: clamp(220px, 80vw, 420px);
       }
 
       .hud {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: repeat(4, auto);
-        grid-template-areas:
-          'top-right'
-          'top-left'
-          'bottom-right'
-          'bottom-left';
+        position: static;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
         padding: 0.85rem;
-        column-gap: 0;
-        row-gap: 0.85rem;
+        pointer-events: auto;
       }
 
-      .hud .top-right,
-      .hud .top-left,
-      .hud .bottom-left,
-      .hud .bottom-right {
+      .hud > * {
+        position: static;
         width: 100%;
-        justify-self: stretch;
+        max-width: none;
       }
 
-      .hud .bottom-left {
-        background: rgba(15, 23, 42, 0.75);
-        border-radius: 0.8rem;
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        padding: 0.7rem 0.85rem;
-        box-shadow: 0 0.9rem 1.8rem rgba(8, 15, 31, 0.45);
-        gap: 0.55rem;
-      }
-
-      .hud .bottom-right {
-        width: 100%;
+      :host([data-touch]) .hud .bottom-left,
+      :host([data-touch]) .hud .bottom-right {
+        bottom: auto;
       }
 
       .identity-tools button {
@@ -1229,13 +1194,13 @@ const template = document.createElement('template');
       <div class="desktop-help">
         <h4>Core controls</h4>
         <ul class="help-list">
-          <li><span>Move</span><span>WASD · Hold any attack to charge</span></li>
-          <li><span>Melee</span><span>Left click · builds Strength</span></li>
-          <li><span>Ranged</span><span>Right click · builds Dexterity</span></li>
+          <li><span>Move</span><span>WASD ┬╖ Hold any attack to charge</span></li>
+          <li><span>Melee</span><span>Left click ┬╖ builds Strength</span></li>
+          <li><span>Ranged</span><span>Right click ┬╖ builds Dexterity</span></li>
           <li><span>Spell</span><span>Space or both buttons</span></li>
           <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
         </ul>
-        <div class="help-footnote">Enter chats nearby · M toggles music · Shift+N starts a fresh hero.</div>
+        <div class="help-footnote">Enter chats nearby ┬╖ M toggles music ┬╖ Shift+N starts a fresh hero.</div>
         
       </div>
       <div class="mobile-help">
@@ -1243,7 +1208,7 @@ const template = document.createElement('template');
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
-        <div class="hero-id" data-hero-id>—</div>
+        <div class="hero-id" data-hero-id>ΓÇö</div>
       </div>
       <div class="identity-tools">
         <button type="button" data-copy-id>Copy ID</button>
@@ -1342,7 +1307,7 @@ const template = document.createElement('template');
         <button type="button" class="touch-interact" data-touch-interact aria-label="Interact">
           <span>Interact</span>
         </button>
-        <p class="touch-hint">Move with the pad · Slash, Volley, Spell attack · Chat to talk · HUD reveals panels · Interact scoops loot and portals</p>
+        <p class="touch-hint">Move with the pad ┬╖ Slash, Volley, Spell attack ┬╖ Chat to talk ┬╖ HUD reveals panels ┬╖ Interact scoops loot and portals</p>
       </div>
     </div>
     <div class="compact-status" hidden data-compact-status>
@@ -1442,14 +1407,14 @@ const GEAR_LIBRARY = {
     slot: 'melee',
     name: 'Forager Stick',
     shortLabel: 'Stick',
-    summary: '+10% damage · extra reach.',
+    summary: '+10% damage ┬╖ extra reach.',
   },
   'melee-sword': {
     id: 'melee-sword',
     slot: 'melee',
     name: 'Steel Sword',
     shortLabel: 'Sword',
-    summary: '+35% damage · wide arc swing.',
+    summary: '+35% damage ┬╖ wide arc swing.',
   },
   'ranged-rock': {
     id: 'ranged-rock',
@@ -1463,14 +1428,14 @@ const GEAR_LIBRARY = {
     slot: 'ranged',
     name: 'Simple Sling',
     shortLabel: 'Sling',
-    summary: '+5% damage · faster travel.',
+    summary: '+5% damage ┬╖ faster travel.',
   },
   'ranged-bow': {
     id: 'ranged-bow',
     slot: 'ranged',
     name: 'Hunter Bow',
     shortLabel: 'Bow',
-    summary: '+30% damage · long reach.',
+    summary: '+30% damage ┬╖ long reach.',
   },
   'spell-air': {
     id: 'spell-air',
@@ -1505,7 +1470,7 @@ const GEAR_LIBRARY = {
     slot: 'armor',
     name: 'Traveler Cloth',
     shortLabel: 'Cloth',
-    summary: 'No bonus — light and breezy.',
+    summary: 'No bonus ΓÇö light and breezy.',
   },
   'armor-leather': {
     id: 'armor-leather',
@@ -3513,7 +3478,7 @@ class GameApp extends HTMLElement {
     if (direction) {
       parts.push(direction);
     }
-    this.minimapPortalHintEl.textContent = `Nearest gateway: ${parts.join(' · ')}`;
+    this.minimapPortalHintEl.textContent = `Nearest gateway: ${parts.join(' ┬╖ ')}`;
   }
 
   _updatePortalPrompt(local, currentLevelId, nearest) {
@@ -3541,13 +3506,13 @@ class GameApp extends HTMLElement {
           if (closest.difficulty) {
             parts.push(closest.difficulty);
           }
-          text = `Press E to ${parts.join(' · ')}`;
+          text = `Press E to ${parts.join(' ┬╖ ')}`;
         } else if (!closest && nearest && nearest.distance <= PORTAL_INTERACT_RADIUS * 1.3) {
           const parts = [`Enter ${nearest.portal.name || 'Gateway'}`];
           if (nearest.portal.difficulty) {
             parts.push(nearest.portal.difficulty);
           }
-          text = `Press E to ${parts.join(' · ')}`;
+          text = `Press E to ${parts.join(' ┬╖ ')}`;
         }
       }
     }
@@ -3613,7 +3578,7 @@ class GameApp extends HTMLElement {
     if (direction) {
       labelParts.push(direction);
     }
-    const label = labelParts.join(' · ');
+    const label = labelParts.join(' ┬╖ ');
     const metricsCtx = ctx;
     metricsCtx.save();
     metricsCtx.font = '600 13px "Segoe UI"';
@@ -3930,10 +3895,10 @@ class GameApp extends HTMLElement {
     if (!this.minimapLabelEl) return;
     const header = this.minimapHeaderEl;
     if (info) {
-      const difficulty = info.difficulty ? ` · ${info.difficulty}` : '';
+      const difficulty = info.difficulty ? ` ┬╖ ${info.difficulty}` : '';
       this.minimapLabelEl.textContent = info.name ? `${info.name}${difficulty}` : info.id || 'Stronghold';
       if (info.difficulty) {
-        this.minimapLabelEl.title = `${info.name || info.id} · ${info.difficulty}`;
+        this.minimapLabelEl.title = `${info.name || info.id} ┬╖ ${info.difficulty}`;
       } else {
         this.minimapLabelEl.removeAttribute('title');
       }
@@ -3981,7 +3946,7 @@ class GameApp extends HTMLElement {
     if (!this.zoneIndicatorEl) return;
     this._updateMinimapLabel(info);
     if (info) {
-      const detail = info.difficulty ? `${info.name} · ${info.difficulty}` : info.name;
+      const detail = info.difficulty ? `${info.name} ┬╖ ${info.difficulty}` : info.name;
       this.zoneIndicatorEl.textContent = detail || info.id || 'Stronghold';
       const accent = info.color || DEFAULT_PORTAL_COLOR;
       this.zoneIndicatorEl.style.color = accent;
@@ -4067,7 +4032,7 @@ class GameApp extends HTMLElement {
       this._updateLevelStatus(info);
       this.audio.ensureContext();
       this.audio.onEffect({ type: 'spell' }, true);
-      this._showLevelBanner(`Entering ${info.name}${info.difficulty ? ` · ${info.difficulty}` : ''}`, info.color);
+      this._showLevelBanner(`Entering ${info.name}${info.difficulty ? ` ┬╖ ${info.difficulty}` : ''}`, info.color);
     } else if (event === 'exit') {
       this.currentLevelId = null;
       this.currentLevelExit = null;
@@ -4397,7 +4362,7 @@ class GameApp extends HTMLElement {
         if (!ownedItem) {
           li.classList.add('locked');
           const label = document.createElement('span');
-          label.textContent = `${def.name} — Locked`;
+          label.textContent = `${def.name} ΓÇö Locked`;
           li.appendChild(label);
           if (def.summary) {
             const summary = document.createElement('span');
@@ -4688,7 +4653,7 @@ class GameApp extends HTMLElement {
     this.chargeMeter.actionName = 'Idle';
     this.chargeMeter.value = 0;
     if (this.heroIdEl) {
-      this.heroIdEl.textContent = nextProfileId || '—';
+      this.heroIdEl.textContent = nextProfileId || 'ΓÇö';
     }
   }
 
@@ -4709,7 +4674,7 @@ class GameApp extends HTMLElement {
 
   _updateHeroIdDisplay() {
     if (!this.heroIdEl) return;
-    this.heroIdEl.textContent = this.profileId || '—';
+    this.heroIdEl.textContent = this.profileId || 'ΓÇö';
   }
 
   _persistProfileId(id) {
@@ -4732,7 +4697,7 @@ class GameApp extends HTMLElement {
   _switchProfile(profileId) {
     const normalized = profileId ? String(profileId).trim() : null;
     this.pendingProfileId = normalized ?? null;
-    this._prepareForReconnect(normalized ?? '—');
+    this._prepareForReconnect(normalized ?? 'ΓÇö');
     this.messageEl.textContent = 'Switching hero...';
     this.messageEl.hidden = false;
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
@@ -5198,3 +5163,4 @@ class GameApp extends HTMLElement {
 }
 
 customElements.define('game-app', GameApp);
+
