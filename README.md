@@ -18,6 +18,7 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Portal compass & collapsible minimap** &mdash; follow the HUD arrow and nearest-portals hint, or tuck the minimap away when you want an unobstructed view.
 - **Ambient recovery with safe haven boosts** &mdash; health slowly returns anywhere in the wild, but stepping into the safe zone accelerates regeneration about a thousand-fold.
 - **Battle Momentum streaks** &mdash; chain takedowns to ignite short-lived boosts to power, speed, and XP, all tracked right on your stat panel.
+- **Aurora WebGL backdrop** &mdash; a native shader paints portal beams, hero auras, and dynamic skies that react to dungeons, safe zones, and momentum streaks.
 - **Touch-first controls** &mdash; a virtual joystick, ability palette, chat toggle, and quick HUD hide button keep tablets and phones fully playable without a keyboard or mouse.
 
 ## Getting started
@@ -84,6 +85,7 @@ README.md       # This file
 - **Networking** relies on a handcrafted WebSocket implementation (handshake + frame encoder/decoder) to avoid external packages.
 - **Game loop** runs server-side: movement, combat, attribute updates, and effect resolution happen authoritatively.
 - **Client rendering** uses a canvas-based renderer with a stateless camera, plus Web Components for UI panels.
+- **Visual effects** layer a native WebGL shader beneath the HUD to generate aurora lighting, safe-zone halos, and portal spotlights without third-party libraries.
 
 ## Next steps
 

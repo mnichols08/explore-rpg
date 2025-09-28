@@ -2,6 +2,7 @@ import './stat-panel.js';
 import './charge-meter.js';
 import './audio-toggle.js';
 import { AudioEngine } from '../audio/audio-engine.js';
+import { WorldWebGLRenderer } from '../renderers/world-webgl.js';
 
 const template = document.createElement('template');
 
@@ -20,9 +21,20 @@ template.innerHTML = `
       inset: 0;
       width: 100%;
       height: 100%;
+    }
+
+    canvas[data-webgl-canvas] {
+      z-index: 2;
+      pointer-events: none;
       background: radial-gradient(circle at center, #1e293b 0%, #0f172a 70%);
+      mix-blend-mode: screen;
+    }
+
+    canvas[data-main-canvas] {
+      z-index: 1;
       cursor: crosshair;
       touch-action: none;
+      background: transparent;
     }
 
     .hud {
@@ -33,6 +45,7 @@ template.innerHTML = `
       grid-template-rows: 1fr 1fr;
       pointer-events: none;
       padding: 1.5rem;
+      z-index: 3;
     }
 
     .hud > * {
@@ -878,7 +891,8 @@ template.innerHTML = `
       font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
     }
   </style>
-  <canvas></canvas>
+  <canvas data-webgl-canvas></canvas>
+  <canvas data-main-canvas></canvas>
   <div class="hud">
     <div class="top-left"><stat-panel></stat-panel></div>
     <div class="top-right">
@@ -1141,8 +1155,13 @@ class GameApp extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
-    this.canvas = this.shadowRoot.querySelector('canvas');
+    this.webglCanvas = this.shadowRoot.querySelector('[data-webgl-canvas]');
+    this.canvas = this.shadowRoot.querySelector('[data-main-canvas]');
     this.ctx = this.canvas.getContext('2d');
+    this.webglRenderer = this.webglCanvas ? new WorldWebGLRenderer(this.webglCanvas) : null;
+    if (this.webglRenderer && this.webglRenderer.supported === false) {
+      this.webglRenderer = null;
+    }
     this.statPanel = this.shadowRoot.querySelector('stat-panel');
     this.chargeMeter = this.shadowRoot.querySelector('charge-meter');
     this.messageEl = this.shadowRoot.querySelector('[data-message]');
@@ -1225,6 +1244,8 @@ class GameApp extends HTMLElement {
     this.touchEnabled = false;
     this.detectedTouch = false;
   this.uiCollapsed = false;
+  this.viewportWidth = 0;
+  this.viewportHeight = 0;
     const coarseQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(pointer: coarse)') : null;
     this.coarsePointerQuery = coarseQuery;
     if ((typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) || (coarseQuery && coarseQuery.matches)) {
@@ -1611,15 +1632,21 @@ class GameApp extends HTMLElement {
   _render() {
     const ctx = this.ctx;
     if (!ctx) return;
-    const width = this.canvas.clientWidth;
-    const height = this.canvas.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    const width = this.viewportWidth || this.canvas.clientWidth || this.canvas.width / dpr;
+    const height = this.viewportHeight || this.canvas.clientHeight || this.canvas.height / dpr;
     const time = performance.now();
+    const timeSeconds = time / 1000;
 
     ctx.clearRect(0, 0, width, height);
 
     if (!this.world) {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, width, height);
+      if (this.webglRenderer) {
+        this.webglRenderer.render({ width, height, dpr, time: timeSeconds });
+      } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, width, height);
+      }
       return;
     }
 
@@ -1631,12 +1658,74 @@ class GameApp extends HTMLElement {
   this._updatePortalPrompt(local, currentLevelId, nearestPortal);
     const levelTheme = this._getLevelTheme(currentLevelId, this.currentLevelColor);
 
-    ctx.fillStyle = levelTheme?.background || '#0f172a';
-    ctx.fillRect(0, 0, width, height);
-
     const cameraX = local?.x ?? this.world.width / 2;
     const cameraY = local?.y ?? this.world.height / 2;
     this._updateSafeZoneIndicator(this._isPlayerInSafeZone(local));
+
+    const heroScreen = local
+      ? this._worldToScreen(local.x, local.y, cameraX, cameraY, width, height)
+      : { x: width / 2, y: height / 2 };
+    const focus = {
+      x: Math.max(0, Math.min(1, heroScreen.x / Math.max(1, width))),
+      y: Math.max(0, Math.min(1, heroScreen.y / Math.max(1, height))),
+    };
+    const safeScreen = this.bankInfo
+      ? this._worldToScreen(this.bankInfo.x, this.bankInfo.y, cameraX, cameraY, width, height)
+      : null;
+    const safeCenter = safeScreen
+      ? {
+          x: Math.max(-2, Math.min(3, safeScreen.x / Math.max(1, width))),
+          y: Math.max(-2, Math.min(3, safeScreen.y / Math.max(1, height))),
+        }
+      : { x: -1, y: -1 };
+    const safeRadiusPx = this.bankInfo ? (this.bankInfo.radius || 0) * this.tileSize : 0;
+    const safeRadius = safeRadiusPx > 0 ? safeRadiusPx / Math.max(1, Math.max(width, height)) : 0;
+    const momentumStacks = Math.max(0, this.localMomentum?.stacks ?? 0);
+    const momentumDuration = Math.max(1, this.localMomentum?.duration ?? 1);
+    const momentumRemaining = Math.max(0, this.localMomentum?.remaining ?? 0);
+    const momentumFraction = Math.max(0, Math.min(1, momentumRemaining / momentumDuration));
+    const momentumBonus = Math.max(
+      this.localMomentum?.bonus?.damage ?? 0,
+      this.localMomentum?.bonus?.speed ?? 0,
+      this.localMomentum?.bonus?.xp ?? 0
+    );
+    const momentumIntensity = Math.min(1, momentumStacks * 0.22 + momentumFraction * 0.35 + momentumBonus * 0.6);
+    let portalDir = { x: 0, y: 0 };
+    let portalIntensity = 0;
+    if (nearestPortal) {
+      const magnitude = Math.hypot(nearestPortal.dx, nearestPortal.dy);
+      if (magnitude > 0.0001) {
+        portalDir = { x: nearestPortal.dx / magnitude, y: nearestPortal.dy / magnitude };
+      }
+      portalIntensity = Math.max(0, 1 - Math.min(nearestPortal.distance / 14, 1));
+    }
+    const accentColorVec = this._cssColorToVec3(
+      this.currentLevelColor || levelTheme?.shadow || '#38bdf8',
+      [0.2, 0.45, 0.72]
+    );
+    const baseColorVec = this._cssColorToVec3(levelTheme?.background || '#0f172a', [0.05, 0.07, 0.12]);
+    const dungeonFactor = currentLevelId ? 1 : 0;
+
+    if (this.webglRenderer) {
+      this.webglRenderer.render({
+        width,
+        height,
+        dpr,
+        time: timeSeconds,
+        focus,
+        momentum: momentumIntensity,
+        safeCenter,
+        safeRadius,
+        portalDirection: portalDir,
+        portalIntensity,
+        baseColor: baseColorVec,
+        accentColor: accentColorVec,
+        dungeonFactor,
+      });
+    } else {
+      ctx.fillStyle = levelTheme?.background || '#0f172a';
+      ctx.fillRect(0, 0, width, height);
+    }
 
     const halfTilesX = width / (2 * this.tileSize);
     const halfTilesY = height / (2 * this.tileSize);
@@ -3930,14 +4019,81 @@ class GameApp extends HTMLElement {
     return { x: vec.x / length, y: vec.y / length };
   }
 
+  _worldToScreen(worldX, worldY, cameraX, cameraY, width, height) {
+    return {
+      x: (worldX - cameraX) * this.tileSize + width / 2,
+      y: (worldY - cameraY) * this.tileSize + height / 2,
+    };
+  }
+
+  _cssColorToVec3(color, fallback = [0, 0, 0]) {
+    if (Array.isArray(color)) {
+      const [r = 0, g = 0, b = 0] = color;
+      return [
+        Math.max(0, Math.min(1, Number(r))),
+        Math.max(0, Math.min(1, Number(g))),
+        Math.max(0, Math.min(1, Number(b))),
+      ];
+    }
+    if (typeof color !== 'string') {
+      return fallback.slice();
+    }
+    const trimmed = color.trim();
+    if (trimmed.startsWith('#')) {
+      let hex = trimmed.slice(1);
+      if (hex.length === 3 || hex.length === 4) {
+        hex = hex
+          .split('')
+          .map((ch) => ch + ch)
+          .join('');
+      }
+      if (hex.length >= 6) {
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        if ([r, g, b].every((value) => Number.isFinite(value))) {
+          return [r / 255, g / 255, b / 255];
+        }
+      }
+    } else {
+      const match = trimmed.match(/rgba?\(([^)]+)\)/i);
+      if (match) {
+        const parts = match[1]
+          .split(',')
+          .map((part) => Number(part.trim()))
+          .filter((value, index) => index < 3 && Number.isFinite(value));
+        if (parts.length === 3) {
+          return [parts[0] / 255, parts[1] / 255, parts[2] / 255];
+        }
+      }
+    }
+    return fallback.slice();
+  }
+
   _resizeCanvas() {
     const rect = this.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
+    this.viewportWidth = rect.width;
+    this.viewportHeight = rect.height;
     this.canvas.width = rect.width * dpr;
     this.canvas.height = rect.height * dpr;
+    if (this.canvas.style) {
+      this.canvas.style.width = `${rect.width}px`;
+      this.canvas.style.height = `${rect.height}px`;
+    }
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr, dpr);
     this.ctx.imageSmoothingEnabled = false;
+    if (this.webglRenderer) {
+      this.webglRenderer.setSize(rect.width, rect.height, dpr);
+    } else if (this.webglCanvas) {
+      this.webglCanvas.width = rect.width * dpr;
+      this.webglCanvas.height = rect.height * dpr;
+      if (this.webglCanvas.style) {
+        this.webglCanvas.style.width = `${rect.width}px`;
+        this.webglCanvas.style.height = `${rect.height}px`;
+      }
+    }
   }
 }
 
