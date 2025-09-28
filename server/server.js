@@ -93,6 +93,8 @@ let usingMongo = false;
 let profiles = new Map();
 let initializationPromise = null;
 let initialized = false;
+const pendingMongoWrites = new Set();
+let shuttingDown = false;
 
 const PORTAL_DISTANCE_THRESHOLD = 1.6;
 const LEVEL_PORTAL_MIN_DISTANCE = 14;
@@ -297,19 +299,30 @@ let profileSaveTimer = null;
 let nextEnemyId = 1;
 let enemySpawnAccumulator = 0;
 
-process.on('beforeExit', () => {
-  flushPersistenceSync();
-});
+async function handleExit(shouldExitProcess, exitCode = 0) {
+  if (shuttingDown) {
+    if (shouldExitProcess) {
+      process.exit(exitCode);
+    }
+    return;
+  }
+  shuttingDown = true;
+  try {
+    await flushPersistence();
+  } catch (err) {
+    console.error('Error while flushing persistence during shutdown:', err);
+  } finally {
+    if (shouldExitProcess) {
+      process.exit(exitCode);
+    }
+  }
+}
 
-process.on('SIGINT', () => {
-  flushPersistenceSync();
-  process.exit(0);
+process.on('beforeExit', async () => {
+  await handleExit(false);
 });
-
-process.on('SIGTERM', () => {
-  flushPersistenceSync();
-  process.exit(0);
-});
+process.on('SIGINT', () => handleExit(true));
+process.on('SIGTERM', () => handleExit(true));
 
 function seededRandom(seed) {
   let state = seed >>> 0;
@@ -3056,7 +3069,7 @@ function persistProfileToMongo(profileId, record) {
       sanitized[key] = value;
     }
   }
-  profilesCollection
+  const op = profilesCollection
     .updateOne(
       { _id: profileId },
       {
@@ -3072,24 +3085,30 @@ function persistProfileToMongo(profileId, record) {
     )
     .catch((err) => {
       console.error('Failed to persist hero profile to MongoDB:', err);
+      throw err;
     });
+  pendingMongoWrites.add(op);
+  op.finally(() => pendingMongoWrites.delete(op));
 }
 
-function closeMongoConnection() {
+async function closeMongoConnection() {
   if (!mongoClient) return;
   const client = mongoClient;
   mongoClient = null;
   profilesCollection = null;
-  client
-    .close()
-    .catch((err) => {
-      console.error('Failed to close MongoDB client:', err);
-    });
+  try {
+    await client.close();
+  } catch (err) {
+    console.error('Failed to close MongoDB client:', err);
+  }
 }
-
-function flushPersistenceSync() {
+async function flushPersistence() {
   if (usingMongo) {
-    closeMongoConnection();
+    while (pendingMongoWrites.size) {
+      const pending = Array.from(pendingMongoWrites);
+      await Promise.allSettled(pending);
+    }
+    await closeMongoConnection();
   } else {
     saveProfilesSync();
   }
@@ -3328,7 +3347,10 @@ async function main() {
 }
 
 if (require.main === module) {
-  main();
+  main().catch((err) => {
+    console.error('Fatal error during startup:', err);
+    handleExit(true, 1);
+  });
 }
 
 module.exports = {

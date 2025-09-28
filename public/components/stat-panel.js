@@ -176,23 +176,33 @@ class StatPanel extends HTMLElement {
 
   render() {
     if (!this._data) return;
-    const { stats, bonuses, health, maxHealth } = this._data;
-    this.dom.strength.textContent = stats.strength.toFixed(1);
-    this.dom.dexterity.textContent = stats.dexterity.toFixed(1);
-    this.dom.intellect.textContent = stats.intellect.toFixed(1);
-    this.dom.hit.textContent = `${(bonuses.hitChance * 100).toFixed(0)}%`;
-    this.dom.range.textContent = `${bonuses.range.toFixed(1)}m`;
-    this.dom.charge.textContent = `${bonuses.maxCharge.toFixed(2)}s`;
+  const stats = this._data.stats ?? {};
+  const bonuses = this._data.bonuses ?? {};
+  const strength = Number.isFinite(stats.strength) ? stats.strength : Number(stats.strength ?? 0);
+  const dexterity = Number.isFinite(stats.dexterity) ? stats.dexterity : Number(stats.dexterity ?? 0);
+  const intellect = Number.isFinite(stats.intellect) ? stats.intellect : Number(stats.intellect ?? 0);
+  const hitChance = Number.isFinite(bonuses.hitChance) ? bonuses.hitChance : Number(bonuses.hitChance ?? 0);
+  const range = Number.isFinite(bonuses.range) ? bonuses.range : Number(bonuses.range ?? 0);
+  const maxCharge = Number.isFinite(bonuses.maxCharge) ? bonuses.maxCharge : Number(bonuses.maxCharge ?? 0);
 
-    const ratio = maxHealth ? health / maxHealth : 0;
-    this.dom.healthBar.style.width = `${Math.max(0, Math.min(1, ratio)) * 100}%`;
-    this.dom.healthText.textContent = `${Math.round(health)} / ${Math.round(maxHealth)}`;
+  this.dom.strength.textContent = strength.toFixed(1);
+  this.dom.dexterity.textContent = dexterity.toFixed(1);
+  this.dom.intellect.textContent = intellect.toFixed(1);
+  this.dom.hit.textContent = `${(hitChance * 100).toFixed(0)}%`;
+  this.dom.range.textContent = `${range.toFixed(1)}m`;
+  this.dom.charge.textContent = `${maxCharge.toFixed(2)}s`;
+
+  const currentHealth = Number.isFinite(this._data.health) ? this._data.health : Number(this._data.health ?? 0);
+  const maximumHealth = Number.isFinite(this._data.maxHealth) ? this._data.maxHealth : Number(this._data.maxHealth ?? 0);
+  const ratio = maximumHealth > 0 ? currentHealth / maximumHealth : 0;
+  this.dom.healthBar.style.width = `${Math.max(0, Math.min(1, ratio)) * 100}%`;
+  this.dom.healthText.textContent = `${Math.round(currentHealth)} / ${Math.round(maximumHealth)}`;
 
     if (this.dom.momentumContainer) {
       const momentum = this._data.momentum || null;
-      const stacks = Math.max(0, Math.floor(momentum?.stacks ?? 0));
-      const remainingMs = Math.max(0, momentum?.remaining ?? 0);
-      const durationMs = Math.max(1, momentum?.duration ?? 0);
+      const stacks = Math.max(0, Math.floor(Number(momentum?.stacks ?? 0)));
+      const remainingMs = Math.max(0, Number(momentum?.remaining ?? 0));
+      const durationMs = Math.max(1, Number(momentum?.duration ?? 0) || 0);
       const progress = Math.max(0, Math.min(1, remainingMs / durationMs));
       if (this.dom.momentumBar) {
         this.dom.momentumBar.style.width = `${progress * 100}%`;
@@ -213,9 +223,12 @@ class StatPanel extends HTMLElement {
 
       const bonus = momentum?.bonus || {};
       const bonusParts = [];
-      if (bonus.damage) bonusParts.push(`Power +${(bonus.damage * 100).toFixed(0)}%`);
-      if (bonus.speed) bonusParts.push(`Speed +${(bonus.speed * 100).toFixed(0)}%`);
-      if (bonus.xp) bonusParts.push(`XP +${(bonus.xp * 100).toFixed(0)}%`);
+      const damageBonus = Number(momentum?.bonus?.damage ?? bonus.damage ?? 0);
+      const speedBonus = Number(momentum?.bonus?.speed ?? bonus.speed ?? 0);
+      const xpBonus = Number(momentum?.bonus?.xp ?? bonus.xp ?? 0);
+      if (damageBonus) bonusParts.push(`Power +${(damageBonus * 100).toFixed(0)}%`);
+      if (speedBonus) bonusParts.push(`Speed +${(speedBonus * 100).toFixed(0)}%`);
+      if (xpBonus) bonusParts.push(`XP +${(xpBonus * 100).toFixed(0)}%`);
       const statusText = stacks > 0 && bonusParts.length
         ? bonusParts.join(' • ')
         : 'Chain takedowns to surge with power.';
