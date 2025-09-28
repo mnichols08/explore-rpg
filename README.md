@@ -18,7 +18,7 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Portal compass & collapsible minimap** &mdash; follow the HUD arrow and nearest-portals hint, or tuck the minimap away when you want an unobstructed view.
 - **Ambient recovery with safe haven boosts** &mdash; health slowly returns anywhere in the wild, but stepping into the safe zone accelerates regeneration about a thousand-fold.
 - **Battle Momentum streaks** &mdash; chain takedowns to ignite short-lived boosts to power, speed, and XP, all tracked right on your stat panel.
-- **Touch-first controls** &mdash; a virtual joystick and ability palette keep tablets and phones fully playable without a keyboard or mouse.
+- **Touch-first controls** &mdash; a virtual joystick, ability palette, and chat toggle keep tablets and phones fully playable without a keyboard or mouse.
 
 ## Getting started
 

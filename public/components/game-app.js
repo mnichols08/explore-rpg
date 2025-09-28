@@ -512,6 +512,19 @@ template.innerHTML = `
       color: #022c22;
     }
 
+    .touch-actions .touch-chat {
+      background: rgba(99, 102, 241, 0.82);
+      border-color: rgba(165, 180, 252, 0.82);
+      color: #0f172a;
+    }
+
+    .touch-actions .touch-chat:active,
+    .touch-actions .touch-chat.active {
+      background: rgba(129, 140, 248, 0.95);
+      border-color: rgba(165, 180, 252, 0.95);
+      color: #0f172a;
+    }
+
     .touch-actions .touch-hint {
       grid-column: span 2;
       margin: 0;
@@ -867,7 +880,7 @@ template.innerHTML = `
   Inside the glowing safe zone, use the bank panel to deposit or sell your haul. Collapse or reopen the minimap from its header button. Music toggle: button or press M. Shift + N to forge a new hero.
       </div>
       <div class="mobile-help">
-        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Hit Interact to scoop loot, gather ore, or slip through glowing portals. The minimap toggle and music switch live up top when you need them.
+        Drag the left pad to roam, tap Slash, Volley, or Spell to attack, and hold to charge. Tap Chat to open the message bar, and Interact to scoop loot, gather ore, or slip through glowing portals. The minimap toggle and music switch live up top when you need them.
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
@@ -924,10 +937,13 @@ template.innerHTML = `
         <button type="button" data-touch-action="spell" aria-label="Spell">
           <span>Spell</span>
         </button>
+        <button type="button" class="touch-chat" data-touch-chat aria-label="Chat">
+          <span>Chat</span>
+        </button>
         <button type="button" class="touch-interact" data-touch-interact aria-label="Interact">
           <span>Interact</span>
         </button>
-        <p class="touch-hint">Drag left pad to move · Tap actions to attack · Interact for loot and portals</p>
+  <p class="touch-hint">Drag left pad to move · Tap actions to attack · Chat to talk · Interact for loot and portals</p>
       </div>
     </div>
   </div>
@@ -1121,6 +1137,7 @@ class GameApp extends HTMLElement {
     this.joystickThumbEl = this.shadowRoot.querySelector('[data-joystick-thumb]');
     this.touchActionButtons = Array.from(this.shadowRoot.querySelectorAll('[data-touch-action]'));
     this.touchInteractButton = this.shadowRoot.querySelector('[data-touch-interact]');
+  this.touchChatButton = this.shadowRoot.querySelector('[data-touch-chat]');
     this.inventoryPanel = this.shadowRoot.querySelector('[data-inventory-panel]');
     this.inventoryCurrencyEl = this.shadowRoot.querySelector('[data-inventory-currency]');
     this.inventoryItemsEl = this.shadowRoot.querySelector('[data-inventory-items]');
@@ -1150,6 +1167,8 @@ class GameApp extends HTMLElement {
   this._handleTouchInteractEnd = this._handleTouchInteractEnd.bind(this);
   this._handleGlobalPointerDown = this._handleGlobalPointerDown.bind(this);
   this._handlePointerSchemeChange = this._handlePointerSchemeChange.bind(this);
+  this._handleTouchChatToggle = this._handleTouchChatToggle.bind(this);
+  this._handleTouchChatPointerEnd = this._handleTouchChatPointerEnd.bind(this);
 
     this.world = null;
     this.players = new Map();
@@ -2027,6 +2046,7 @@ class GameApp extends HTMLElement {
       this.chatInput.value = '';
       this.chatInput.focus({ preventScroll: true });
     }
+    this._syncTouchChatButton();
   }
 
   _exitChatMode() {
@@ -2040,6 +2060,7 @@ class GameApp extends HTMLElement {
     if (this.chatEntry) {
       this.chatEntry.hidden = true;
     }
+    this._syncTouchChatButton();
   }
 
   _submitChatMessage() {
@@ -3544,6 +3565,7 @@ class GameApp extends HTMLElement {
       this.setAttribute('data-touch', 'true');
     }
     this._bindTouchControls();
+    this._syncTouchChatButton();
   }
 
   _bindTouchControls() {
@@ -3568,6 +3590,13 @@ class GameApp extends HTMLElement {
       this.touchInteractButton.addEventListener('pointercancel', this._handleTouchInteractEnd);
       this.touchInteractButton.addEventListener('pointerleave', this._handleTouchInteractEnd);
     }
+    if (this.touchChatButton) {
+      this.touchChatButton.addEventListener('pointerdown', this._handleTouchChatToggle);
+      this.touchChatButton.addEventListener('pointerup', this._handleTouchChatPointerEnd);
+      this.touchChatButton.addEventListener('pointercancel', this._handleTouchChatPointerEnd);
+      this.touchChatButton.addEventListener('pointerleave', this._handleTouchChatPointerEnd);
+    }
+    this._syncTouchChatButton();
   }
 
   _unbindTouchControls() {
@@ -3589,6 +3618,12 @@ class GameApp extends HTMLElement {
       this.touchInteractButton.removeEventListener('pointerup', this._handleTouchInteractEnd);
       this.touchInteractButton.removeEventListener('pointercancel', this._handleTouchInteractEnd);
       this.touchInteractButton.removeEventListener('pointerleave', this._handleTouchInteractEnd);
+    }
+    if (this.touchChatButton) {
+      this.touchChatButton.removeEventListener('pointerdown', this._handleTouchChatToggle);
+      this.touchChatButton.removeEventListener('pointerup', this._handleTouchChatPointerEnd);
+      this.touchChatButton.removeEventListener('pointercancel', this._handleTouchChatPointerEnd);
+      this.touchChatButton.removeEventListener('pointerleave', this._handleTouchChatPointerEnd);
     }
     this._clearTouchMovement();
   }
@@ -3681,6 +3716,31 @@ class GameApp extends HTMLElement {
     if (this.joystickThumbEl) {
       this.joystickThumbEl.style.transform = 'translate3d(0, 0, 0)';
     }
+  }
+
+  _syncTouchChatButton() {
+    if (!this.touchChatButton) return;
+    this.touchChatButton.classList.toggle('active', Boolean(this.chatActive));
+  }
+
+  _handleTouchChatToggle(event) {
+    if (!this._isTouchLike(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this._enableTouchControls();
+    if (this.chatActive) {
+      this._exitChatMode();
+    } else {
+      this._enterChatMode();
+    }
+    this._syncTouchChatButton();
+  }
+
+  _handleTouchChatPointerEnd(event) {
+    if (!this._isTouchLike(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this._syncTouchChatButton();
   }
 
   _handleTouchActionPress(event) {
