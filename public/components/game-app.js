@@ -419,6 +419,46 @@ template.innerHTML = `
       text-align: center;
     }
 
+    .settings-card {
+      width: clamp(280px, 45vw, 420px);
+      text-align: left;
+      display: grid;
+      gap: 1rem;
+    }
+
+    .settings-section {
+      display: grid;
+      gap: 0.45rem;
+      padding: 0.8rem;
+      border-radius: 0.75rem;
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .settings-section h4 {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #e2e8f0;
+    }
+
+    .settings-section p {
+      margin: 0;
+      font-size: 0.8rem;
+      color: rgba(203, 213, 225, 0.9);
+      line-height: 1.5;
+    }
+
+    .settings-section button {
+      justify-self: start;
+    }
+
+    .settings-feedback {
+      min-height: 1rem;
+      font-size: 0.78rem;
+      color: #bae6fd;
+      text-align: center;
+    }
+
     .admin-status {
       font-size: 0.78rem;
       letter-spacing: 0.05em;
@@ -1337,8 +1377,7 @@ template.innerHTML = `
           <li><span>Spell</span><span>Space or both buttons</span></li>
           <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
         </ul>
-  <div class="help-footnote">Enter chats nearby • M toggles music • Shift+N starts a fresh hero.</div>
-        
+        <div class="help-footnote">Enter chats nearby • M toggles music • Shift+N starts a fresh hero.</div>
       </div>
       <div class="mobile-help">
         Use the left pad to move, Slash/Volley/Spell to act, Interact for loot and portals, Chat to speak, and tap HUD anytime to reveal the panels.
@@ -1349,12 +1388,13 @@ template.innerHTML = `
       </div>
       <div>
         <span class="identity-legend">Hero ID</span>
-  <div class="hero-id" data-hero-id>—</div>
+        <div class="hero-id" data-hero-id>—</div>
       </div>
       <div class="identity-tools">
         <button type="button" data-copy-id>Copy ID</button>
         <button type="button" data-new-hero>Start New Hero</button>
         <button type="button" data-use-id>Use Hero ID</button>
+        <button type="button" data-settings-panel>Settings</button>
         <button type="button" data-admin-panel hidden>Admin Panel</button>
       </div>
     </div>
@@ -1521,6 +1561,25 @@ template.innerHTML = `
       <div class="actions">
         <button type="button" data-admin-refresh>Refresh</button>
         <button type="button" data-admin-close>Close</button>
+      </div>
+    </div>
+  </div>
+  <div class="identity-overlay" hidden data-settings-overlay>
+    <div class="identity-card settings-card">
+      <h3>Player Settings</h3>
+      <div class="settings-section">
+        <h4>Player-versus-Player</h4>
+        <p data-settings-pvp-status>Loading PvP status…</p>
+        <button type="button" class="primary" data-settings-pvp-toggle>Toggle PvP</button>
+      </div>
+      <div class="settings-section">
+        <h4>Tutorial</h4>
+        <p>Replay the tutorial to revisit the basics.</p>
+        <button type="button" data-settings-reset-tutorial>Reset Tutorial</button>
+      </div>
+      <div class="settings-feedback" data-settings-feedback></div>
+      <div class="actions">
+        <button type="button" data-settings-close>Close</button>
       </div>
     </div>
   </div>
@@ -1831,6 +1890,7 @@ class GameApp extends HTMLElement {
   this.newHeroButton = this.shadowRoot.querySelector('[data-new-hero]');
   this.useHeroButton = this.shadowRoot.querySelector('[data-use-id]');
   this.adminPanelButton = this.shadowRoot.querySelector('[data-admin-panel]');
+  this.settingsPanelButton = this.shadowRoot.querySelector('[data-settings-panel]');
   this.identityOverlay = this.shadowRoot.querySelector('[data-identity-overlay]');
   this.identityInput = this.shadowRoot.querySelector('[data-identity-input]');
   this.identityLoadButton = this.shadowRoot.querySelector('[data-identity-load]');
@@ -1853,6 +1913,12 @@ class GameApp extends HTMLElement {
   this.adminFeedbackEl = this.shadowRoot.querySelector('[data-admin-feedback]');
   this.adminRefreshButton = this.shadowRoot.querySelector('[data-admin-refresh]');
   this.adminCloseButton = this.shadowRoot.querySelector('[data-admin-close]');
+  this.settingsOverlay = this.shadowRoot.querySelector('[data-settings-overlay]');
+  this.settingsPvpStatusEl = this.shadowRoot.querySelector('[data-settings-pvp-status]');
+  this.settingsPvpToggleButton = this.shadowRoot.querySelector('[data-settings-pvp-toggle]');
+  this.settingsResetTutorialButton = this.shadowRoot.querySelector('[data-settings-reset-tutorial]');
+  this.settingsCloseButton = this.shadowRoot.querySelector('[data-settings-close]');
+  this.settingsFeedbackEl = this.shadowRoot.querySelector('[data-settings-feedback]');
   this.chatEntry = this.shadowRoot.querySelector('[data-chat-entry]');
   this.chatInput = this.shadowRoot.querySelector('[data-chat-input]');
     this.touchControlsEl = this.shadowRoot.querySelector('[data-touch-controls]');
@@ -2003,8 +2069,11 @@ class GameApp extends HTMLElement {
     this.tutorialCompleting = false;
     this.adminProfiles = [];
     this.adminSafeZone = null;
-    this.adminPanelOpen = false;
-    this.chatActive = false;
+  this.adminPanelOpen = false;
+  this.settingsPanelOpen = false;
+  this.settingsPvpPending = false;
+  this.settingsTutorialPending = false;
+  this.chatActive = false;
     this.spellKeyActive = false;
 
   this.lastSafeZoneState = null;
@@ -2039,6 +2108,10 @@ class GameApp extends HTMLElement {
   this._handleAdminClose = this._handleAdminClose.bind(this);
   this._handleAdminRefresh = this._handleAdminRefresh.bind(this);
   this._handleAdminContentClick = this._handleAdminContentClick.bind(this);
+  this._handleSettingsToggle = this._handleSettingsToggle.bind(this);
+  this._handleSettingsClose = this._handleSettingsClose.bind(this);
+  this._handleSettingsPvpToggle = this._handleSettingsPvpToggle.bind(this);
+  this._handleSettingsResetTutorial = this._handleSettingsResetTutorial.bind(this);
     this._resizeCanvas = this._resizeCanvas.bind(this);
     this._handleBankDeposit = this._handleBankDeposit.bind(this);
     this._handleBankWithdraw = this._handleBankWithdraw.bind(this);
@@ -2096,6 +2169,10 @@ class GameApp extends HTMLElement {
   this.adminRefreshButton?.addEventListener('click', this._handleAdminRefresh);
   this.adminCloseButton?.addEventListener('click', this._handleAdminClose);
   this.adminContentEl?.addEventListener('click', this._handleAdminContentClick);
+  this.settingsPanelButton?.addEventListener('click', this._handleSettingsToggle);
+  this.settingsPvpToggleButton?.addEventListener('click', this._handleSettingsPvpToggle);
+  this.settingsResetTutorialButton?.addEventListener('click', this._handleSettingsResetTutorial);
+  this.settingsCloseButton?.addEventListener('click', this._handleSettingsClose);
     this.chatInput?.addEventListener('keydown', this._handleChatInputKeydown);
   this.bankDepositButton?.addEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.addEventListener('click', this._handleBankWithdraw);
@@ -2155,12 +2232,22 @@ class GameApp extends HTMLElement {
   this.adminRefreshButton?.removeEventListener('click', this._handleAdminRefresh);
   this.adminCloseButton?.removeEventListener('click', this._handleAdminClose);
   this.adminContentEl?.removeEventListener('click', this._handleAdminContentClick);
+  this.settingsPanelButton?.removeEventListener('click', this._handleSettingsToggle);
+  this.settingsPvpToggleButton?.removeEventListener('click', this._handleSettingsPvpToggle);
+  this.settingsResetTutorialButton?.removeEventListener('click', this._handleSettingsResetTutorial);
+  this.settingsCloseButton?.removeEventListener('click', this._handleSettingsClose);
   this.chatInput?.removeEventListener('keydown', this._handleChatInputKeydown);
   this.bankDepositButton?.removeEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.removeEventListener('click', this._handleBankWithdraw);
   this.bankSellButton?.removeEventListener('click', this._handleBankSell);
   this.gearPanel?.removeEventListener('click', this._handleGearPanelClick);
-    this._unbindTouchControls();
+  if (this.settingsOverlay) {
+    this.settingsOverlay.hidden = true;
+  }
+  this.settingsPanelOpen = false;
+  this.settingsPvpPending = false;
+  this.settingsTutorialPending = false;
+  this._unbindTouchControls();
   if (this.bankFeedbackTimer) {
     clearTimeout(this.bankFeedbackTimer);
     this.bankFeedbackTimer = null;
@@ -2190,9 +2277,13 @@ class GameApp extends HTMLElement {
       isAdmin: false,
       banned: false,
       createdAt: null,
+      pvpOptIn: false,
+      pvpCooldownEndsAt: 0,
+      pvpLastCombatAt: 0,
     };
     this._updateHeroNameDisplay();
     this._updateAdminButtonVisibility();
+    this._updateSettingsState();
     let storedId = null;
     try {
       storedId = window.localStorage?.getItem(PROFILE_STORAGE_KEY) ?? null;
@@ -2379,7 +2470,12 @@ class GameApp extends HTMLElement {
         this._flashInventoryPanel();
       } else if (data.type === 'bank-result') {
         const ok = data.ok !== false;
-        const message = typeof data.message === 'string' ? data.message : ok ? 'Bank transaction complete.' : 'Bank action failed.';
+        const message =
+          typeof data.message === 'string'
+            ? data.message
+            : ok
+            ? 'Bank transaction complete.'
+            : 'Bank action failed.';
         this._showBankFeedback(message, ok);
         if (ok) {
           this._flashInventoryPanel();
@@ -2411,12 +2507,9 @@ class GameApp extends HTMLElement {
             message = `${def.name} equipped.`;
           } else {
             const slotMeta = data.slot ? EQUIPMENT_SLOT_META[data.slot] : null;
-            const slotLabel = slotMeta?.label || (data.slot ? data.slot.charAt(0).toUpperCase() + data.slot.slice(1) : 'Item');
-            if (ok) {
-              message = `${slotLabel} updated.`;
-            } else {
-              message = `Unable to equip ${slotLabel.toLowerCase()}.`;
-            }
+            const slotLabel =
+              slotMeta?.label || (data.slot ? data.slot.charAt(0).toUpperCase() + data.slot.slice(1) : 'Item');
+            message = ok ? `${slotLabel} updated.` : `Unable to equip ${slotLabel.toLowerCase()}.`;
           }
         }
         this._showGearFeedback(message, ok);
@@ -3149,6 +3242,9 @@ class GameApp extends HTMLElement {
 
   _handleKeyDown(event) {
     if (event.repeat) return;
+    if (this._shouldIgnoreGlobalKey(event)) {
+      return;
+    }
     if (this.chatActive) {
       if (event.code === 'Escape') {
         event.preventDefault();
@@ -3205,6 +3301,9 @@ class GameApp extends HTMLElement {
   }
 
   _handleKeyUp(event) {
+    if (this._shouldIgnoreGlobalKey(event)) {
+      return;
+    }
     if (this.chatActive) return;
     if (event.code === 'Space') {
       event.preventDefault();
@@ -5076,15 +5175,30 @@ class GameApp extends HTMLElement {
       profile.isAdmin !== undefined ? Boolean(profile.isAdmin) : Boolean(current.isAdmin);
     const banned = profile.banned !== undefined ? Boolean(profile.banned) : Boolean(current.banned);
     const createdAt = profile.createdAt ?? current.createdAt ?? null;
+    const pvpOptIn =
+      profile.pvpOptIn !== undefined ? Boolean(profile.pvpOptIn) : Boolean(current.pvpOptIn);
+    const pvpCooldownEndsAt =
+      profile.pvpCooldownEndsAt !== undefined
+        ? Number(profile.pvpCooldownEndsAt) || 0
+        : Number(current.pvpCooldownEndsAt) || 0;
+    const pvpLastCombatAt =
+      profile.pvpLastCombatAt !== undefined
+        ? Number(profile.pvpLastCombatAt) || 0
+        : Number(current.pvpLastCombatAt) || 0;
+
     this.profileMeta = {
       name,
       tutorialCompleted,
       isAdmin,
       banned,
       createdAt,
+      pvpOptIn,
+      pvpCooldownEndsAt,
+      pvpLastCombatAt,
     };
     this._updateHeroNameDisplay();
     this._updateAdminButtonVisibility();
+    this._updateSettingsState();
   }
 
   _updateHeroNameDisplay() {
@@ -5328,6 +5442,16 @@ class GameApp extends HTMLElement {
         this.heroNameFeedback.style.color = '#fca5a5';
         this.heroNameSubmitButton?.removeAttribute('disabled');
         this.pendingNameRequest = false;
+      } else if (data.field === 'pvp' && this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = data.message || 'Unable to change PvP status right now.';
+        this.settingsFeedbackEl.style.color = '#fca5a5';
+        this.settingsPvpPending = false;
+        this._updateSettingsState();
+      } else if (data.field === 'tutorial' && this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = data.message || 'Tutorial reset failed.';
+        this.settingsFeedbackEl.style.color = '#fca5a5';
+        this.settingsTutorialPending = false;
+        this._updateSettingsState();
       } else if (this.adminFeedbackEl) {
         this.adminFeedbackEl.textContent = data.message || 'Profile action failed.';
         this.adminFeedbackEl.style.color = '#fca5a5';
@@ -5349,6 +5473,32 @@ class GameApp extends HTMLElement {
           this._startTutorialFlow(true);
         }
       }, 1200);
+      return;
+    }
+
+    if (event === 'pvp-updated') {
+      this.settingsPvpPending = false;
+      this._applyProfileSnapshot({
+        pvpOptIn: Boolean(data.pvpOptIn),
+        pvpCooldownEndsAt: Number(data.cooldownEndsAt) || 0,
+        pvpLastCombatAt: Number(data.lastCombatAt) || 0,
+      });
+      if (this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = data.message || (data.pvpOptIn ? 'PvP enabled.' : 'PvP disabled.');
+        this.settingsFeedbackEl.style.color = '#bbf7d0';
+      }
+      this._updateSettingsState();
+      return;
+    }
+
+    if (event === 'tutorial-reset') {
+      this.settingsTutorialPending = false;
+      this._applyProfileSnapshot({ tutorialCompleted: false });
+      if (this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = data.message || 'Tutorial reset. Walk through the steps again when ready!';
+        this.settingsFeedbackEl.style.color = '#bbf7d0';
+      }
+      this._startTutorialFlow(true);
       return;
     }
 
@@ -5465,6 +5615,7 @@ class GameApp extends HTMLElement {
     if (!this.adminOverlay) return;
     this.adminOverlay.hidden = true;
     this.adminPanelOpen = false;
+  this.settingsPanelOpen = false;
     if (!silent && this.adminFeedbackEl) {
       this.adminFeedbackEl.textContent = '';
     }
@@ -5524,6 +5675,7 @@ class GameApp extends HTMLElement {
     badges.push(profile.online ? 'Online' : 'Offline');
     if (profile.admin) badges.push('Admin');
     if (profile.banned) badges.push('Banned');
+  badges.push(profile.pvpOptIn ? 'PvP on' : 'PvP off');
     badges.push(profile.tutorialCompleted ? 'Tutorial done' : 'Needs tutorial');
     const badgeHtml = badges
       .map((label) => `<span>${this._escapeHtml(label)}</span>`)
@@ -5658,6 +5810,108 @@ class GameApp extends HTMLElement {
       this._sendAdminCommand('set-meta', { profileId, meta: { tutorialCompleted: !current } });
     }
   }
+
+    _handleSettingsToggle() {
+      if (!this.settingsOverlay) return;
+      if (this.settingsOverlay.hidden === false) {
+        this._closeSettingsPanel();
+      } else {
+        this._openSettingsPanel();
+      }
+    }
+
+    _handleSettingsClose() {
+      this._closeSettingsPanel();
+    }
+
+    _openSettingsPanel() {
+      if (!this.settingsOverlay) return;
+      this.settingsOverlay.hidden = false;
+      this.settingsPanelOpen = true;
+      if (this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = '';
+        this.settingsFeedbackEl.style.color = '#bae6fd';
+      }
+      this._updateSettingsState();
+    }
+
+    _closeSettingsPanel() {
+      if (!this.settingsOverlay) return;
+      this.settingsOverlay.hidden = true;
+      this.settingsPanelOpen = false;
+      if (this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = '';
+      }
+    }
+
+    _handleSettingsPvpToggle() {
+      const nextEnabled = !Boolean(this.profileMeta?.pvpOptIn);
+      if (!this._sendProfileAction('toggle-pvp', { enabled: nextEnabled })) {
+        if (this.settingsFeedbackEl) {
+          this.settingsFeedbackEl.textContent = 'Connection unavailable. Retry in a moment.';
+          this.settingsFeedbackEl.style.color = '#fca5a5';
+        }
+        return;
+      }
+      this.settingsPvpPending = true;
+      if (this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = nextEnabled ? 'Enabling PvP...' : 'Requesting PvP disable...';
+        this.settingsFeedbackEl.style.color = '#bae6fd';
+      }
+      this._updateSettingsState();
+    }
+
+    _handleSettingsResetTutorial() {
+      if (!this._sendProfileAction('reset-tutorial')) {
+        if (this.settingsFeedbackEl) {
+          this.settingsFeedbackEl.textContent = 'Unable to reach server. Try again shortly.';
+          this.settingsFeedbackEl.style.color = '#fca5a5';
+        }
+        return;
+      }
+      this.settingsTutorialPending = true;
+      if (this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = 'Resetting tutorial...';
+        this.settingsFeedbackEl.style.color = '#bae6fd';
+      }
+      this._updateSettingsState();
+    }
+
+    _updateSettingsState() {
+      const meta = this.profileMeta || {};
+      const now = Date.now();
+      const pvpEnabled = Boolean(meta.pvpOptIn);
+      const cooldownEndsAt = Number(meta.pvpCooldownEndsAt) || 0;
+      const remainingMs = Math.max(0, cooldownEndsAt - now);
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+
+      if (this.settingsPvpStatusEl) {
+        let text = pvpEnabled
+          ? 'PvP is currently ENABLED. You can both deal and receive player damage.'
+          : 'PvP is currently DISABLED. Other heroes cannot damage you.';
+        if (remainingMs > 0 && pvpEnabled) {
+          text += ` You can disable PvP in ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}.`;
+        }
+        this.settingsPvpStatusEl.textContent = text;
+      }
+
+      if (this.settingsPvpToggleButton) {
+        this.settingsPvpToggleButton.textContent = pvpEnabled ? 'Disable PvP' : 'Enable PvP';
+        if ((pvpEnabled && remainingMs > 0) || this.settingsPvpPending) {
+          this.settingsPvpToggleButton.setAttribute('disabled', 'disabled');
+        } else {
+          this.settingsPvpToggleButton.removeAttribute('disabled');
+        }
+      }
+
+      if (this.settingsResetTutorialButton) {
+        if (this.settingsTutorialPending) {
+          this.settingsResetTutorialButton.setAttribute('disabled', 'disabled');
+        } else {
+          this.settingsResetTutorialButton.removeAttribute('disabled');
+        }
+      }
+    }
 
   _sendAdminCommand(command, payload = {}) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -5794,6 +6048,29 @@ class GameApp extends HTMLElement {
     if (!event) return false;
     const type = event.pointerType;
     return type === 'touch' || type === 'pen' || type === '' || type === undefined;
+  }
+
+  _isEditableTarget(target) {
+    if (!target) return false;
+    if (target.isContentEditable) return true;
+    const tag = typeof target.tagName === 'string' ? target.tagName.toLowerCase() : '';
+    if (tag === 'textarea') return true;
+    if (tag === 'input') {
+      const type = (target.type || '').toLowerCase();
+      const bypass = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file']);
+      return !bypass.has(type);
+    }
+    return false;
+  }
+
+  _shouldIgnoreGlobalKey(event) {
+    if (!event) return false;
+    const target = event.target;
+    if (!target) return false;
+    if (target === this.chatInput) {
+      return false;
+    }
+    return this._isEditableTarget(target);
   }
 
   _handleJoystickStart(event) {

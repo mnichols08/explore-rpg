@@ -88,6 +88,7 @@ const MOMENTUM_XP_SCALE = 0.08;
 
 const HERO_NAME_MIN_LENGTH = 3;
 const HERO_NAME_MAX_LENGTH = 24;
+const PVP_DISABLE_COOLDOWN_MS = 60_000;
 
 let MongoClientModule = null;
 let mongoClient = null;
@@ -858,6 +859,9 @@ function createPlayer(connection, requestedProfileId) {
     isAdmin: Boolean(profileData.admin),
     banned: Boolean(profileData.banned),
     createdAt: profileData.createdAt,
+    pvpOptIn: Boolean(profileData.pvpOptIn),
+    pvpCooldownUntil: Number(profileData.pvpCooldownUntil) || 0,
+    pvpLastCombatAt: Number(profileData.pvpLastCombatAt) || 0,
   };
 
   const spawnLevel = levelForCoordinate(spawn.x, spawn.y);
@@ -873,6 +877,9 @@ function createPlayer(connection, requestedProfileId) {
   profileData.tutorialCompleted = player.profileMeta.tutorialCompleted;
   profileData.admin = player.profileMeta.isAdmin;
   profileData.banned = player.profileMeta.banned;
+  profileData.pvpOptIn = player.profileMeta.pvpOptIn;
+  profileData.pvpCooldownUntil = player.profileMeta.pvpCooldownUntil;
+  profileData.pvpLastCombatAt = player.profileMeta.pvpLastCombatAt;
   profileData.lastSeen = timestamp;
   syncProfile(player);
 
@@ -2186,6 +2193,40 @@ function damagePlayer(target, amount) {
   }
 }
 
+function isPvpEnabled(player) {
+  return Boolean(player?.profileMeta?.pvpOptIn);
+}
+
+function canEngageInPvp(attacker, target) {
+  if (!attacker || !target) return false;
+  if (attacker === target) return false;
+  if (!attacker.profileMeta || !target.profileMeta) return false;
+  if (!isPvpEnabled(attacker) || !isPvpEnabled(target)) return false;
+  return true;
+}
+
+function recordPvpEngagement(player) {
+  if (!player) return;
+  const now = Date.now();
+  if (!player.profileMeta) {
+    player.profileMeta = {};
+  }
+  player.profileMeta.pvpLastCombatAt = now;
+  player.profileMeta.pvpCooldownUntil = now + PVP_DISABLE_COOLDOWN_MS;
+  const record = player.profileId ? profiles.get(player.profileId) : null;
+  if (record) {
+    record.pvpLastCombatAt = player.profileMeta.pvpLastCombatAt;
+    record.pvpCooldownUntil = player.profileMeta.pvpCooldownUntil;
+    record.pvpOptIn = Boolean(player.profileMeta.pvpOptIn);
+    profiles.set(player.profileId, record);
+    if (usingMongo && profilesCollection) {
+      persistProfileToMongo(player.profileId, record);
+    } else {
+      queueSaveProfiles();
+    }
+  }
+}
+
 function resolveAction(player, actionType, aimVector, chargeSeconds) {
   const now = Date.now();
   ensureEquipment(player);
@@ -2296,7 +2337,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
       }
     }
     if (candidatePlayer && Math.random() <= hitChance) {
-      if (!playerInSafeZone(candidatePlayer)) {
+      if (!playerInSafeZone(candidatePlayer) && canEngageInPvp(player, candidatePlayer)) {
         if (actionType === 'spell') {
           const config = spellItem?.spell;
           if (config?.effect === 'knockback' && config.magnitude) {
@@ -2305,6 +2346,8 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
         }
         if (damageBase > 0) {
           damagePlayer(candidatePlayer, damageBase);
+          recordPvpEngagement(player);
+          recordPvpEngagement(candidatePlayer);
         }
       }
     }
@@ -2315,8 +2358,12 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
       if (playerInSafeZone(target)) continue;
       const within = isWithinCone(player, aim, target, range + PLAYER_HIT_RADIUS, coneCosHalfAngle, PLAYER_HIT_RADIUS);
       if (!within) continue;
-      if (Math.random() <= hitChance) {
+      if (Math.random() <= hitChance && canEngageInPvp(player, target)) {
         damagePlayer(target, damageBase);
+        if (damageBase > 0) {
+          recordPvpEngagement(player);
+          recordPvpEngagement(target);
+        }
         if (actionType === 'melee' && meleeKnockback > 0) {
           applyKnockbackEntity(target, meleeKnockback, aim, target.levelId || null);
         }
@@ -2724,6 +2771,9 @@ function sendProfileSnapshot(player) {
       isAdmin: Boolean(player.profileMeta?.isAdmin),
       banned: Boolean(player.profileMeta?.banned),
       createdAt: player.profileMeta?.createdAt || null,
+      pvpOptIn: Boolean(player.profileMeta?.pvpOptIn),
+      pvpCooldownEndsAt: Number(player.profileMeta?.pvpCooldownUntil) || 0,
+      pvpLastCombatAt: Number(player.profileMeta?.pvpLastCombatAt) || 0,
     },
   });
 }
@@ -2767,6 +2817,61 @@ function handleProfileMessage(player, payload) {
       tutorialCompleted: true,
       safeZone: destination,
       skipped: Boolean(payload.skipped),
+    });
+    sendProfileSnapshot(player);
+  } else if (action === 'toggle-pvp') {
+    const enable = payload.enabled !== undefined ? Boolean(payload.enabled) : true;
+    if (enable) {
+      player.profileMeta.pvpOptIn = true;
+      player.profileMeta.pvpCooldownUntil = 0;
+      syncProfile(player);
+      sendTo(player, {
+        type: 'profile',
+        event: 'pvp-updated',
+        pvpOptIn: true,
+        cooldownEndsAt: Number(player.profileMeta?.pvpCooldownUntil) || 0,
+        lastCombatAt: Number(player.profileMeta?.pvpLastCombatAt) || 0,
+        message: 'PvP enabled. You can now engage with other flagged heroes.',
+      });
+      sendProfileSnapshot(player);
+    } else {
+      const now = Date.now();
+      const cooldownUntil = Math.max(
+        Number(player.profileMeta?.pvpCooldownUntil) || 0,
+        (Number(player.profileMeta?.pvpLastCombatAt) || 0) + PVP_DISABLE_COOLDOWN_MS
+      );
+      if (cooldownUntil > now) {
+        const remainingSeconds = Math.ceil((cooldownUntil - now) / 1000);
+        sendTo(player, {
+          type: 'profile',
+          event: 'error',
+          field: 'pvp',
+          message: `Stay out of PvP for ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before disabling.`,
+        });
+        return;
+      }
+      player.profileMeta.pvpOptIn = false;
+      player.profileMeta.pvpCooldownUntil = 0;
+      syncProfile(player);
+      sendTo(player, {
+        type: 'profile',
+        event: 'pvp-updated',
+        pvpOptIn: false,
+        cooldownEndsAt: 0,
+        lastCombatAt: Number(player.profileMeta?.pvpLastCombatAt) || 0,
+        message: 'PvP disabled. You are no longer vulnerable to other heroes.',
+      });
+      sendProfileSnapshot(player);
+    }
+  } else if (action === 'reset-tutorial') {
+    player.profileMeta.tutorialCompleted = false;
+    const destination = teleportPlayerToSafeZone(player);
+    syncProfile(player);
+    sendTo(player, {
+      type: 'profile',
+      event: 'tutorial-reset',
+      message: 'Tutorial reset. Review the basics from the safe zone bank.',
+      safeZone: destination,
     });
     sendProfileSnapshot(player);
   } else {
@@ -3091,6 +3196,8 @@ function buildAdminProfileList() {
       online: Boolean(online),
       playerId: online?.id || null,
       position,
+      pvpOptIn: Boolean(record?.pvpOptIn),
+      pvpCooldownUntil: Math.max(0, Number(record?.pvpCooldownUntil) || 0),
     });
   }
 
@@ -3335,6 +3442,15 @@ function syncProfile(player) {
     meta.tutorialCompleted != null ? Boolean(meta.tutorialCompleted) : Boolean(existing.tutorialCompleted);
   const adminFlag = meta.isAdmin != null ? Boolean(meta.isAdmin) : Boolean(existing.admin);
   const bannedFlag = meta.banned != null ? Boolean(meta.banned) : Boolean(existing.banned);
+  const pvpOptIn = meta.pvpOptIn != null ? Boolean(meta.pvpOptIn) : Boolean(existing.pvpOptIn);
+  const pvpCooldownUntil =
+    meta.pvpCooldownUntil != null
+      ? Math.max(0, Number(meta.pvpCooldownUntil) || 0)
+      : Math.max(0, Number(existing.pvpCooldownUntil) || 0);
+  const pvpLastCombatAt =
+    meta.pvpLastCombatAt != null
+      ? Math.max(0, Number(meta.pvpLastCombatAt) || 0)
+      : Math.max(0, Number(existing.pvpLastCombatAt) || 0);
 
   player.profileMeta = {
     ...meta,
@@ -3343,6 +3459,9 @@ function syncProfile(player) {
     isAdmin: adminFlag,
     banned: bannedFlag,
     createdAt,
+    pvpOptIn,
+    pvpCooldownUntil,
+    pvpLastCombatAt,
   };
 
   const record = {
@@ -3374,6 +3493,9 @@ function syncProfile(player) {
     },
     gear: serializeGear(player.gear),
     equipment: serializeEquipment(player.equipment),
+    pvpOptIn,
+    pvpCooldownUntil,
+    pvpLastCombatAt,
   };
   profiles.set(player.profileId, record);
   if (usingMongo && profilesCollection) {
@@ -3419,6 +3541,9 @@ function buildProfileCache(entries) {
     const admin = Boolean(value?.admin);
     const banned = Boolean(value?.banned);
     const createdAt = Number(value?.createdAt) || Number(value?.lastSeen) || Date.now();
+    const pvpOptIn = Boolean(value?.pvpOptIn);
+    const pvpCooldownUntil = Math.max(0, Number(value?.pvpCooldownUntil) || 0);
+    const pvpLastCombatAt = Math.max(0, Number(value?.pvpLastCombatAt) || 0);
     map.set(normalized, {
       xp: cloneXP(value?.xp),
       maxHealth,
@@ -3435,6 +3560,9 @@ function buildProfileCache(entries) {
       admin,
       banned,
       createdAt,
+      pvpOptIn,
+      pvpCooldownUntil,
+      pvpLastCombatAt,
     });
   }
   return { map, nextPlayerId: maxAliasIndex + 1 };
@@ -3498,6 +3626,9 @@ function serializeProfileRecord(value) {
       typeof value?.health === 'number'
         ? clamp(Number(value.health), 0, Number(value?.maxHealth) || 100)
         : undefined,
+    pvpOptIn: Boolean(value?.pvpOptIn),
+    pvpCooldownUntil: Math.max(0, Number(value?.pvpCooldownUntil) || 0),
+    pvpLastCombatAt: Math.max(0, Number(value?.pvpLastCombatAt) || 0),
   };
 
   if (value?.inventory) {

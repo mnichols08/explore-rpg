@@ -21,6 +21,7 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Aurora WebGL backdrop** &mdash; a native shader paints portal beams, hero auras, danger flares around enemy clusters, and dynamic skies that react to dungeons, safe zones, and momentum streaks—with a Glow toggle for purists who want the classic flat look.
 - **Touch-first controls** &mdash; a virtual joystick, ability palette, chat toggle, and quick HUD hide button keep tablets and phones fully playable without a keyboard or mouse.
 - **Hero onboarding & tutorial** &mdash; first-time players name their adventurer, learn combat, gathering, and safe-zone mechanics in a guided (and skippable) walkthrough, then warp directly into the safe haven to start their journey.
+- **Player-controlled PvP opt-in** &mdash; a built-in settings overlay lets heroes flag themselves for PvP combat, see cooldown timers, and rerun the tutorial whenever they want.
 - **In-game server command center** &mdash; the very first hero is promoted to server admin automatically and can rename heroes, tweak XP, grant or reclaim currency, teleport players to safety, and ban/kick profiles live through an integrated panel.
 
 ## Getting started
@@ -84,6 +85,7 @@ node .\server\server.js --self-test
 - **Shift + N** starts a fresh hero (copy your Hero ID first if you want to return later).
 - **Minimap Toggle** button collapses or reopens the tactical map, and your choice sticks between sessions.
 - **Glow toggle** button switches the WebGL aurora on or off instantly if you want the classic flat look.
+- **Settings** button opens an overlay where you can reset the tutorial or opt into/out of PvP (leaving PvP requires a one-minute cooldown after your last duel).
 - Watch for the on-screen portal prompt; when it lights up, press **E** to jump through a gateway or exit a dungeon.
 - Down enemies together to earn bonus XP aligned with the finishing attack type.
 - Chain kills quickly to build **Battle Momentum** for stacked speed, damage, and XP bonuses before the timer expires.
