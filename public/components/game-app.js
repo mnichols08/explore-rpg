@@ -1995,6 +1995,8 @@ class GameApp extends HTMLElement {
   this.touchChatButton = this.shadowRoot.querySelector('[data-touch-chat]');
     this.touchUiToggleButton = this.shadowRoot.querySelector('[data-touch-ui-toggle]');
     this.touchUiToggleLabel = this.shadowRoot.querySelector('[data-touch-ui-label]');
+    this.desktopHelpEl = this.shadowRoot.querySelector('.desktop-help');
+    this.mobileHelpEl = this.shadowRoot.querySelector('.mobile-help');
     this.compactStatusEl = this.shadowRoot.querySelector('[data-compact-status]');
     this.compactHealthBar = this.shadowRoot.querySelector('[data-compact-health-bar]');
     this.compactHealthText = this.shadowRoot.querySelector('[data-compact-health-text]');
@@ -2016,6 +2018,7 @@ class GameApp extends HTMLElement {
   this.bankWithdrawButton = this.shadowRoot.querySelector('[data-bank-withdraw]');
   this.bankSellButton = this.shadowRoot.querySelector('[data-bank-sell]');
   this.bankFeedbackEl = this.shadowRoot.querySelector('[data-bank-feedback]');
+  this.controlHintsToggleButton = this.shadowRoot.querySelector('[data-control-hints-toggle]');
     this.gearPanel = this.shadowRoot.querySelector('[data-gear-panel]');
     this.gearFeedbackEl = this.shadowRoot.querySelector('[data-gear-feedback]');
     this.equipmentLabels = {};
@@ -2061,6 +2064,7 @@ class GameApp extends HTMLElement {
     this.compactAutoCollapse = false;
     this.hasStoredUiPreference = false;
   this.uiCollapsed = false;
+  this.controlHintsVisible = true;
   this.viewportWidth = 0;
   this.viewportHeight = 0;
   this.webglEnabled = Boolean(this.webglRenderer);
@@ -2187,6 +2191,7 @@ class GameApp extends HTMLElement {
   this._handleSettingsClose = this._handleSettingsClose.bind(this);
   this._handleSettingsPvpToggle = this._handleSettingsPvpToggle.bind(this);
   this._handleSettingsResetTutorial = this._handleSettingsResetTutorial.bind(this);
+  this._handleControlHintsToggle = this._handleControlHintsToggle.bind(this);
     this._resizeCanvas = this._resizeCanvas.bind(this);
     this._handleBankDeposit = this._handleBankDeposit.bind(this);
     this._handleBankWithdraw = this._handleBankWithdraw.bind(this);
@@ -2209,6 +2214,7 @@ class GameApp extends HTMLElement {
     this._evaluateCompactLayout();
     this._updateCompactStatus();
     this._syncCompactOverlayVisibility();
+    this._loadControlHintsPreference();
   }
 
   connectedCallback() {
@@ -2252,6 +2258,7 @@ class GameApp extends HTMLElement {
   this.settingsPvpToggleButton?.addEventListener('click', this._handleSettingsPvpToggle);
   this.settingsResetTutorialButton?.addEventListener('click', this._handleSettingsResetTutorial);
   this.settingsCloseButton?.addEventListener('click', this._handleSettingsClose);
+  this.controlHintsToggleButton?.addEventListener('click', this._handleControlHintsToggle);
     this.chatInput?.addEventListener('keydown', this._handleChatInputKeydown);
   this.bankDepositButton?.addEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.addEventListener('click', this._handleBankWithdraw);
@@ -2317,6 +2324,7 @@ class GameApp extends HTMLElement {
   this.settingsPvpToggleButton?.removeEventListener('click', this._handleSettingsPvpToggle);
   this.settingsResetTutorialButton?.removeEventListener('click', this._handleSettingsResetTutorial);
   this.settingsCloseButton?.removeEventListener('click', this._handleSettingsClose);
+  this.controlHintsToggleButton?.removeEventListener('click', this._handleControlHintsToggle);
   this.chatInput?.removeEventListener('keydown', this._handleChatInputKeydown);
   this.bankDepositButton?.removeEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.removeEventListener('click', this._handleBankWithdraw);
@@ -3346,6 +3354,11 @@ class GameApp extends HTMLElement {
       this._startNewHero(false);
       return;
     }
+    if (event.code === 'KeyM' && event.shiftKey) {
+      event.preventDefault();
+      this._handleControlHintsToggle();
+      return;
+    }
     if (event.code === 'KeyM') {
       event.preventDefault();
       this.audio.ensureContext();
@@ -3881,6 +3894,69 @@ class GameApp extends HTMLElement {
     window.removeEventListener('pointerup', this._handleMinimapDragEnd);
     window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
     this._persistMinimapFloatPosition();
+  }
+
+  _handleControlHintsToggle(event) {
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+    }
+    this._setControlHintsVisible(!this.controlHintsVisible);
+  }
+
+  _setControlHintsVisible(visible, persist = true) {
+    const next = Boolean(visible);
+    if (this.controlHintsVisible === next && !persist) {
+      this._syncControlHintsVisibility();
+      return;
+    }
+    this.controlHintsVisible = next;
+    this._syncControlHintsVisibility();
+    if (persist) {
+      try {
+        window.localStorage?.setItem(CONTROL_HINTS_STORAGE_KEY, next ? '1' : '0');
+      } catch (err) {
+        // ignore storage write failures
+      }
+    }
+  }
+
+  _syncControlHintsVisibility() {
+    const visible = this.controlHintsVisible;
+    if (this.desktopHelpEl) {
+      if (visible) {
+        this.desktopHelpEl.removeAttribute('hidden');
+      } else {
+        this.desktopHelpEl.setAttribute('hidden', '');
+      }
+    }
+    if (this.mobileHelpEl) {
+      if (visible) {
+        this.mobileHelpEl.removeAttribute('hidden');
+      } else {
+        this.mobileHelpEl.setAttribute('hidden', '');
+      }
+    }
+    if (this.controlHintsToggleButton) {
+      const label = visible ? 'Hide Controls' : 'Show Controls';
+      this.controlHintsToggleButton.textContent = label;
+      this.controlHintsToggleButton.setAttribute('aria-pressed', visible ? 'true' : 'false');
+      this.controlHintsToggleButton.setAttribute('aria-label', `${label} panel`);
+    }
+  }
+
+  _loadControlHintsPreference() {
+    let stored = null;
+    try {
+      stored = window.localStorage?.getItem(CONTROL_HINTS_STORAGE_KEY);
+    } catch (err) {
+      stored = null;
+    }
+    if (stored === '0') {
+      this._setControlHintsVisible(false, false);
+    } else {
+      this._setControlHintsVisible(true, false);
+    }
   }
 
   _toggleMinimapVisibility(event) {
