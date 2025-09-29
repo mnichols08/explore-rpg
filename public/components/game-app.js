@@ -2935,6 +2935,9 @@ class GameApp extends HTMLElement {
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
+  this.safeZones = new Map();
+  this.activeZoneId = 'frontier';
+  this.activeZoneLabel = 'Frontier';
     this.ownedGear = new Set(Object.values(STARTING_EQUIPMENT));
     this.equipment = { ...STARTING_EQUIPMENT };
     this.minimapBase = null;
@@ -3458,6 +3461,7 @@ class GameApp extends HTMLElement {
         this._ingestLevels(data.levels);
         this._prepareMinimap(true);
         this._ingestPortals(data.portals);
+  this._ingestSafeZones(data.safeZones, data.bank);
         this.youId = data.id;
         this._applyProfileSnapshot(data.profile || null);
         if (data.profileId) {
@@ -3484,7 +3488,10 @@ class GameApp extends HTMLElement {
         this._replaceChats(data.chats);
         this._ingestOreNodes(data.oreNodes);
         this._ingestLootDrops(data.loot);
-  this.bankInfo = this._normalizeBankInfo(data.bank);
+        this._syncActiveSafeZone(data.you?.zoneId || this.activeZoneId, data.bank);
+        if (this.world) {
+          this.world.bank = this.bankInfo ? { ...this.bankInfo } : null;
+        }
         this._updateInventoryPanel();
         this.localStats = data.you.stats;
         this.localBonuses = data.you.bonuses;
@@ -3506,6 +3513,7 @@ class GameApp extends HTMLElement {
         if (Array.isArray(data.levels)) {
           this._ingestLevels(data.levels);
         }
+        this._ingestSafeZones(data.safeZones, data.bank);
         const map = new Map();
         let me = null;
         for (const rawPlayer of data.players) {
@@ -3530,7 +3538,10 @@ class GameApp extends HTMLElement {
     this._replaceChats(data.chats);
         this._ingestOreNodes(data.oreNodes);
         this._ingestLootDrops(data.loot);
-    this.bankInfo = this._normalizeBankInfo(data.bank);
+        this._syncActiveSafeZone(me?.zoneId || this.activeZoneId, data.bank);
+        if (this.world) {
+          this.world.bank = this.bankInfo ? { ...this.bankInfo } : null;
+        }
         if (me) {
           this._applyLevelInfoFromPayload(me);
           this.localStats = me.stats;
@@ -3655,6 +3666,37 @@ class GameApp extends HTMLElement {
         this._showGearFeedback(message, ok);
       } else if (data.type === 'portal-event') {
         this._handlePortalEvent(data);
+      } else if (data.type === 'zone-event') {
+        const zone = this._normalizeZonePayload(data.zone);
+        if (zone) {
+          const map = this.safeZones instanceof Map ? new Map(this.safeZones) : new Map();
+          const existing = map.get(zone.id) || {};
+          map.set(zone.id, { ...existing, ...zone });
+          this.safeZones = map;
+          this.activeZoneId = zone.id;
+          this.activeZoneLabel = zone.name || zone.id;
+        }
+        if (data.safeZone && (zone || this.safeZones instanceof Map)) {
+          const safeX = Number(data.safeZone.x) || 0;
+          const safeY = Number(data.safeZone.y) || 0;
+          const safeRadius = Math.max(0, Number(data.safeZone.radius) || 0);
+          const map = this.safeZones instanceof Map ? new Map(this.safeZones) : new Map();
+          const key = zone?.id || this.activeZoneId || 'frontier';
+          const existing = map.get(key) || { id: key };
+          map.set(key, { ...existing, x: safeX, y: safeY, radius: safeRadius });
+          this.safeZones = map;
+        }
+        this._syncActiveSafeZone(zone?.id || this.activeZoneId, data.safeZone);
+        if (this.world) {
+          this.world.bank = this.bankInfo ? { ...this.bankInfo } : null;
+        }
+        const label = zone?.name || this.activeZoneLabel || 'New Zone';
+        const difficulty = zone?.difficulty ? ` (${zone.difficulty})` : '';
+        if (data.event === 'enter') {
+          this._showTransientMessage(`Teleported to ${label}${difficulty}.`, 4200);
+        } else if (data.event === 'change') {
+          this._showTransientMessage(`Entered ${label}${difficulty}.`, 3600);
+        }
       } else if (data.type === 'disconnect') {
         this.players.delete(data.id);
       }
@@ -4734,6 +4776,7 @@ class GameApp extends HTMLElement {
     if (!raw || typeof raw !== 'object') return null;
     const id = typeof raw.id === 'string' ? raw.id : raw.id != null ? String(raw.id) : null;
     if (!id) return null;
+    const zoneId = typeof raw.zoneId === 'string' ? raw.zoneId : raw.zoneId != null ? String(raw.zoneId) : null;
     const aimX = Number.isFinite(raw.aimX) ? Number(raw.aimX) : Number.isFinite(raw.aim?.x) ? Number(raw.aim.x) : 1;
     const aimY = Number.isFinite(raw.aimY) ? Number(raw.aimY) : Number.isFinite(raw.aim?.y) ? Number(raw.aim.y) : 0;
     const aim = this._normalize({ x: aimX, y: aimY });
@@ -4752,6 +4795,7 @@ class GameApp extends HTMLElement {
     return {
       ...raw,
       id,
+  zoneId,
       aimX,
       aimY,
       aim,
@@ -4824,6 +4868,9 @@ class GameApp extends HTMLElement {
     if (!portal || !portal.id) return null;
     return {
       id: portal.id,
+      type: portal.type || 'level',
+      zoneId: portal.zoneId || 'frontier',
+      targetZoneId: portal.targetZoneId || null,
       levelId: portal.levelId || null,
       name: portal.name || 'Gateway',
       difficulty: portal.difficulty || '',
@@ -7177,6 +7224,87 @@ class GameApp extends HTMLElement {
       next.set(normalized.id, normalized);
     }
     this.lootDrops = next;
+  }
+
+  _normalizeZonePayload(zone) {
+    if (!zone || !zone.id) return null;
+    const id = String(zone.id);
+    return {
+      id,
+      name: zone.name || id,
+      color: zone.color || '#22c55e',
+      difficulty: zone.difficulty || '',
+      tier: zone.tier != null ? zone.tier : null,
+      enemyScale: Number(zone.enemyScale) || 1,
+      x: Number(zone.x) || 0,
+      y: Number(zone.y) || 0,
+      radius: Math.max(0, Number(zone.radius) || 0),
+    };
+  }
+
+  _ingestSafeZones(safeZones, fallbackBank = null) {
+    const next = this.safeZones instanceof Map ? new Map(this.safeZones) : new Map();
+    if (Array.isArray(safeZones)) {
+      for (const zone of safeZones) {
+        const normalized = this._normalizeZonePayload(zone);
+        if (normalized) {
+          next.set(normalized.id, normalized);
+        }
+      }
+    }
+    if (!next.size && fallbackBank) {
+      const bank = this._normalizeBankInfo(fallbackBank);
+      if (bank) {
+        next.set('frontier', {
+          id: 'frontier',
+          name: 'Frontier',
+          color: '#22c55e',
+          difficulty: '',
+          tier: 1,
+          enemyScale: 1,
+          x: bank.x,
+          y: bank.y,
+          radius: bank.radius,
+        });
+      }
+    }
+    this.safeZones = next;
+  }
+
+  _syncActiveSafeZone(zoneId, fallbackBank = null) {
+    if (zoneId) {
+      this.activeZoneId = zoneId;
+    }
+    let safe = null;
+    if (this.safeZones instanceof Map) {
+      safe = this.safeZones.get(this.activeZoneId) || this.safeZones.get('frontier') || null;
+    }
+    if (!safe && fallbackBank) {
+      const bank = this._normalizeBankInfo(fallbackBank);
+      if (bank) {
+        safe = {
+          id: 'frontier',
+          name: 'Frontier',
+          color: '#22c55e',
+          difficulty: '',
+          tier: 1,
+          enemyScale: 1,
+          x: bank.x,
+          y: bank.y,
+          radius: bank.radius,
+        };
+      }
+    }
+    if (safe) {
+      this.activeZoneLabel = safe.name || safe.id;
+      this.bankInfo = {
+        x: safe.x,
+        y: safe.y,
+        radius: Math.max(0, Number(safe.radius) || 0),
+      };
+    } else if (fallbackBank) {
+      this.bankInfo = this._normalizeBankInfo(fallbackBank);
+    }
   }
 
   _normalizeBankInfo(bank) {

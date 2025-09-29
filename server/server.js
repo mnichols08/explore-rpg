@@ -13,14 +13,14 @@ const MONGO_URL = process.env.MONGO_URL || '';
 const MONGO_DB_NAME = process.env.MONGO_DB || 'explore_rpg';
 const MONGO_COLLECTION = process.env.MONGO_COLLECTION || 'profiles';
 const TICK_RATE = 20; // updates per second
-const WORLD_WIDTH = 160;
-const WORLD_HEIGHT = 160;
+const WORLD_WIDTH = 320;
+const WORLD_HEIGHT = 320;
 const WORLD_SEED = 9272025;
 const TILE_TYPES = ['water', 'sand', 'grass', 'forest', 'rock'];
 const TILE_WALKABLE = new Set(['sand', 'grass', 'forest', 'ember', 'glyph']);
 const EFFECT_LIFETIME = 600; // ms
 const ENEMY_SPAWN_INTERVAL = 8000;
-const ENEMY_MAX_COUNT = 24;
+const ENEMY_MAX_COUNT = 36;
 const ENEMY_WANDER_INTERVAL = 1800;
 const ENEMY_VARIANTS = [
   {
@@ -78,6 +78,71 @@ const ORE_NODE_RADIUS = 0.65;
 const LOOT_LIFETIME_MS = 90000;
 const BANK_POSITION = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
 const SAFE_ZONE_RADIUS = 8.5;
+const DEFAULT_ZONE_ID = 'frontier';
+const ZONE_DEFINITIONS = [
+  {
+    id: DEFAULT_ZONE_ID,
+    name: 'Frontier Vale',
+    color: '#22c55e',
+    difficulty: 'Novice',
+    tier: 1,
+    bounds: {
+      minX: 0,
+      minY: 0,
+      maxX: WORLD_WIDTH - 1,
+      maxY: WORLD_HEIGHT - 1,
+    },
+    safeZoneHint: {
+      x: Math.floor(WORLD_WIDTH / 2),
+      y: Math.floor(WORLD_HEIGHT / 2),
+    },
+    enemyScale: 1,
+    seedOffset: 0,
+    portalColor: '#22c55e',
+  },
+  {
+    id: 'shrouded-marsh',
+    name: 'Shrouded Marsh',
+    color: '#0ea5e9',
+    difficulty: 'Challenging',
+    tier: 2,
+    bounds: {
+      minX: Math.floor(WORLD_WIDTH * 0.08),
+      maxX: Math.min(WORLD_WIDTH - 2, Math.floor(WORLD_WIDTH * 0.46)),
+      minY: Math.floor(WORLD_HEIGHT * 0.58),
+      maxY: Math.min(WORLD_HEIGHT - 2, Math.floor(WORLD_HEIGHT * 0.92)),
+    },
+    safeZoneHint: {
+      x: Math.floor(WORLD_WIDTH * 0.23),
+      y: Math.floor(WORLD_HEIGHT * 0.79),
+    },
+    enemyScale: 1.65,
+    seedOffset: 0x51c3,
+    portalColor: '#38bdf8',
+  },
+  {
+    id: 'ashen-ridge',
+    name: 'Ashen Ridge',
+    color: '#f97316',
+    difficulty: 'Deadly',
+    tier: 3,
+    bounds: {
+      minX: Math.floor(WORLD_WIDTH * 0.58),
+      maxX: Math.min(WORLD_WIDTH - 2, Math.floor(WORLD_WIDTH * 0.94)),
+      minY: Math.floor(WORLD_HEIGHT * 0.12),
+      maxY: Math.min(WORLD_HEIGHT - 2, Math.floor(WORLD_HEIGHT * 0.48)),
+    },
+    safeZoneHint: {
+      x: Math.floor(WORLD_WIDTH * 0.78),
+      y: Math.floor(WORLD_HEIGHT * 0.25),
+    },
+    enemyScale: 2.35,
+    seedOffset: 0x9e37,
+    portalColor: '#fb923c',
+  },
+];
+const ZONE_DEFINITION_MAP = new Map(ZONE_DEFINITIONS.map((zone) => [zone.id, zone]));
+const NON_DEFAULT_ZONES = ZONE_DEFINITIONS.filter((zone) => zone.id !== DEFAULT_ZONE_ID);
 const BANK_TRADE_BATCH = 5;
 const SAFE_ZONE_HEAL_DURATION_MS = 60000;
 const WILDERNESS_HEAL_SCALE = 1 / 1000;
@@ -458,6 +523,8 @@ let effectCounter = 1;
 let chatCounter = 1;
 let oreNodeCounter = 1;
 let lootCounter = 1;
+const zoneStates = new Map();
+const zoneSafeZones = new Map();
 
 const world = {
   width: WORLD_WIDTH,
@@ -841,6 +908,8 @@ function initializeLevels() {
     level.entrance = { x: portal.x, y: portal.y };
     world.portals.push({
       id: level.portalId,
+      type: 'level',
+      zoneId: DEFAULT_ZONE_ID,
       levelId: level.id,
       name: level.name,
       difficulty: level.difficulty,
@@ -851,35 +920,65 @@ function initializeLevels() {
   }
 }
 
-function findSpawn() {
-  const rand = seededRandom(Date.now() ^ WORLD_SEED);
+function findSpawn(zoneId = DEFAULT_ZONE_ID) {
+  const def = getZoneDefinition(zoneId);
+  const bounds = normalizeZoneBounds(def?.bounds);
+  const rand = seededRandom((Date.now() ^ WORLD_SEED ^ hashString(zoneId)) >>> 0);
   for (let attempts = 0; attempts < 500; attempts += 1) {
-    const x = Math.floor(rand() * WORLD_WIDTH);
-    const y = Math.floor(rand() * WORLD_HEIGHT);
+    const x = Math.floor(rand() * (bounds.maxX - bounds.minX + 1)) + bounds.minX;
+    const y = Math.floor(rand() * (bounds.maxY - bounds.minY + 1)) + bounds.minY;
     if (isInsideAnyLevel(x + 0.5, y + 0.5)) continue;
-    if (TILE_WALKABLE.has(world.tiles[y][x])) {
-      return { x: x + 0.5, y: y + 0.5 };
-    }
-  }
-  return { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
-}
-
-function findEnemySpawn() {
-  const rand = seededRandom((Date.now() + nextEnemyId) ^ (WORLD_SEED >>> 1));
-  for (let attempts = 0; attempts < 400; attempts += 1) {
-    const x = Math.floor(rand() * WORLD_WIDTH);
-    const y = Math.floor(rand() * WORLD_HEIGHT);
     if (!TILE_WALKABLE.has(world.tiles[y][x])) continue;
-    if (isInsideAnyLevel(x + 0.5, y + 0.5)) continue;
-    if (!isTileFarFromPlayers(x + 0.5, y + 0.5, 6, null)) continue;
-    if (isInSafeZone(x + 0.5, y + 0.5)) continue;
     return { x: x + 0.5, y: y + 0.5 };
   }
-  return findSpawn();
+  return {
+    x: clamp((bounds.minX + bounds.maxX) / 2 + 0.5, 0.5, world.width - 0.5),
+    y: clamp((bounds.minY + bounds.maxY) / 2 + 0.5, 0.5, world.height - 0.5),
+  };
+}
+
+function pickZoneForSpawn() {
+  const zoneWeights = new Map();
+  for (const player of clients.values()) {
+    if (player.levelId) continue;
+    const zoneId = player.zoneId || determineZoneForPosition(player.x, player.y)?.id || DEFAULT_ZONE_ID;
+    zoneWeights.set(zoneId, (zoneWeights.get(zoneId) || 0) + 1);
+  }
+  if (!zoneWeights.size) return DEFAULT_ZONE_ID;
+  let total = 0;
+  for (const weight of zoneWeights.values()) total += weight;
+  let pick = Math.random() * total;
+  for (const [zoneId, weight] of zoneWeights) {
+    pick -= weight;
+    if (pick <= 0) return zoneId;
+  }
+  return DEFAULT_ZONE_ID;
+}
+
+function findEnemySpawn(zoneId = null) {
+  const targetZoneId = zoneId || pickZoneForSpawn();
+  const def = getZoneDefinition(targetZoneId);
+  const bounds = normalizeZoneBounds(def?.bounds);
+  const randSeed = (Date.now() + nextEnemyId * 977 + hashString(targetZoneId)) ^ (WORLD_SEED >>> 1);
+  const rand = seededRandom(randSeed >>> 0);
+  for (let attempts = 0; attempts < 400; attempts += 1) {
+    const x = Math.floor(rand() * (bounds.maxX - bounds.minX + 1)) + bounds.minX;
+    const y = Math.floor(rand() * (bounds.maxY - bounds.minY + 1)) + bounds.minY;
+    if (!TILE_WALKABLE.has(world.tiles[y][x])) continue;
+    if (isInsideAnyLevel(x + 0.5, y + 0.5)) continue;
+    if (!isTileFarFromPlayers(x + 0.5, y + 0.5, 6, null, targetZoneId)) continue;
+    if (isInSafeZone(x + 0.5, y + 0.5, targetZoneId)) continue;
+    return { x: x + 0.5, y: y + 0.5, zoneId: targetZoneId };
+  }
+  const fallback = findSpawn(targetZoneId);
+  return { x: fallback.x, y: fallback.y, zoneId: targetZoneId };
 }
 
 function findLevelSpawn(level) {
-  if (!level) return findEnemySpawn();
+  if (!level) {
+    const spawn = findEnemySpawn();
+    return { x: spawn.x, y: spawn.y };
+  }
   const seed = Date.now() + nextEnemyId * 7 + hashString(level.id);
   const rand = seededRandom(seed >>> 0);
   const minTileX = clamp(Math.floor(level.spawnBox.minX - 0.5), 1, WORLD_WIDTH - 2);
@@ -899,9 +998,13 @@ function findLevelSpawn(level) {
   return { x: level.entry.x, y: level.entry.y };
 }
 
-function isTileFarFromPlayers(x, y, minDistance, levelId = null) {
+function isTileFarFromPlayers(x, y, minDistance, levelId = null, zoneId = null) {
   for (const player of clients.values()) {
     if ((player.levelId || null) !== (levelId || null)) continue;
+    if (!levelId) {
+      const playerZone = player.zoneId || determineZoneForPosition(player.x, player.y)?.id || DEFAULT_ZONE_ID;
+      if (zoneId && playerZone !== zoneId) continue;
+    }
     const dist = Math.hypot(player.x - x, player.y - y);
     if (dist < minDistance) {
       return false;
@@ -983,11 +1086,14 @@ function createPlayer(connection, requestedProfileId) {
     const py = clamp(Number(profileData.position.y) || 0.5, 0.5, WORLD_HEIGHT - 0.5);
     if (walkable(px, py)) {
       spawn = { x: px, y: py };
+    } else if (profileData.position.zoneId) {
+      spawn = findSpawn(profileData.position.zoneId);
     }
   }
   if (!spawn) {
     spawn = findSpawn();
   }
+  const spawnZone = determineZoneForPosition(spawn.x, spawn.y)?.id || DEFAULT_ZONE_ID;
 
   const xp = cloneXP(profileData?.xp);
   const baseMaxHealth = Number(profileData?.maxHealth) || 100;
@@ -1005,6 +1111,7 @@ function createPlayer(connection, requestedProfileId) {
     connection,
     x: spawn.x,
     y: spawn.y,
+    zoneId: spawnZone,
     move: { x: 0, y: 0 },
     aim: { x: 1, y: 0 },
     health: clamp(savedHealth, 1, baseMaxHealth),
@@ -1057,11 +1164,37 @@ function createPlayer(connection, requestedProfileId) {
   return { player, profileId, profileData };
 }
 
+function applyZoneScalingToEnemy(enemy, zoneId) {
+  if (!zoneId || zoneId === DEFAULT_ZONE_ID) return;
+  const zone = zoneStates.get(zoneId) || getZoneDefinition(zoneId);
+  if (!zone) return;
+  const scale = Math.max(1, Number(zone.enemyScale) || 1);
+  if (scale === 1) return;
+  enemy.health = Math.round(enemy.health * scale);
+  enemy.maxHealth = Math.round(enemy.maxHealth * scale);
+  enemy.speed *= 1 + (scale - 1) * 0.18;
+  enemy.xpReward = {
+    melee: Math.round((enemy.xpReward?.melee ?? 0) * scale),
+    ranged: Math.round((enemy.xpReward?.ranged ?? 0) * scale),
+    spell: Math.round((enemy.xpReward?.spell ?? 0) * scale),
+  };
+  if (enemy.attack) {
+    enemy.attack = {
+      ...enemy.attack,
+      damage: Math.round((enemy.attack.damage ?? 0) * scale),
+      cooldown: Math.max(400, enemy.attack.cooldown / (1 + (scale - 1) * 0.2)),
+      range: (enemy.attack.range ?? 0) + (scale - 1) * 0.35,
+    };
+  }
+}
+
 function createEnemy(options = {}) {
   const level = options.level ?? null;
   const pool = level && Array.isArray(level.enemyVariants) && level.enemyVariants.length ? level.enemyVariants : ENEMY_VARIANTS;
   const variant = pool[nextEnemyId % pool.length];
-  const spawn = level ? findLevelSpawn(level) : findEnemySpawn();
+  const spawnInfo = level ? findLevelSpawn(level) : findEnemySpawn(options.zoneId);
+  const spawn = { x: spawnInfo.x, y: spawnInfo.y };
+  const zoneId = level ? null : spawnInfo.zoneId || determineZoneForPosition(spawn.x, spawn.y)?.id || DEFAULT_ZONE_ID;
   const enemy = {
     id: `e${nextEnemyId++}`,
     type: variant.type,
@@ -1074,13 +1207,23 @@ function createEnemy(options = {}) {
     speed: variant.speed,
     health: variant.health,
     maxHealth: variant.health,
-    xpReward: variant.xp,
+    xpReward: {
+      melee: variant.xp?.melee ?? 0,
+      ranged: variant.xp?.ranged ?? 0,
+      spell: variant.xp?.spell ?? 0,
+    },
     radius: variant.radius,
     attack: variant.attack ? { ...variant.attack } : null,
     attackCooldown: variant.attack ? variant.attack.cooldown * (0.5 + Math.random() * 0.6) : 0,
     levelId: level ? level.id : null,
     status: { slowUntil: 0, slowFactor: 1 },
   };
+  if (!level) {
+    enemy.zoneId = zoneId || DEFAULT_ZONE_ID;
+    applyZoneScalingToEnemy(enemy, enemy.zoneId);
+  } else {
+    enemy.zoneId = null;
+  }
   return enemy;
 }
 
@@ -1097,7 +1240,8 @@ function updateEnemies(dt) {
   while (enemySpawnAccumulator >= ENEMY_SPAWN_INTERVAL) {
     enemySpawnAccumulator -= ENEMY_SPAWN_INTERVAL;
     if (overworldCount < ENEMY_MAX_COUNT) {
-      const enemy = createEnemy();
+      const zoneId = pickZoneForSpawn();
+      const enemy = createEnemy({ zoneId });
       spawned.push(enemy);
       overworldCount += 1;
     }
@@ -1137,6 +1281,11 @@ function updateEnemies(dt) {
     let targetDistance = Infinity;
     for (const player of clients.values()) {
       if ((player.levelId || null) !== (enemy.levelId || null)) continue;
+      if (!enemy.levelId) {
+        const playerZone = player.zoneId || determineZoneForPosition(player.x, player.y)?.id || DEFAULT_ZONE_ID;
+        const enemyZone = enemy.zoneId || determineZoneForPosition(enemy.x, enemy.y)?.id || DEFAULT_ZONE_ID;
+        if (playerZone !== enemyZone) continue;
+      }
       if (playerInSafeZone(player)) continue;
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist < targetDistance) {
@@ -1169,16 +1318,19 @@ function updateEnemies(dt) {
     const candidateX = enemy.x + dx;
     const candidateY = enemy.y + dy;
     const insideLevelX = !level || (candidateX >= level.bounds.minX && candidateX <= level.bounds.maxX);
-    if (walkable(candidateX, enemy.y) && (level ? insideLevelX : !isInSafeZone(candidateX, enemy.y))) {
+    if (walkable(candidateX, enemy.y) && (level ? insideLevelX : !isInSafeZone(candidateX, enemy.y, enemy.zoneId))) {
       enemy.x = clamp(candidateX, 0.5, world.width - 0.5);
     } else {
       enemy.wanderTarget = randomDirection();
     }
     const insideLevelY = !level || (candidateY >= level.bounds.minY && candidateY <= level.bounds.maxY);
-    if (walkable(enemy.x, candidateY) && (level ? insideLevelY : !isInSafeZone(enemy.x, candidateY))) {
+    if (walkable(enemy.x, candidateY) && (level ? insideLevelY : !isInSafeZone(enemy.x, candidateY, enemy.zoneId))) {
       enemy.y = clamp(candidateY, 0.5, world.height - 0.5);
     } else {
       enemy.wanderTarget = randomDirection();
+    }
+    if (!level) {
+      enemy.zoneId = determineZoneForPosition(enemy.x, enemy.y)?.id || enemy.zoneId || DEFAULT_ZONE_ID;
     }
 
     if (enemy.attack) {
@@ -1630,50 +1782,370 @@ function randomDirection() {
   return { x: Math.cos(angle), y: Math.sin(angle) };
 }
 
-function resolveBankPosition() {
-  const preferX = clamp(BANK_POSITION.x, 2, world.width - 2);
-  const preferY = clamp(BANK_POSITION.y, 2, world.height - 2);
-  const attempts = 120;
-  let best = { x: preferX, y: preferY };
+function getZoneDefinition(zoneId) {
+  return ZONE_DEFINITION_MAP.get(zoneId) || ZONE_DEFINITION_MAP.get(DEFAULT_ZONE_ID);
+}
+
+function getZoneState(zoneId) {
+  if (!zoneId) return zoneStates.get(DEFAULT_ZONE_ID) || null;
+  return zoneStates.get(zoneId) || null;
+}
+
+function normalizeZoneBounds(rawBounds) {
+  const bounds = rawBounds || {};
+  const minX = clamp(Math.floor(bounds.minX ?? 0), 0, WORLD_WIDTH - 1);
+  const maxX = clamp(Math.floor(bounds.maxX ?? WORLD_WIDTH - 1), minX, WORLD_WIDTH - 1);
+  const minY = clamp(Math.floor(bounds.minY ?? 0), 0, WORLD_HEIGHT - 1);
+  const maxY = clamp(Math.floor(bounds.maxY ?? WORLD_HEIGHT - 1), minY, WORLD_HEIGHT - 1);
+  return { minX, maxX, minY, maxY };
+}
+
+function pointInBounds(x, y, bounds) {
+  if (!bounds) return true;
+  return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
+}
+
+function determineZoneForPosition(x, y) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  for (const state of zoneStates.values()) {
+    if (pointInBounds(xi, yi, state.bounds)) {
+      return state;
+    }
+  }
+  for (const zone of NON_DEFAULT_ZONES) {
+    if (pointInBounds(xi, yi, zone.bounds)) {
+      return zoneStates.get(zone.id) || zone;
+    }
+  }
+  return zoneStates.get(DEFAULT_ZONE_ID) || getZoneDefinition(DEFAULT_ZONE_ID);
+}
+
+function resolveSafeZonePosition(zoneState) {
+  const bounds = normalizeZoneBounds(zoneState?.bounds);
+  const preferX = clamp(
+    Math.floor(zoneState?.safeZoneHint?.x ?? BANK_POSITION.x),
+    bounds.minX + 1,
+    bounds.maxX - 1
+  );
+  const preferY = clamp(
+    Math.floor(zoneState?.safeZoneHint?.y ?? BANK_POSITION.y),
+    bounds.minY + 1,
+    bounds.maxY - 1
+  );
+  const attempts = 160;
+  let best = { x: preferX + 0.5, y: preferY + 0.5 };
   let bestDist = Infinity;
+  const randSeed = (WORLD_SEED ^ hashString(zoneState?.id || DEFAULT_ZONE_ID) ^ (zoneState?.seedOffset || 0)) >>> 0;
+  const rand = seededRandom(randSeed || 1);
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const angle = (attempt / attempts) * Math.PI * 2;
-    const radius = attempt / attempts * 8;
-    const x = clamp(Math.round(preferX + Math.cos(angle) * radius), 1, world.width - 2);
-    const y = clamp(Math.round(preferY + Math.sin(angle) * radius), 1, world.height - 2);
-    if (!walkable(x + 0.5, y + 0.5)) continue;
-    const dist = Math.hypot(x + 0.5 - preferX, y + 0.5 - preferY);
+    const angle = rand() * Math.PI * 2;
+    const radius = 0.75 + attempt * 0.35;
+    const tileX = clamp(Math.round(preferX + Math.cos(angle) * radius), bounds.minX + 1, bounds.maxX - 1);
+    const tileY = clamp(Math.round(preferY + Math.sin(angle) * radius), bounds.minY + 1, bounds.maxY - 1);
+    const worldX = tileX + 0.5;
+    const worldY = tileY + 0.5;
+    if (!walkable(worldX, worldY)) continue;
+    const dist = Math.hypot(worldX - (preferX + 0.5), worldY - (preferY + 0.5));
     if (dist < bestDist) {
-      best = { x: x + 0.5, y: y + 0.5 };
+      best = { x: worldX, y: worldY };
       bestDist = dist;
-      if (dist < 1) break;
+      if (dist < 0.6) break;
     }
   }
   return best;
 }
 
-function isInSafeZone(x, y) {
-  if (!bankLocation) return false;
-  const dx = x - bankLocation.x;
-  const dy = y - bankLocation.y;
+function carveZoneSanctuary(zoneState) {
+  if (!zoneState?.safeZone) return;
+  const bounds = normalizeZoneBounds(zoneState.bounds);
+  const centerX = zoneState.safeZone.x;
+  const centerY = zoneState.safeZone.y;
+  const radiusTiles = Math.ceil(SAFE_ZONE_RADIUS);
+  for (let dy = -radiusTiles; dy <= radiusTiles; dy += 1) {
+    const ty = clamp(Math.floor(centerY) + dy, bounds.minY, bounds.maxY);
+    const row = world.tiles[ty];
+    if (!row) continue;
+    for (let dx = -radiusTiles; dx <= radiusTiles; dx += 1) {
+      const tx = clamp(Math.floor(centerX) + dx, bounds.minX, bounds.maxX);
+      const worldX = tx + 0.5;
+      const worldY = ty + 0.5;
+      if (Math.hypot(worldX - centerX, worldY - centerY) <= SAFE_ZONE_RADIUS * 0.85) {
+        row[tx] = 'glyph';
+      }
+    }
+  }
+}
+
+function overlayZoneTerrain(zoneState, seedOverride = null) {
+  if (!zoneState) return;
+  const bounds = normalizeZoneBounds(zoneState.bounds);
+  const width = bounds.maxX - bounds.minX + 1;
+  const height = bounds.maxY - bounds.minY + 1;
+  if (width <= 0 || height <= 0) return;
+  const seed =
+    seedOverride != null
+      ? seedOverride >>> 0
+      : (WORLD_SEED ^ (zoneState.seedOffset || 0) ^ (zoneState.generation || 0)) >>> 0;
+  const tiles = generateTerrain(width, height, seed || (WORLD_SEED >>> 0));
+  for (let y = 0; y < height; y += 1) {
+    const row = world.tiles[bounds.minY + y];
+    if (!row) continue;
+    for (let x = 0; x < width; x += 1) {
+      row[bounds.minX + x] = tiles[y][x];
+    }
+  }
+}
+
+function markPortalTile(position) {
+  if (!position) return;
+  const gx = clamp(Math.floor(position.x), 0, world.width - 1);
+  const gy = clamp(Math.floor(position.y), 0, world.height - 1);
+  if (world.tiles[gy]) {
+    world.tiles[gy][gx] = 'glyph';
+  }
+}
+
+function findPortalSpotNear(center, zoneId, minRadius = SAFE_ZONE_RADIUS + 4) {
+  const zoneState = getZoneState(zoneId) || getZoneDefinition(zoneId);
+  const bounds = normalizeZoneBounds(zoneState?.bounds);
+  const rand = seededRandom((WORLD_SEED ^ hashString(`${zoneId}:${center.x}:${center.y}`)) >>> 0);
+  const attempts = 240;
+  const baseAngle = rand() * Math.PI * 2;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const radius = minRadius + attempt * 0.35;
+    const angle = baseAngle + attempt * 0.9;
+    const tileX = clamp(Math.round(center.x + Math.cos(angle) * radius), bounds.minX + 1, bounds.maxX - 1);
+    const tileY = clamp(Math.round(center.y + Math.sin(angle) * radius), bounds.minY + 1, bounds.maxY - 1);
+    const worldX = tileX + 0.5;
+    const worldY = tileY + 0.5;
+    if (!walkable(worldX, worldY)) continue;
+    if (isInsideAnyLevel(worldX, worldY)) continue;
+    if (isInSafeZone(worldX, worldY, zoneId)) continue;
+    let tooClose = false;
+    for (const portal of world.portals) {
+      if ((portal.zoneId || DEFAULT_ZONE_ID) !== (zoneId || DEFAULT_ZONE_ID)) continue;
+      if (Math.hypot(portal.x - worldX, portal.y - worldY) < LEVEL_PORTAL_MIN_DISTANCE) {
+        tooClose = true;
+        break;
+      }
+    }
+    if (tooClose) continue;
+    return { x: worldX, y: worldY };
+  }
+  return {
+    x: clamp(center.x, bounds.minX + 1, bounds.maxX - 1),
+    y: clamp(center.y + minRadius, bounds.minY + 1, bounds.maxY - 1),
+  };
+}
+
+function initializeZones() {
+  zoneStates.clear();
+  zoneSafeZones.clear();
+  for (const def of ZONE_DEFINITIONS) {
+    const bounds = normalizeZoneBounds(def.bounds);
+    const safeZoneHint = {
+      x: clamp(Math.floor(def.safeZoneHint?.x ?? (bounds.minX + bounds.maxX) / 2), bounds.minX + 1, bounds.maxX - 1),
+      y: clamp(Math.floor(def.safeZoneHint?.y ?? (bounds.minY + bounds.maxY) / 2), bounds.minY + 1, bounds.maxY - 1),
+    };
+    const state = {
+      id: def.id,
+      name: def.name,
+      color: def.color,
+      difficulty: def.difficulty,
+      tier: def.tier ?? null,
+      bounds,
+      safeZoneHint,
+      enemyScale: Math.max(1, Number(def.enemyScale) || 1),
+      seedOffset: def.seedOffset >>> 0 || 0,
+      portalColor: def.portalColor || def.color || '#38bdf8',
+      generation: 0,
+    };
+    zoneStates.set(state.id, state);
+    if (state.id !== DEFAULT_ZONE_ID) {
+      overlayZoneTerrain(state);
+    }
+    state.safeZone = resolveSafeZonePosition(state);
+    zoneSafeZones.set(state.id, state.safeZone);
+    carveZoneSanctuary(state);
+  }
+  const frontier = zoneStates.get(DEFAULT_ZONE_ID);
+  if (frontier) {
+    frontier.safeZone = resolveSafeZonePosition(frontier);
+    zoneSafeZones.set(DEFAULT_ZONE_ID, frontier.safeZone);
+    carveZoneSanctuary(frontier);
+    bankLocation = frontier.safeZone;
+  } else {
+    bankLocation = { x: BANK_POSITION.x, y: BANK_POSITION.y };
+  }
+}
+
+function initializeZonePortals() {
+  const baseSafe = getSafeZoneLocation(DEFAULT_ZONE_ID);
+  let ordinal = 0;
+  for (const state of zoneStates.values()) {
+    if (state.id === DEFAULT_ZONE_ID) continue;
+    const outward = findPortalSpotNear(baseSafe, DEFAULT_ZONE_ID, SAFE_ZONE_RADIUS + 5 + ordinal * 2);
+    markPortalTile(outward);
+    const entryPortal = {
+      id: `zone-${state.id}-entry`,
+      type: 'zone',
+      zoneId: DEFAULT_ZONE_ID,
+      targetZoneId: state.id,
+      name: state.name,
+      difficulty: state.difficulty || '',
+      color: state.portalColor,
+      x: outward.x,
+      y: outward.y,
+    };
+    world.portals.push(entryPortal);
+    state.entryPortalId = entryPortal.id;
+
+    const returnSpot = findPortalSpotNear(state.safeZone, state.id, SAFE_ZONE_RADIUS * 0.6);
+    markPortalTile(returnSpot);
+    const returnPortal = {
+      id: `zone-${state.id}-return`,
+      type: 'zone-return',
+      zoneId: state.id,
+      targetZoneId: DEFAULT_ZONE_ID,
+      name: 'Return to Frontier',
+      difficulty: 'Safe',
+      color: '#c084fc',
+      x: returnSpot.x,
+      y: returnSpot.y,
+    };
+    world.portals.push(returnPortal);
+    state.returnPortalId = returnPortal.id;
+    ordinal += 1;
+  }
+}
+
+function updateZoneReturnPortal(zoneState) {
+  if (!zoneState?.returnPortalId) return;
+  const portal = world.portals.find((p) => p.id === zoneState.returnPortalId);
+  if (!portal) return;
+  const spot = findPortalSpotNear(zoneState.safeZone, zoneState.id, SAFE_ZONE_RADIUS * 0.6);
+  markPortalTile(spot);
+  portal.x = spot.x;
+  portal.y = spot.y;
+}
+
+function regenerateZone(zoneId, force = false) {
+  if (!zoneId || zoneId === DEFAULT_ZONE_ID) return;
+  const state = zoneStates.get(zoneId);
+  if (!state) return;
+  if (!force) {
+    for (const player of clients.values()) {
+      if (player.levelId) continue;
+      const playerZone = player.zoneId || determineZoneForPosition(player.x, player.y)?.id;
+      if (playerZone === zoneId) {
+        return;
+      }
+    }
+  }
+  state.generation = (state.generation || 0) + 1;
+  const seed = (WORLD_SEED ^ state.seedOffset ^ state.generation ^ Date.now()) >>> 0;
+  overlayZoneTerrain(state, seed);
+  state.safeZone = resolveSafeZonePosition(state);
+  zoneSafeZones.set(zoneId, state.safeZone);
+  carveZoneSanctuary(state);
+  updateZoneReturnPortal(state);
+  world.enemies = world.enemies.filter((enemy) => enemy.levelId || enemy.zoneId !== zoneId);
+  initializeOreNodes();
+}
+
+function serializeZone(zoneStateOrDef) {
+  if (!zoneStateOrDef) return null;
+  const id = zoneStateOrDef.id || DEFAULT_ZONE_ID;
+  const safe = zoneSafeZones.get(id) || zoneStateOrDef.safeZone || null;
+  return {
+    id,
+    name: zoneStateOrDef.name,
+    color: zoneStateOrDef.color,
+    difficulty: zoneStateOrDef.difficulty || '',
+    tier: zoneStateOrDef.tier || null,
+    enemyScale: zoneStateOrDef.enemyScale || 1,
+    x: safe?.x ?? null,
+    y: safe?.y ?? null,
+    radius: SAFE_ZONE_RADIUS,
+  };
+}
+
+function getSafeZoneLocation(zoneId = DEFAULT_ZONE_ID) {
+  const def = getZoneDefinition(zoneId);
+  const targetId = def?.id || DEFAULT_ZONE_ID;
+  const cached = zoneSafeZones.get(targetId);
+  if (cached) return cached;
+  let state = zoneStates.get(targetId);
+  if (!state) {
+    const bounds = normalizeZoneBounds(def?.bounds);
+    const safeZoneHint = {
+      x: clamp(Math.floor(def?.safeZoneHint?.x ?? (bounds.minX + bounds.maxX) / 2), bounds.minX + 1, bounds.maxX - 1),
+      y: clamp(Math.floor(def?.safeZoneHint?.y ?? (bounds.minY + bounds.maxY) / 2), bounds.minY + 1, bounds.maxY - 1),
+    };
+    state = {
+      id: targetId,
+      name: def?.name || targetId,
+      color: def?.color || '#22c55e',
+      difficulty: def?.difficulty || '',
+      tier: def?.tier || null,
+      bounds,
+      safeZoneHint,
+      enemyScale: Math.max(1, Number(def?.enemyScale) || 1),
+      seedOffset: def?.seedOffset >>> 0 || 0,
+      portalColor: def?.portalColor || def?.color || '#38bdf8',
+      generation: 0,
+    };
+    zoneStates.set(state.id, state);
+    if (state.id !== DEFAULT_ZONE_ID) {
+      overlayZoneTerrain(state);
+    }
+  }
+  state.safeZone = resolveSafeZonePosition(state);
+  zoneSafeZones.set(state.id, state.safeZone);
+  carveZoneSanctuary(state);
+  if (state.id === DEFAULT_ZONE_ID) {
+    bankLocation = state.safeZone;
+  }
+  return state.safeZone;
+}
+
+function isInSafeZone(x, y, zoneId = null) {
+  const zone = zoneId ? getZoneDefinition(zoneId) : determineZoneForPosition(x, y);
+  const safe = getSafeZoneLocation(zone?.id || DEFAULT_ZONE_ID);
+  if (!safe) return false;
+  const dx = x - safe.x;
+  const dy = y - safe.y;
   return dx * dx + dy * dy <= SAFE_ZONE_RADIUS * SAFE_ZONE_RADIUS;
 }
 
 function playerInSafeZone(player) {
   if (!player || player.levelId) return false;
-  return isInSafeZone(player.x, player.y);
+  const zone = player.zoneId || determineZoneForPosition(player.x, player.y)?.id;
+  return isInSafeZone(player.x, player.y, zone);
 }
 
-function getSafeZoneLocation() {
-  if (!bankLocation) {
-    bankLocation = resolveBankPosition();
-  }
-  return bankLocation || { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
-}
-
-function teleportPlayerToSafeZone(player) {
+function teleportPlayerToZone(player, zoneId, options = {}) {
   if (!player) return null;
-  const safe = getSafeZoneLocation();
+  const def = getZoneDefinition(zoneId);
+  const targetZoneId = def?.id || DEFAULT_ZONE_ID;
+  const shouldRegenerate = options.forceRegenerate ?? (targetZoneId !== DEFAULT_ZONE_ID);
+  if (shouldRegenerate) {
+    let occupied = false;
+    for (const other of clients.values()) {
+      if (other === player) continue;
+      if (other.levelId) continue;
+      const otherZone = other.zoneId || determineZoneForPosition(other.x, other.y)?.id || DEFAULT_ZONE_ID;
+      if (otherZone === targetZoneId) {
+        occupied = true;
+        break;
+      }
+    }
+    if (!occupied) {
+      regenerateZone(targetZoneId, true);
+    }
+  }
+  const safe = getSafeZoneLocation(targetZoneId);
   const angle = Math.random() * Math.PI * 2;
   const radius = Math.random() * Math.max(0, SAFE_ZONE_RADIUS - 1.2);
   let x = safe.x + Math.cos(angle) * radius;
@@ -1684,13 +2156,39 @@ function teleportPlayerToSafeZone(player) {
   }
   player.levelId = null;
   player.levelReturn = null;
-  player.x = clamp(x, 0.5, WORLD_WIDTH - 0.5);
-  player.y = clamp(y, 0.5, WORLD_HEIGHT - 0.5);
+  player.zoneId = targetZoneId;
+  player.x = clamp(x, 0.5, world.width - 0.5);
+  player.y = clamp(y, 0.5, world.height - 0.5);
   player.move.x = 0;
   player.move.y = 0;
   player.action = null;
   player.health = player.maxHealth;
-  return { x: player.x, y: player.y };
+  sendTo(player, {
+    type: 'zone-event',
+    event: 'enter',
+    zone: serializeZone(zoneStates.get(targetZoneId) || def),
+    safeZone: { x: safe.x, y: safe.y, radius: SAFE_ZONE_RADIUS },
+  });
+  return { x: player.x, y: player.y, zoneId: targetZoneId };
+}
+
+function teleportPlayerToSafeZone(player, zoneId = DEFAULT_ZONE_ID) {
+  return teleportPlayerToZone(player, zoneId, { forceRegenerate: zoneId !== DEFAULT_ZONE_ID });
+}
+
+function updatePlayerZone(player) {
+  if (!player || player.levelId) return;
+  const zone = determineZoneForPosition(player.x, player.y);
+  const zoneId = zone?.id || DEFAULT_ZONE_ID;
+  if (player.zoneId === zoneId) return;
+  player.zoneId = zoneId;
+  const safe = getSafeZoneLocation(zoneId);
+  sendTo(player, {
+    type: 'zone-event',
+    event: 'change',
+    zone: serializeZone(zoneStates.get(zoneId) || zone),
+    safeZone: { x: safe.x, y: safe.y, radius: SAFE_ZONE_RADIUS },
+  });
 }
 
 function ensureInventoryData(source) {
@@ -2210,13 +2708,30 @@ function handlePortalEnter(player, portalId) {
   if (!player || !portalId) return;
   const portal = world.portals.find((p) => p.id === portalId);
   if (!portal) return;
+  const distance = Math.hypot(player.x - portal.x, player.y - portal.y);
+  if (distance > PORTAL_DISTANCE_THRESHOLD) return;
+  const portalZoneId = portal.zoneId || DEFAULT_ZONE_ID;
+  if (!player.levelId) {
+    const playerZone = player.zoneId || determineZoneForPosition(player.x, player.y)?.id || DEFAULT_ZONE_ID;
+    if (playerZone !== portalZoneId) return;
+  }
+  if (portal.type === 'zone') {
+    if (player.levelId) return;
+    teleportPlayerToZone(player, portal.targetZoneId || DEFAULT_ZONE_ID);
+    syncProfile(player);
+    return;
+  }
+  if (portal.type === 'zone-return') {
+    if (player.levelId) return;
+    teleportPlayerToZone(player, portal.targetZoneId || DEFAULT_ZONE_ID, { forceRegenerate: false });
+    syncProfile(player);
+    return;
+  }
   const level = world.levels.get(portal.levelId);
   if (!level) return;
   if (player.levelId && player.levelId !== level.id) return;
-  const distance = Math.hypot(player.x - portal.x, player.y - portal.y);
-  if (distance > PORTAL_DISTANCE_THRESHOLD) return;
   if (player.levelId === level.id) return;
-  player.levelReturn = { x: player.x, y: player.y };
+  player.levelReturn = { x: player.x, y: player.y, zoneId: player.zoneId || portalZoneId };
   player.levelId = level.id;
   player.x = level.entry.x;
   player.y = level.entry.y;
@@ -2254,10 +2769,12 @@ function handlePortalExit(player) {
   if (!walkable(destination.x, destination.y)) {
     destination = findSpawn();
   }
+  const returnZoneId = player.levelReturn?.zoneId || determineZoneForPosition(destination.x, destination.y)?.id || DEFAULT_ZONE_ID;
   player.levelId = null;
   player.levelReturn = null;
   player.x = clamp(destination.x, 0.5, world.width - 0.5);
   player.y = clamp(destination.y + 1.2, 0.5, world.height - 0.5);
+  player.zoneId = returnZoneId;
   player.move.x = 0;
   player.move.y = 0;
   player.action = null;
@@ -2269,6 +2786,7 @@ function handlePortalExit(player) {
       name: level.name,
     },
   });
+  updatePlayerZone(player);
   syncProfile(player);
 }
 
@@ -2314,12 +2832,9 @@ function walkable(x, y) {
   return TILE_WALKABLE.has(world.tiles[ty][tx]);
 }
 
-if (!bankLocation) {
-  bankLocation = resolveBankPosition();
-}
-
+initializeZones();
 initializeLevels();
-
+initializeZonePortals();
 initializeOreNodes();
 
 function resolveMovement(player, dt) {
@@ -2354,11 +2869,13 @@ function damagePlayer(target, amount) {
     target.levelReturn = null;
     resetMomentum(target);
     const spawn = findSpawn();
+    const spawnZone = determineZoneForPosition(spawn.x, spawn.y)?.id || DEFAULT_ZONE_ID;
     target.x = spawn.x;
     target.y = spawn.y;
+    target.zoneId = spawnZone;
     target.health = target.maxHealth;
     if (profile) {
-      profile.position = { x: target.x, y: target.y };
+      profile.position = { x: target.x, y: target.y, zoneId: spawnZone };
       profile.health = target.health;
     }
   }
@@ -2640,6 +3157,9 @@ function gameTick(now, dt) {
   for (const player of clients.values()) {
     decayMomentum(player, now);
     resolveMovement(player, dt);
+    if (!player.levelId) {
+      updatePlayerZone(player);
+    }
     if (player.health < player.maxHealth) {
       const healRatePerMs = player.maxHealth / SAFE_ZONE_HEAL_DURATION_MS;
       const healMultiplier = playerInSafeZone(player) ? 1 : WILDERNESS_HEAL_SCALE;
@@ -2664,6 +3184,7 @@ function gameTick(now, dt) {
         profile.position = {
           x: clamp(player.x, 0.5, world.width - 0.5),
           y: clamp(player.y, 0.5, world.height - 0.5),
+          zoneId: player.zoneId || DEFAULT_ZONE_ID,
         };
         profile.health = clamp(player.health, 0, player.maxHealth);
       }
@@ -2694,6 +3215,7 @@ function gameTick(now, dt) {
       admin: Boolean(player.profileMeta?.isAdmin),
       x: player.x,
       y: player.y,
+      zoneId: player.zoneId || DEFAULT_ZONE_ID,
       health: player.health,
       maxHealth: player.maxHealth,
       stats: player.stats,
@@ -2740,6 +3262,7 @@ function gameTick(now, dt) {
       maxHealth: enemy.maxHealth,
       radius: enemy.radius,
       levelId: enemy.levelId || null,
+      zoneId: enemy.zoneId || null,
     })),
     chats: world.chats.map((chat) => ({
       id: chat.id,
@@ -2775,8 +3298,14 @@ function gameTick(now, dt) {
           radius: SAFE_ZONE_RADIUS,
         }
       : null,
+    safeZones: Array.from(zoneStates.values())
+      .map((zone) => serializeZone(zone))
+      .filter(Boolean),
     portals: world.portals.map((portal) => ({
       id: portal.id,
+      type: portal.type || 'level',
+      zoneId: portal.zoneId || DEFAULT_ZONE_ID,
+      targetZoneId: portal.targetZoneId || null,
       levelId: portal.levelId,
       name: portal.name,
       difficulty: portal.difficulty,
@@ -3781,6 +4310,7 @@ function syncProfile(player) {
     position: {
       x: clamp(player.x, 0.5, world.width - 0.5),
       y: clamp(player.y, 0.5, world.height - 0.5),
+      zoneId: player.zoneId || DEFAULT_ZONE_ID,
     },
     health: clamp(player.health, 0, player.maxHealth),
     name,
@@ -4255,6 +4785,7 @@ function sendInitialState(player, options = {}) {
       health: enemy.health,
       maxHealth: enemy.maxHealth,
       radius: enemy.radius,
+      zoneId: enemy.zoneId || null,
     })),
     chats: world.chats.map((chat) => ({
       id: chat.id,
@@ -4289,8 +4820,14 @@ function sendInitialState(player, options = {}) {
           radius: SAFE_ZONE_RADIUS,
         }
       : null,
+    safeZones: Array.from(zoneStates.values())
+      .map((zone) => serializeZone(zone))
+      .filter(Boolean),
     portals: world.portals.map((portal) => ({
       id: portal.id,
+      type: portal.type || 'level',
+      zoneId: portal.zoneId || DEFAULT_ZONE_ID,
+      targetZoneId: portal.targetZoneId || null,
       levelId: portal.levelId,
       name: portal.name,
       difficulty: portal.difficulty,
@@ -4308,6 +4845,7 @@ function sendInitialState(player, options = {}) {
       bonuses: player.bonuses,
       health: player.health,
       maxHealth: player.maxHealth,
+  zoneId: player.zoneId || DEFAULT_ZONE_ID,
       momentum: serializeMomentum(player, Date.now()),
       levelId: player.levelId || null,
       levelExit: youLevel?.exit ?? null,
