@@ -29,6 +29,62 @@ const TILE_HEIGHTS = {
 const WALKABLE_TILE_TYPES = new Set(['sand', 'grass', 'forest', 'ember', 'glyph']);
 const WALKABLE_OVERLAY_COLOR = '#38bdf8';
 const WALKABLE_BARRIER_COLOR = '#1d4ed8';
+const TERRAIN_TEXTURE_SCHEMES = {
+  grass: {
+    base: '#14532d',
+    highlight: '#1e7044',
+    shadow: '#0b3520',
+    accent: '#4ade80',
+    accentDensity: 0.08,
+    highlightDensity: 0.25,
+    repeat: 3.1,
+  },
+  sand: {
+    base: '#d6b26d',
+    highlight: '#f0d38a',
+    shadow: '#b68c4c',
+    accent: '#fde68a',
+    accentDensity: 0.05,
+    highlightDensity: 0.2,
+    repeat: 2.4,
+  },
+  forest: {
+    base: '#0f3620',
+    highlight: '#166534',
+    shadow: '#052112',
+    accent: '#34d399',
+    accentDensity: 0.07,
+    highlightDensity: 0.28,
+    repeat: 2.8,
+  },
+  ember: {
+    base: '#40150a',
+    highlight: '#b45309',
+    shadow: '#220801',
+    accent: '#fb923c',
+    accentDensity: 0.06,
+    highlightDensity: 0.22,
+    repeat: 2.2,
+  },
+  glyph: {
+    base: '#211c5c',
+    highlight: '#3730a3',
+    shadow: '#0f172a',
+    accent: '#6366f1',
+    accentDensity: 0.05,
+    highlightDensity: 0.18,
+    repeat: 2.6,
+  },
+  default: {
+    base: '#334155',
+    highlight: '#475569',
+    shadow: '#1f2937',
+    accent: '#64748b',
+    accentDensity: 0.04,
+    highlightDensity: 0.18,
+    repeat: 2.2,
+  },
+};
 
 const PLAYER_STYLES = {
   self: {
@@ -118,10 +174,12 @@ export class WorldIsometricRenderer {
     this.oreGroup = null;
     this.lootGroup = null;
     this.exitGroup = null;
-  this.walkabilityGroup = null;
-  this.walkOverlayMaterial = null;
-  this.walkBarrierMaterial = null;
-  this.walkBarrierCrossMaterial = null;
+    this.terrainGroup = null;
+    this.walkabilityGroup = null;
+    this.walkOverlayMaterial = null;
+    this.walkBarrierMaterial = null;
+    this.walkBarrierCrossMaterial = null;
+    this._terrainTextureCache = new Map();
     this.cameraDistance = 32;
     this.cameraElevation = Math.PI / 3.2;
     this.cameraAzimuth = Math.PI / 4;
@@ -329,8 +387,9 @@ export class WorldIsometricRenderer {
       this.camera.position.set(20, 22, 20);
       this.camera.lookAt(0, 0, 0);
 
-      this.tileGroup = new Group();
-      this.decorGroup = new Group();
+  this.tileGroup = new Group();
+  this.terrainGroup = new Group();
+  this.decorGroup = new Group();
       this.portalGroup = new Group();
       this.safeGroup = new Group();
       this.walkabilityGroup = new Group();
@@ -338,8 +397,9 @@ export class WorldIsometricRenderer {
       this.lootGroup = new Group();
       this.exitGroup = new Group();
       this.characterGroup = new Group();
-      this.scene.add(this.tileGroup);
-      this.scene.add(this.decorGroup);
+  this.scene.add(this.tileGroup);
+  this.scene.add(this.terrainGroup);
+  this.scene.add(this.decorGroup);
       this.scene.add(this.portalGroup);
       this.scene.add(this.safeGroup);
       this.scene.add(this.walkabilityGroup);
@@ -450,6 +510,7 @@ export class WorldIsometricRenderer {
       this._tilesRef = null;
       if (this.isReady()) {
         this._disposeGroup(this.tileGroup);
+        this._disposeGroup(this.terrainGroup, false);
         this._disposeGroup(this.decorGroup);
         this._disposeGroup(this.walkabilityGroup, false);
         this.walkOverlayMaterial = null;
@@ -536,6 +597,9 @@ export class WorldIsometricRenderer {
     if (this.decorGroup) {
       this._disposeGroup(this.decorGroup);
     }
+    if (this.terrainGroup) {
+      this._disposeGroup(this.terrainGroup);
+    }
     if (this.portalGroup) {
       this._disposeGroup(this.portalGroup);
     }
@@ -571,6 +635,7 @@ export class WorldIsometricRenderer {
     if (!rows || !cols) {
       this._disposeGroup(this.tileGroup);
       this._disposeGroup(this.decorGroup);
+      this._disposeGroup(this.terrainGroup, false);
       this._disposeGroup(this.walkabilityGroup, false);
       this.walkOverlayMaterial = null;
       this.walkBarrierMaterial = null;
@@ -580,8 +645,9 @@ export class WorldIsometricRenderer {
 
     const { BoxGeometry, MeshStandardMaterial, InstancedMesh, Object3D } = this.THREE;
 
-    this._disposeGroup(this.tileGroup);
-    this._disposeGroup(this.decorGroup);
+  this._disposeGroup(this.tileGroup);
+  this._disposeGroup(this.decorGroup);
+  this._disposeGroup(this.terrainGroup, false);
     this._disposeGroup(this.walkabilityGroup, false);
     this.walkOverlayMaterial = null;
     this.walkBarrierMaterial = null;
@@ -627,7 +693,7 @@ export class WorldIsometricRenderer {
         const seed = pseudoRandom(x, y);
         const isWalkable = WALKABLE_TILE_TYPES.has(tile);
         if (isWalkable) {
-          walkableTiles.push({ x: px, z: pz, height });
+          walkableTiles.push({ x: px, z: pz, height, type: tile, seed });
           const neighborOffsets = [
             { dx: 1, dz: 0 },
             { dx: -1, dz: 0 },
@@ -697,6 +763,7 @@ export class WorldIsometricRenderer {
     }
     this.tileGroup.add(tileMesh);
 
+    this._buildTerrainDetail(walkableTiles);
     this._buildDecor(forest, stones, crystals, embers);
     this._buildWalkabilityOverlay(walkableTiles, barrierX, barrierZ);
   }
@@ -750,6 +817,94 @@ export class WorldIsometricRenderer {
       { color: 0xfb923c, emissive: 0xc2410c, emissiveIntensity: 0.7, roughness: 0.55, metalness: 0.25 },
       0.45
     );
+  }
+
+  _buildTerrainDetail(walkableTiles) {
+    if (!this.terrainGroup) return;
+    this._disposeGroup(this.terrainGroup, false);
+    if (!walkableTiles || walkableTiles.length === 0) {
+      return;
+    }
+
+    const {
+      Object3D,
+      InstancedMesh,
+      MeshStandardMaterial,
+      PlaneGeometry,
+      DoubleSide,
+      RepeatWrapping,
+      LinearMipMapLinearFilter,
+      LinearFilter,
+    } = this.THREE;
+
+    const tilesByType = new Map();
+    for (const tile of walkableTiles) {
+      const key = tile.type || 'default';
+      if (!tilesByType.has(key)) {
+        tilesByType.set(key, []);
+      }
+      tilesByType.get(key).push(tile);
+    }
+
+    if (tilesByType.size === 0) {
+      return;
+    }
+
+    const dummy = new Object3D();
+    const geometry = new PlaneGeometry(1, 1);
+    geometry.rotateX(-Math.PI / 2);
+
+    const maxAnisotropy = this.renderer?.capabilities?.getMaxAnisotropy?.() ?? 1;
+
+    for (const [type, tiles] of tilesByType.entries()) {
+      const scheme = TERRAIN_TEXTURE_SCHEMES[type] || TERRAIN_TEXTURE_SCHEMES.default;
+      const texture = this._getTerrainTexture(type);
+      if (!texture) continue;
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+      texture.needsUpdate = true;
+      if (texture.repeat) {
+        const repeatScalar = scheme.repeat ?? 2.4;
+        texture.repeat.set(repeatScalar, repeatScalar);
+      }
+      if (texture.anisotropy !== maxAnisotropy) {
+        texture.anisotropy = maxAnisotropy;
+      }
+      if (LinearMipMapLinearFilter) {
+        texture.minFilter = LinearMipMapLinearFilter;
+      }
+      if (LinearFilter) {
+        texture.magFilter = LinearFilter;
+      }
+
+      const material = new MeshStandardMaterial({
+        map: texture,
+        transparent: true,
+        alphaTest: 0.05,
+        side: DoubleSide,
+        roughness: 0.82,
+        metalness: 0.04,
+        depthWrite: false,
+      });
+
+      const mesh = new InstancedMesh(geometry, material, tiles.length);
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.renderOrder = 1;
+
+      for (let i = 0; i < tiles.length; i += 1) {
+        const tile = tiles[i];
+        const jitter = 0.92 + (tile.seed ?? 0) * 0.1;
+        dummy.position.set(tile.x, tile.height + 0.022, tile.z);
+        dummy.rotation.set(0, (tile.seed ?? 0) * Math.PI * 2, 0);
+  dummy.scale.set(jitter, jitter, jitter);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+
+      mesh.instanceMatrix.needsUpdate = true;
+      this.terrainGroup.add(mesh);
+    }
   }
 
   _buildWalkabilityOverlay(walkableTiles, barrierX, barrierZ) {
@@ -835,6 +990,77 @@ export class WorldIsometricRenderer {
     } else {
       this.walkBarrierCrossMaterial = null;
     }
+  }
+
+  _getTerrainTexture(type) {
+    const cacheKey = TERRAIN_TEXTURE_SCHEMES[type] ? type : 'default';
+    if (this._terrainTextureCache?.has(cacheKey)) {
+      return this._terrainTextureCache.get(cacheKey);
+    }
+    if (!this._terrainTextureCache) {
+      this._terrainTextureCache = new Map();
+    }
+
+    const scheme = TERRAIN_TEXTURE_SCHEMES[cacheKey] || TERRAIN_TEXTURE_SCHEMES.default;
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return null;
+    }
+
+    ctx.fillStyle = scheme.base;
+    ctx.fillRect(0, 0, size, size);
+
+    const fract = (value) => value - Math.floor(value);
+
+    const drawNoise = (count, color, minRadius, maxRadius, alphaRange, seedOffset = 0) => {
+      if (count <= 0) return;
+      ctx.fillStyle = color;
+      for (let i = 0; i < count; i += 1) {
+        const u = fract(pseudoRandom(seedOffset + i * 0.73, seedOffset + i * 1.19));
+        const v = fract(pseudoRandom(seedOffset + i * 2.17, seedOffset + i * 0.37));
+        const w = fract(pseudoRandom(seedOffset + i * 3.61, seedOffset + i * 1.41));
+        const x = Math.floor(u * size);
+        const y = Math.floor(v * size);
+        const radius = minRadius + w * (maxRadius - minRadius);
+        const alpha = (alphaRange.min ?? 0.05) + w * ((alphaRange.max ?? 0.2) - (alphaRange.min ?? 0.05));
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    const highlightCount = Math.floor(size * scheme.highlightDensity * 6.5);
+    const accentCount = Math.floor(size * scheme.accentDensity * 5.2);
+    const shadowCount = Math.floor(size * scheme.highlightDensity * 4.2);
+
+    drawNoise(highlightCount, scheme.highlight, 0.6, 2.6, { min: 0.06, max: 0.16 }, 11.3);
+    drawNoise(accentCount, scheme.accent, 0.5, 1.8, { min: 0.12, max: 0.28 }, 47.9);
+    drawNoise(shadowCount, scheme.shadow, 0.5, 2.1, { min: 0.04, max: 0.12 }, 83.7);
+
+    const gradient = ctx.createLinearGradient(0, 0, size, size);
+    gradient.addColorStop(0, 'rgba(255,255,255,0.05)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0.07)');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    const texture = new this.THREE.CanvasTexture(canvas);
+    if ('colorSpace' in texture && this.THREE.SRGBColorSpace) {
+      texture.colorSpace = this.THREE.SRGBColorSpace;
+    } else if ('encoding' in texture && this.THREE.sRGBEncoding) {
+      texture.encoding = this.THREE.sRGBEncoding;
+    }
+
+    texture.needsUpdate = true;
+
+    this._terrainTextureCache.set(cacheKey, texture);
+    return texture;
   }
 
   _syncLighting(theme, levelId) {
