@@ -54,9 +54,46 @@ template.innerHTML = `
       pointer-events: none;
       padding: var(--hud-gap);
       z-index: 4;
+      display: flex;
+      flex-direction: column;
       letter-spacing: 0.04em;
       text-transform: uppercase;
       color: rgba(148, 163, 184, 0.78);
+    }
+
+    .hud-layout {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: var(--hud-gap);
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .hud-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--hud-gap);
+      pointer-events: none;
+    }
+
+    .hud-row.top-row {
+      align-items: flex-start;
+    }
+
+    .hud-row.bottom-row {
+      align-items: flex-end;
+      margin-top: auto;
+    }
+
+    .hud-row > * {
+      pointer-events: auto;
+      min-width: min(260px, 100%);
+      flex: 1 1 clamp(220px, 28vw, var(--hud-panel-max-width));
+      max-width: var(--hud-panel-max-width);
     }
 
     .minimap-header button {
