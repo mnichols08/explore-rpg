@@ -1327,6 +1327,39 @@ template.innerHTML = `
       backdrop-filter: blur(6px);
       gap: 0.5rem;
       align-items: center;
+      transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+      z-index: 24;
+    }
+
+    .chat-entry::before {
+      content: 'Chat active — press Enter to send, Esc to close';
+      position: absolute;
+      top: -1.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: rgba(226, 232, 240, 0.85);
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      pointer-events: none;
+      opacity: 0;
+      transform-origin: center;
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+
+    :host([data-chat-active]) .chat-entry {
+      background: rgba(22, 30, 48, 0.95);
+      border-color: rgba(125, 211, 252, 0.65);
+      box-shadow: 0 1.4rem 2.6rem rgba(14, 32, 58, 0.55);
+    }
+
+    :host([data-chat-active]) .chat-entry::before {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-4px);
     }
 
     .chat-entry[hidden] {
@@ -3807,6 +3840,7 @@ class GameApp extends HTMLElement {
       this.chatInput.value = '';
       this.chatInput.focus({ preventScroll: true });
     }
+    this.setAttribute('data-chat-active', 'true');
     this._syncTouchChatButton();
   }
 
@@ -3821,6 +3855,7 @@ class GameApp extends HTMLElement {
     if (this.chatEntry) {
       this.chatEntry.hidden = true;
     }
+    this.removeAttribute('data-chat-active');
     this._syncTouchChatButton();
   }
 
