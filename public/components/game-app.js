@@ -275,6 +275,79 @@ template.innerHTML = `
       box-shadow: inset 0 0 1.1rem rgba(8, 15, 31, 0.42);
     }
 
+    [data-draggable-panel]:not(.compact-status) {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 0.4rem;
+    }
+
+    [data-draggable-panel]:not(.compact-status).panel-collapsed {
+      grid-template-rows: auto;
+    }
+
+    [data-draggable-panel]:not(.compact-status).panel-collapsed > [data-panel-content] {
+      display: none !important;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.45rem;
+      padding: 0.35rem 0.6rem;
+      background: rgba(15, 23, 42, 0.78);
+      border-radius: 0.65rem;
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      box-shadow: 0 0.65rem 1.35rem rgba(15, 23, 42, 0.38);
+      color: rgba(226, 232, 240, 0.86);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      user-select: none;
+      pointer-events: auto;
+    }
+
+    .panel-header .panel-title {
+      font-weight: 600;
+      line-height: 1.1;
+    }
+
+    .panel-toggle {
+      all: unset;
+      cursor: pointer;
+      width: 1.7rem;
+      height: 1.7rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      color: #e2e8f0;
+      font-size: 1.2rem;
+      line-height: 1;
+      transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
+    }
+
+    .panel-toggle:hover {
+      background: rgba(59, 130, 246, 0.42);
+      border-color: rgba(56, 189, 248, 0.65);
+    }
+
+    .panel-toggle:active {
+      transform: scale(0.9);
+    }
+
+    [data-draggable-panel]:not(.compact-status).panel-collapsed .panel-header {
+      margin-bottom: 0;
+    }
+
+    [data-draggable-panel]:not(.compact-status).panel-collapsed .panel-toggle {
+      background: rgba(30, 41, 59, 0.68);
+      border-color: rgba(148, 163, 184, 0.35);
+    }
+
     .minimap-legend {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -330,14 +403,34 @@ template.innerHTML = `
       line-height: 1.4;
     }
 
+    .hud .top-left {
+      gap: 0.45rem;
+      flex: 1 1 clamp(240px, 28vw, 320px);
+      max-width: clamp(260px, 32vw, 340px);
+    }
+
+    .hud .top-left > [data-panel-content] {
+      display: block;
+    }
+
     .hud .top-right {
-      display: grid;
-      gap: 0.6rem;
+      gap: 0.45rem;
       flex: 1 1 clamp(260px, 32vw, 360px);
       max-width: clamp(280px, 36vw, 420px);
     }
 
+    .hud .top-right > [data-panel-content] {
+      display: grid;
+      gap: 0.6rem;
+    }
+
     .hud .bottom-left {
+      gap: 0.45rem;
+      flex: 1 1 clamp(240px, 32vw, 340px);
+      max-width: clamp(260px, 34vw, 360px);
+    }
+
+    .hud .bottom-left > [data-panel-content] {
       max-height: calc(48vh - var(--hud-gap));
       overflow-y: auto;
       color: rgba(226, 232, 240, 0.86);
@@ -350,15 +443,17 @@ template.innerHTML = `
       backdrop-filter: blur(6px);
       display: grid;
       gap: 0.55rem;
-      flex: 1 1 clamp(240px, 32vw, 340px);
-      max-width: clamp(260px, 34vw, 360px);
     }
 
     .hud .bottom-right {
-      display: grid;
-      gap: 0.5rem;
+      gap: 0.45rem;
       flex: 1 1 clamp(260px, 30vw, 360px);
       max-width: clamp(280px, 34vw, 380px);
+    }
+
+    .hud .bottom-right > [data-panel-content] {
+      display: grid;
+      gap: 0.5rem;
     }
 
     @media (max-width: 1200px) {
@@ -1708,151 +1803,209 @@ template.innerHTML = `
   <div class="hud">
     <div class="hud-layout">
       <div class="hud-row top-row">
-        <div class="top-left" data-draggable-panel="stats"><stat-panel></stat-panel></div>
-        <div class="top-right" data-draggable-panel="utility">
-          <div class="utility-bar">
-            <charge-meter></charge-meter>
-            <audio-toggle></audio-toggle>
+        <div class="top-left" data-draggable-panel="stats" data-panel-title="Character Stats">
+          <div class="panel-header" data-panel-header>
+            <span class="panel-title">Character Stats</span>
+            <button
+              type="button"
+              class="panel-toggle"
+              data-panel-toggle="stats"
+              aria-expanded="true"
+              aria-controls="panel-content-stats"
+            >
+              −
+            </button>
           </div>
-          <button
-            type="button"
-            class="minimap-ghost"
-            data-minimap-ghost
-            hidden
-            aria-hidden="true"
-            aria-label="Show minimap"
-          >
-            Show Minimap
-          </button>
-          <div class="minimap-card" data-minimap-card>
-            <div class="minimap-header" data-minimap-header>
-              <span>Minimap</span>
-              <div class="minimap-header-actions">
-                <span data-minimap-label>Overworld</span>
-                <button type="button" data-minimap-expand aria-haspopup="dialog" aria-pressed="false">Expand</button>
-                <button type="button" data-minimap-float aria-pressed="false">Float</button>
-                <button type="button" data-minimap-toggle aria-pressed="false">Hide</button>
-              </div>
+          <div class="panel-content" data-panel-content="stats" id="panel-content-stats">
+            <stat-panel></stat-panel>
+          </div>
+        </div>
+        <div class="top-right" data-draggable-panel="utility" data-panel-title="Utility &amp; Map">
+          <div class="panel-header" data-panel-header>
+            <span class="panel-title">Utility &amp; Map</span>
+            <button
+              type="button"
+              class="panel-toggle"
+              data-panel-toggle="utility"
+              aria-expanded="true"
+              aria-controls="panel-content-utility"
+            >
+              −
+            </button>
+          </div>
+          <div class="panel-content" data-panel-content="utility" id="panel-content-utility">
+            <div class="utility-bar">
+              <charge-meter></charge-meter>
+              <audio-toggle></audio-toggle>
             </div>
-            <div class="minimap-body" data-minimap-body>
-              <canvas data-minimap></canvas>
-              <ul class="minimap-legend">
-                <li data-type="you">You</li>
-                <li data-type="hero">Allies</li>
-                <li data-type="pvp">PvP Flagged</li>
-                <li data-type="portal">Portals</li>
-                <li data-type="safe">Safe Zone</li>
-              </ul>
-              <div class="minimap-footer" data-minimap-portal-hint>Follow the gold arrow to reach a gateway.</div>
+            <button
+              type="button"
+              class="minimap-ghost"
+              data-minimap-ghost
+              hidden
+              aria-hidden="true"
+              aria-label="Show minimap"
+            >
+              Show Minimap
+            </button>
+            <div class="minimap-card" data-minimap-card>
+              <div class="minimap-header" data-minimap-header>
+                <span>Minimap</span>
+                <div class="minimap-header-actions">
+                  <span data-minimap-label>Overworld</span>
+                  <button type="button" data-minimap-expand aria-haspopup="dialog" aria-pressed="false">Expand</button>
+                  <button type="button" data-minimap-float aria-pressed="false">Float</button>
+                  <button type="button" data-minimap-toggle aria-pressed="false">Hide</button>
+                </div>
+              </div>
+              <div class="minimap-body" data-minimap-body>
+                <canvas data-minimap></canvas>
+                <ul class="minimap-legend">
+                  <li data-type="you">You</li>
+                  <li data-type="hero">Allies</li>
+                  <li data-type="pvp">PvP Flagged</li>
+                  <li data-type="portal">Portals</li>
+                  <li data-type="safe">Safe Zone</li>
+                </ul>
+                <div class="minimap-footer" data-minimap-portal-hint>Follow the gold arrow to reach a gateway.</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
       <div class="hud-row bottom-row">
-        <div class="bottom-left" data-draggable-panel="identity">
-          <div class="desktop-help">
-            <h4>Core controls</h4>
-            <ul class="help-list">
-              <li><span>Move</span><span>WASD — Hold any attack to charge</span></li>
-              <li><span>Melee</span><span>Left click — builds Strength</span></li>
-              <li><span>Ranged</span><span>Right click — builds Dexterity</span></li>
-              <li><span>Spell</span><span>Space or both buttons</span></li>
-              <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
-            </ul>
-            <div class="help-footnote">Enter chats nearby • M opens map • Alt+M toggles music • Shift+M toggles controls • Shift+N starts a fresh hero.</div>
+        <div class="bottom-left" data-draggable-panel="identity" data-panel-title="Hero &amp; Account">
+          <div class="panel-header" data-panel-header>
+            <span class="panel-title">Hero &amp; Account</span>
+            <button
+              type="button"
+              class="panel-toggle"
+              data-panel-toggle="identity"
+              aria-expanded="true"
+              aria-controls="panel-content-identity"
+            >
+              −
+            </button>
           </div>
-          <div class="mobile-help">
-            Use the left pad to move, Slash/Volley/Spell to act, Interact for loot and portals, Chat to speak, and tap HUD anytime to reveal the panels.
-          </div>
-          <div class="identity-details">
-            <div class="identity-item">
-              <span class="identity-legend">Hero</span>
-              <div class="hero-name" data-hero-name>New Adventurer</div>
+          <div class="panel-content" data-panel-content="identity" id="panel-content-identity">
+            <div class="desktop-help">
+              <h4>Core controls</h4>
+              <ul class="help-list">
+                <li><span>Move</span><span>WASD — Hold any attack to charge</span></li>
+                <li><span>Melee</span><span>Left click — builds Strength</span></li>
+                <li><span>Ranged</span><span>Right click — builds Dexterity</span></li>
+                <li><span>Spell</span><span>Space or both buttons</span></li>
+                <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
+              </ul>
+              <div class="help-footnote">Enter chats nearby • M opens map • Alt+M toggles music • Shift+M toggles controls • Shift+N starts a fresh hero.</div>
             </div>
-            <div class="identity-item">
-              <span class="identity-legend">Account</span>
-              <div class="hero-account" data-hero-account>Not linked</div>
+            <div class="mobile-help">
+              Use the left pad to move, Slash/Volley/Spell to act, Interact for loot and portals, Chat to speak, and tap HUD anytime to reveal the panels.
             </div>
-            <div class="identity-item">
-              <span class="identity-legend">Hero ID</span>
-              <div class="hero-id" data-hero-id>—</div>
+            <div class="identity-details">
+              <div class="identity-item">
+                <span class="identity-legend">Hero</span>
+                <div class="hero-name" data-hero-name>New Adventurer</div>
+              </div>
+              <div class="identity-item">
+                <span class="identity-legend">Account</span>
+                <div class="hero-account" data-hero-account>Not linked</div>
+              </div>
+              <div class="identity-item">
+                <span class="identity-legend">Hero ID</span>
+                <div class="hero-id" data-hero-id>—</div>
+              </div>
             </div>
-          </div>
-          <div class="identity-tools">
-            <button type="button" data-account-manage>Account</button>
-            <button type="button" data-sign-out hidden>Sign Out</button>
-            <button type="button" data-new-hero>Start New Hero</button>
-            <button type="button" data-copy-id>Copy ID</button>
-            <button type="button" data-control-hints-toggle>Show Controls</button>
-            <button type="button" data-settings-panel>Settings</button>
-            <button type="button" data-admin-panel hidden>Admin Panel</button>
+            <div class="identity-tools">
+              <button type="button" data-account-manage>Account</button>
+              <button type="button" data-sign-out hidden>Sign Out</button>
+              <button type="button" data-new-hero>Start New Hero</button>
+              <button type="button" data-copy-id>Copy ID</button>
+              <button type="button" data-control-hints-toggle>Show Controls</button>
+              <button type="button" data-settings-panel>Settings</button>
+              <button type="button" data-admin-panel hidden>Admin Panel</button>
+            </div>
           </div>
         </div>
-  <div class="bottom-right" data-draggable-panel="inventory">
-          <div class="resource-panel" data-inventory-panel>
-            <div>
-              <h4>Inventory</h4>
-              <div class="totals"><span>Currency</span><span data-inventory-currency>0</span></div>
-              <ul data-inventory-items></ul>
-            </div>
-            <div>
-              <h4>Bank</h4>
-              <div class="totals"><span>Vault</span><span data-bank-currency>0</span></div>
-              <ul data-bank-items></ul>
-            </div>
-            <div class="status" data-safe-zone-status>
-              <span>Safe Zone</span>
-              <span data-safe-zone-indicator>Unknown</span>
-            </div>
-            <div class="status zone" data-zone-status>
-              <span>Zone</span>
-              <span data-zone-indicator>Overworld</span>
-            </div>
-            <div class="bank-actions" data-bank-actions>
-              <button type="button" data-bank-deposit disabled>Deposit All</button>
-              <button type="button" data-bank-withdraw disabled>Withdraw All</button>
-              <button type="button" data-bank-sell disabled>Sell Ores</button>
-            </div>
-            <div class="bank-feedback" data-bank-feedback></div>
+    <div class="bottom-right" data-draggable-panel="inventory" data-panel-title="Inventory &amp; Equipment">
+          <div class="panel-header" data-panel-header>
+            <span class="panel-title">Inventory &amp; Equipment</span>
+            <button
+              type="button"
+              class="panel-toggle"
+              data-panel-toggle="inventory"
+              aria-expanded="true"
+              aria-controls="panel-content-inventory"
+            >
+              −
+            </button>
           </div>
-          <div class="resource-panel gear-panel" data-gear-panel>
-            <div class="gear-head">
-              <h4>Equipment</h4>
-              <p>Swap between weapons, spellbooks, and armor you have found.</p>
+          <div class="panel-content" data-panel-content="inventory" id="panel-content-inventory">
+            <div class="resource-panel" data-inventory-panel>
+              <div>
+                <h4>Inventory</h4>
+                <div class="totals"><span>Currency</span><span data-inventory-currency>0</span></div>
+                <ul data-inventory-items></ul>
+              </div>
+              <div>
+                <h4>Bank</h4>
+                <div class="totals"><span>Vault</span><span data-bank-currency>0</span></div>
+                <ul data-bank-items></ul>
+              </div>
+              <div class="status" data-safe-zone-status>
+                <span>Safe Zone</span>
+                <span data-safe-zone-indicator>Unknown</span>
+              </div>
+              <div class="status zone" data-zone-status>
+                <span>Zone</span>
+                <span data-zone-indicator>Overworld</span>
+              </div>
+              <div class="bank-actions" data-bank-actions>
+                <button type="button" data-bank-deposit disabled>Deposit All</button>
+                <button type="button" data-bank-withdraw disabled>Withdraw All</button>
+                <button type="button" data-bank-sell disabled>Sell Ores</button>
+              </div>
+              <div class="bank-feedback" data-bank-feedback></div>
             </div>
-            <div class="gear-slots">
-              <div class="gear-slot" data-gear-slot="melee">
-                <header>
-                  <span class="slot-label">Melee Weapon</span>
-                  <span class="slot-equipped" data-equipped-label="melee">Bare Fists</span>
-                </header>
-                <ul class="gear-options" data-gear-options="melee"></ul>
+            <div class="resource-panel gear-panel" data-gear-panel>
+              <div class="gear-head">
+                <h4>Equipment</h4>
+                <p>Swap between weapons, spellbooks, and armor you have found.</p>
               </div>
-              <div class="gear-slot" data-gear-slot="ranged">
-                <header>
-                  <span class="slot-label">Ranged Weapon</span>
-                  <span class="slot-equipped" data-equipped-label="ranged">Throwing Rocks</span>
-                </header>
-                <ul class="gear-options" data-gear-options="ranged"></ul>
+              <div class="gear-slots">
+                <div class="gear-slot" data-gear-slot="melee">
+                  <header>
+                    <span class="slot-label">Melee Weapon</span>
+                    <span class="slot-equipped" data-equipped-label="melee">Bare Fists</span>
+                  </header>
+                  <ul class="gear-options" data-gear-options="melee"></ul>
+                </div>
+                <div class="gear-slot" data-gear-slot="ranged">
+                  <header>
+                    <span class="slot-label">Ranged Weapon</span>
+                    <span class="slot-equipped" data-equipped-label="ranged">Throwing Rocks</span>
+                  </header>
+                  <ul class="gear-options" data-gear-options="ranged"></ul>
+                </div>
+                <div class="gear-slot" data-gear-slot="spell">
+                  <header>
+                    <span class="slot-label">Spellbook</span>
+                    <span class="slot-equipped" data-equipped-label="spell">Zephyr Primer</span>
+                  </header>
+                  <ul class="gear-options" data-gear-options="spell"></ul>
+                </div>
+                <div class="gear-slot" data-gear-slot="armor">
+                  <header>
+                    <span class="slot-label">Armor</span>
+                    <span class="slot-equipped" data-equipped-label="armor">Traveler Cloth</span>
+                  </header>
+                  <ul class="gear-options" data-gear-options="armor"></ul>
+                </div>
               </div>
-              <div class="gear-slot" data-gear-slot="spell">
-                <header>
-                  <span class="slot-label">Spellbook</span>
-                  <span class="slot-equipped" data-equipped-label="spell">Zephyr Primer</span>
-                </header>
-                <ul class="gear-options" data-gear-options="spell"></ul>
-              </div>
-              <div class="gear-slot" data-gear-slot="armor">
-                <header>
-                  <span class="slot-label">Armor</span>
-                  <span class="slot-equipped" data-equipped-label="armor">Traveler Cloth</span>
-                </header>
-                <ul class="gear-options" data-gear-options="armor"></ul>
-              </div>
+              <div class="gear-feedback" data-gear-feedback></div>
             </div>
-            <div class="gear-feedback" data-gear-feedback></div>
           </div>
-        </div>
+  </div>
       </div>
     </div>
     <div class="portal-prompt" hidden data-portal-prompt></div>
@@ -2245,6 +2398,7 @@ const MINIMAP_FLOAT_POSITION_KEY = 'explore-rpg-minimap-pos';
 const VISUAL_STORAGE_KEY = 'explore-rpg-visuals';
 const ISO_MODE_STORAGE_KEY = 'explore-rpg-isometric';
 const PANEL_POSITION_STORAGE_PREFIX = 'explore-rpg-panel-';
+const PANEL_COLLAPSE_STORAGE_PREFIX = 'explore-rpg-panel-collapsed-';
 const UI_COLLAPSE_STORAGE_KEY = 'explore-rpg-ui-collapsed';
 const CONTROL_HINTS_STORAGE_KEY = 'explore-rpg-control-hints';
 const MINIMAP_SIZE = 176;
@@ -2462,6 +2616,7 @@ class GameApp extends HTMLElement {
       this.equipmentOptionLists[slot] = this.shadowRoot.querySelector(`[data-gear-options="${slot}"]`);
     }
     this.panelDragEntries = [];
+    this.panelZCounter = 32;
     this._panelsRestored = false;
     this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
     this._submitChatMessage = this._submitChatMessage.bind(this);
@@ -2878,9 +3033,13 @@ class GameApp extends HTMLElement {
   window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
   if (Array.isArray(this.panelDragEntries)) {
     for (const entry of this.panelDragEntries) {
+      if (entry?.toggleButton && entry.onToggleClick) {
+        entry.toggleButton.removeEventListener('click', entry.onToggleClick);
+      }
       this._releasePanelPointer(entry, true);
     }
   }
+  this.panelDragEntries = [];
   this._panelsRestored = false;
     this.audio.setMusicEnabled(false);
       this.isoRenderer?.dispose?.();
@@ -4095,6 +4254,24 @@ class GameApp extends HTMLElement {
       this._setMapOverlayVisible(!this.mapOverlayVisible);
       return;
     }
+    const identityOverlayActive = Boolean(this.identityOverlay && this.identityOverlay.hidden === false);
+    const settingsOverlayActive = Boolean(this.settingsOverlay && this.settingsOverlay.hidden === false);
+    if (event.code === 'KeyC' && noModifiers && !identityOverlayActive && !settingsOverlayActive) {
+      event.preventDefault();
+      this._showPanelById('stats', { focus: true });
+      return;
+    }
+    if (event.code === 'KeyI' && noModifiers && !identityOverlayActive && !settingsOverlayActive) {
+      event.preventDefault();
+      this._showPanelById('inventory', { focus: true });
+      return;
+    }
+    if (event.code === 'Escape' && noModifiers) {
+      if (this._handleEscapePanelShortcut()) {
+        event.preventDefault();
+        return;
+      }
+    }
     this.audio.ensureContext();
     if (this.identityOverlay && !this.identityOverlay.hidden) {
       return;
@@ -4652,6 +4829,9 @@ class GameApp extends HTMLElement {
       for (const entry of this.panelDragEntries) {
         if (!entry?.element) continue;
         entry.element.removeEventListener('pointerdown', entry.onPointerDown);
+        if (entry.toggleButton && entry.onToggleClick) {
+          entry.toggleButton.removeEventListener('click', entry.onToggleClick);
+        }
         this._releasePanelPointer(entry, true);
       }
       this.panelDragEntries.length = 0;
@@ -4671,11 +4851,13 @@ class GameApp extends HTMLElement {
       id,
       element,
       storageKey: `${PANEL_POSITION_STORAGE_PREFIX}${id}`,
+      collapseStorageKey: `${PANEL_COLLAPSE_STORAGE_PREFIX}${id}`,
       floating: false,
       pointerId: null,
       pointerType: null,
       offsetX: 0,
       offsetY: 0,
+      collapsed: false,
     };
     entry.onPointerDown = (event) => this._handlePanelPointerDown(event, entry);
     entry.onPointerMove = (event) => this._handlePanelPointerMove(event, entry);
@@ -4683,6 +4865,24 @@ class GameApp extends HTMLElement {
     entry.onPointerCancel = (event) => this._handlePanelPointerCancel(event, entry);
     element.addEventListener('pointerdown', entry.onPointerDown);
     element.classList.add('draggable-panel');
+    entry.title = element.getAttribute('data-panel-title') || id;
+    const safeSelectorId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(id)
+      : id.replace(/(["\\:\[\]\.#])/g, '\\$1');
+    entry.contentEl = element.querySelector(`[data-panel-content="${safeSelectorId}"]`) || element.querySelector('[data-panel-content]');
+    entry.toggleButton = element.querySelector(`[data-panel-toggle="${safeSelectorId}"]`);
+    if (entry.toggleButton) {
+      entry.toggleButton.textContent = '−';
+      entry.toggleButton.setAttribute('aria-expanded', 'true');
+      entry.toggleButton.setAttribute('aria-label', `Collapse ${entry.title || 'panel'}`);
+      entry.onToggleClick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this._togglePanelCollapsed(entry);
+      };
+      entry.toggleButton.addEventListener('click', entry.onToggleClick);
+    }
+    this._restorePanelCollapse(entry);
     this.panelDragEntries.push(entry);
   }
 
@@ -4712,6 +4912,18 @@ class GameApp extends HTMLElement {
       return;
     }
     this._ensurePanelFloating(entry, parsed);
+  }
+
+  _restorePanelCollapse(entry) {
+    if (!entry) return;
+    let stored = null;
+    try {
+      stored = entry.collapseStorageKey ? window.localStorage?.getItem(entry.collapseStorageKey) : null;
+    } catch (err) {
+      stored = null;
+    }
+    const collapsed = stored === '1';
+    this._setPanelCollapsed(entry, collapsed, false);
   }
 
   _ensurePanelFloating(entry, initialPosition = null) {
@@ -4749,6 +4961,67 @@ class GameApp extends HTMLElement {
     const clamped = this._clampPanelPosition(entry, left, top);
     element.style.left = `${Math.round(clamped.left)}px`;
     element.style.top = `${Math.round(clamped.top)}px`;
+  }
+
+  _setPanelCollapsed(entry, collapsed, persist = true) {
+    if (!entry) return;
+    const next = Boolean(collapsed);
+    if (entry.collapsed === next) {
+      if (persist) {
+        this._persistPanelCollapse(entry);
+      }
+      return;
+    }
+    entry.collapsed = next;
+    entry.element?.classList.toggle('panel-collapsed', next);
+    if (entry.contentEl) {
+      if (next) {
+        entry.contentEl.setAttribute('hidden', '');
+        entry.contentEl.style.display = 'none';
+      } else {
+        entry.contentEl.removeAttribute('hidden');
+        entry.contentEl.style.display = '';
+      }
+    }
+    if (entry.toggleButton) {
+      entry.toggleButton.textContent = next ? '+' : '−';
+      entry.toggleButton.setAttribute('aria-expanded', next ? 'false' : 'true');
+      const title = entry.title || 'panel';
+      entry.toggleButton.setAttribute('aria-label', `${next ? 'Expand' : 'Collapse'} ${title}`);
+    }
+    if (!next) {
+      this._bringPanelToFront(entry);
+    }
+    if (persist) {
+      this._persistPanelCollapse(entry);
+    }
+  }
+
+  _togglePanelCollapsed(entry) {
+    if (!entry) return;
+    this._setPanelCollapsed(entry, !entry.collapsed);
+  }
+
+  _persistPanelCollapse(entry) {
+    if (!entry?.collapseStorageKey) return;
+    try {
+      if (entry.collapsed) {
+        window.localStorage?.setItem(entry.collapseStorageKey, '1');
+      } else {
+        window.localStorage?.removeItem(entry.collapseStorageKey);
+      }
+    } catch (err) {
+      // ignore storage failures
+    }
+  }
+
+  _bringPanelToFront(entry) {
+    if (!entry?.element || !entry.floating) return;
+    if (!Number.isFinite(this.panelZCounter)) {
+      this.panelZCounter = 32;
+    }
+    this.panelZCounter += 1;
+    entry.element.style.zIndex = `${Math.max(20, this.panelZCounter)}`;
   }
 
   _clampPanelPosition(entry, left, top) {
@@ -4800,6 +5073,7 @@ class GameApp extends HTMLElement {
     const hudRect = this.hudEl?.getBoundingClientRect();
     const rect = entry.element.getBoundingClientRect();
     if (!hudRect || !rect) return;
+  this._bringPanelToFront(entry);
     entry.offsetX = event.clientX - rect.left;
     entry.offsetY = event.clientY - rect.top;
     entry.pointerId = event.pointerId;
@@ -4881,6 +5155,53 @@ class GameApp extends HTMLElement {
     } catch (err) {
       // ignore storage errors
     }
+  }
+
+  _getPanelEntry(id) {
+    if (!id || !Array.isArray(this.panelDragEntries)) return null;
+    return this.panelDragEntries.find((entry) => entry?.id === id) || null;
+  }
+
+  _showPanelById(id, options = {}) {
+    const entry = this._getPanelEntry(id);
+    if (!entry) return false;
+    const { focus = false } = options;
+    if (entry.collapsed) {
+      this._setPanelCollapsed(entry, false);
+    }
+    if (!entry.floating) {
+      entry.element?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
+    if (focus) {
+      const focusTarget = entry.element?.querySelector('[data-panel-focus]')
+        || entry.element?.querySelector('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      focusTarget?.focus?.({ preventScroll: true });
+    }
+    if (entry.floating) {
+      this._bringPanelToFront(entry);
+    }
+    return true;
+  }
+
+  _handleEscapePanelShortcut() {
+    if (this.settingsOverlay && this.settingsOverlay.hidden === false) {
+      this._closeSettingsPanel();
+      return true;
+    }
+    const identityEntry = this._getPanelEntry('identity');
+    if (identityEntry && identityEntry.collapsed) {
+      this._showPanelById('identity', { focus: true });
+      return true;
+    }
+    if (this.settingsOverlay && this.settingsOverlay.hidden !== false) {
+      this._openSettingsPanel();
+      return true;
+    }
+    if (identityEntry) {
+      this._showPanelById('identity', { focus: true });
+      return true;
+    }
+    return false;
   }
 
   _reclampDraggablePanels() {
