@@ -24,6 +24,7 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Cinematic dungeon exits & enemy upgrades** &mdash; swirling portal pylons mark escape points while each enemy family now sports bespoke, higher-fidelity meshes and motion loops.
 - **Walkable terrain cues** &mdash; a shimmering overlay paints every traversable tile and faint ward lines hug impassable borders so the play space is instantly readable.
 - **Textured walkable terrain** &mdash; procedural grass, sand, ember, and rune patterns tile across the walkable plane so each biome reads at a glance without sacrificing performance.
+- **Hero loadout cosmetics** &mdash; layered armor, cloaks, and weapon models respond to equipped gear while melee swings flash translucent 3D arcs synced to combat effects.
 - **Touch-first controls** &mdash; a virtual joystick, ability palette, chat toggle, and quick HUD hide button keep tablets and phones fully playable without a keyboard or mouse.
 - **Hero onboarding & tutorial** &mdash; first-time players name their adventurer, learn combat, gathering, and safe-zone mechanics in a guided (and skippable) walkthrough, then warp directly into the safe haven to start their journey.
 - **Player-controlled PvP opt-in** &mdash; a built-in settings overlay lets heroes flag themselves for PvP combat, see cooldown timers, and rerun the tutorial whenever they want.

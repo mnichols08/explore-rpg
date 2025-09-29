@@ -85,6 +85,75 @@ const TERRAIN_TEXTURE_SCHEMES = {
     repeat: 2.2,
   },
 };
+const ARMOR_STYLES = {
+  'armor-cloth': {
+    torso: '#e2e8f0',
+    trim: '#cbd5f5',
+    emissive: '#38bdf8',
+    undersuit: '#1f2937',
+    cloak: { base: '#1e3a8a', edge: '#60a5fa' },
+  },
+  'armor-leather': {
+    torso: '#78350f',
+    trim: '#fde68a',
+    emissive: '#f97316',
+    undersuit: '#0f172a',
+    cloak: { base: '#4d1f07', edge: '#fb923c' },
+  },
+  'armor-mail': {
+    torso: '#94a3b8',
+    trim: '#e2e8f0',
+    emissive: '#38bdf8',
+    undersuit: '#0b1220',
+    cloak: { base: '#0f172a', edge: '#38bdf8' },
+  },
+  default: {
+    torso: '#475569',
+    trim: '#cbd5f5',
+    emissive: '#38bdf8',
+    undersuit: '#111827',
+    cloak: { base: '#1f2937', edge: '#38bdf8' },
+  },
+};
+const WEAPON_STYLES = {
+  'melee-fist': {
+    type: 'fist',
+    primary: '#facc15',
+    accent: '#f97316',
+    length: 0.6,
+    thickness: 0.24,
+  },
+  'melee-stick': {
+    type: 'staff',
+    primary: '#b45309',
+    accent: '#fde68a',
+    length: 1.18,
+    thickness: 0.12,
+  },
+  'melee-sword': {
+    type: 'blade',
+    primary: '#e2e8f0',
+    accent: '#38bdf8',
+    pommel: '#f97316',
+    length: 1.12,
+    bladeWidth: 0.16,
+    bladeThickness: 0.06,
+  },
+  default: {
+    type: 'staff',
+    primary: '#94a3b8',
+    accent: '#38bdf8',
+    length: 1.05,
+    thickness: 0.1,
+  },
+};
+const MELEE_VARIANT_COLORS = {
+  'melee-fist': '#facc15',
+  'melee-stick': '#f97316',
+  'melee-sword': '#38bdf8',
+  default: '#fbbf24',
+};
+const DEFAULT_EFFECT_LIFETIME = 600;
 
 const PLAYER_STYLES = {
   self: {
@@ -175,11 +244,14 @@ export class WorldIsometricRenderer {
     this.lootGroup = null;
     this.exitGroup = null;
     this.terrainGroup = null;
+  this.effectGroup = null;
     this.walkabilityGroup = null;
     this.walkOverlayMaterial = null;
     this.walkBarrierMaterial = null;
     this.walkBarrierCrossMaterial = null;
     this._terrainTextureCache = new Map();
+  this.effectMeshes = new Map();
+  this.weaponSwingStates = new Map();
     this.cameraDistance = 32;
     this.cameraElevation = Math.PI / 3.2;
     this.cameraAzimuth = Math.PI / 4;
@@ -387,25 +459,27 @@ export class WorldIsometricRenderer {
       this.camera.position.set(20, 22, 20);
       this.camera.lookAt(0, 0, 0);
 
-  this.tileGroup = new Group();
-  this.terrainGroup = new Group();
-  this.decorGroup = new Group();
+    this.tileGroup = new Group();
+    this.terrainGroup = new Group();
+    this.decorGroup = new Group();
       this.portalGroup = new Group();
       this.safeGroup = new Group();
       this.walkabilityGroup = new Group();
       this.oreGroup = new Group();
       this.lootGroup = new Group();
       this.exitGroup = new Group();
+    this.effectGroup = new Group();
       this.characterGroup = new Group();
-  this.scene.add(this.tileGroup);
-  this.scene.add(this.terrainGroup);
-  this.scene.add(this.decorGroup);
+    this.scene.add(this.tileGroup);
+    this.scene.add(this.terrainGroup);
+    this.scene.add(this.decorGroup);
       this.scene.add(this.portalGroup);
       this.scene.add(this.safeGroup);
       this.scene.add(this.walkabilityGroup);
       this.scene.add(this.oreGroup);
       this.scene.add(this.lootGroup);
       this.scene.add(this.exitGroup);
+    this.scene.add(this.effectGroup);
       this.scene.add(this.characterGroup);
 
       this.ambientLight = new AmbientLight(0xf8fafc, 0.65);
@@ -568,6 +642,7 @@ export class WorldIsometricRenderer {
     this._syncDungeonExit(state.dungeonExit || null, currentLevelId, time, state.exitColor || null);
     this._syncPlayers(state.players || [], state.localId ?? null, time, currentLevelId, state.chargeSnapshot || null);
     this._syncEnemies(state.enemies || [], time, currentLevelId);
+  this._syncEffects(state.effects || [], time, currentLevelId);
     this._updateWalkabilityPulse(time, currentLevelId);
 
     const cameraX = state.cameraX ?? world.width / 2;
@@ -612,6 +687,9 @@ export class WorldIsometricRenderer {
     if (this.exitGroup) {
       this._disposeGroup(this.exitGroup);
     }
+    if (this.effectGroup) {
+      this._disposeGroup(this.effectGroup);
+    }
     if (this.characterGroup) {
       this._disposeGroup(this.characterGroup);
     }
@@ -624,6 +702,9 @@ export class WorldIsometricRenderer {
       this.walkBarrierMaterial = null;
       this.walkBarrierCrossMaterial = null;
     }
+    this.effectMeshes.clear();
+    this.weaponSwingStates.clear();
+    this._terrainTextureCache.clear();
     this.renderer?.dispose?.();
   }
 
@@ -817,6 +898,213 @@ export class WorldIsometricRenderer {
       { color: 0xfb923c, emissive: 0xc2410c, emissiveIntensity: 0.7, roughness: 0.55, metalness: 0.25 },
       0.45
     );
+  }
+
+  _resolveArmorPalette(armorId) {
+    const key = armorId && ARMOR_STYLES[armorId] ? armorId : 'default';
+    return ARMOR_STYLES[key];
+  }
+
+  _resolveWeaponSpec(weaponId) {
+    const base = WEAPON_STYLES[weaponId] || WEAPON_STYLES.default;
+    return {
+      type: base.type || 'staff',
+      primary: base.primary || '#cbd5f5',
+      accent: base.accent || '#38bdf8',
+      pommel: base.pommel || base.accent || '#38bdf8',
+      length: base.length ?? 1,
+      thickness: base.thickness ?? 0.1,
+      bladeWidth: base.bladeWidth ?? 0.14,
+      bladeThickness: base.bladeThickness ?? 0.05,
+    };
+  }
+
+  _refreshPlayerCosmetics(entry, player, isSelf) {
+    if (!entry?.group) return;
+    const equipment = player?.equipment || {};
+    const armorId = equipment.armor || null;
+    const palette = this._resolveArmorPalette(armorId);
+  const { body, armor, shoulderLeft, shoulderRight, belt, cloak } = entry.group.userData;
+    if (entry.state.armorId !== armorId) {
+      if (armor?.material) {
+        armor.material.color.copy(this._getColor(palette.torso));
+        armor.material.emissive.copy(this._getColor(palette.emissive));
+      }
+      if (shoulderLeft?.material) {
+        shoulderLeft.material.color.copy(this._getColor(palette.trim));
+        shoulderLeft.material.emissive.copy(this._getColor(palette.emissive));
+      }
+      if (shoulderRight?.material) {
+        shoulderRight.material.color.copy(this._getColor(palette.trim));
+        shoulderRight.material.emissive.copy(this._getColor(palette.emissive));
+      }
+      if (belt?.material) {
+        belt.material.color.copy(this._getColor(palette.trim));
+        belt.material.emissive.copy(this._getColor(palette.emissive));
+      }
+      if (cloak?.material) {
+        cloak.material.color.copy(this._getColor(palette.cloak.base));
+        cloak.material.emissive.copy(this._getColor(palette.cloak.edge));
+      }
+      if (body?.material) {
+        body.material.color.copy(this._getColor(palette.undersuit));
+        body.material.emissiveIntensity = isSelf ? 0.52 : 0.38;
+      }
+      entry.state.armorId = armorId;
+    }
+    const weaponSpec = this._ensureWeapon(entry, equipment.melee, isSelf);
+    entry.state.weaponSpec = weaponSpec;
+  }
+
+  _ensureWeapon(entry, weaponId, isSelf) {
+    const resolvedId = weaponId || 'melee-fist';
+    if (entry.state.weaponId === resolvedId && entry.state.weaponSpec) {
+      return entry.state.weaponSpec;
+    }
+    const spec = this._resolveWeaponSpec(resolvedId);
+    this._rebuildWeapon(entry, spec, isSelf);
+    entry.state.weaponId = resolvedId;
+    entry.state.weaponSpec = spec;
+    return spec;
+  }
+
+  _rebuildWeapon(entry, spec, isSelf) {
+    const { Mesh, MeshStandardMaterial, MeshBasicMaterial, CylinderGeometry, BoxGeometry, SphereGeometry } = this.THREE;
+    const pivot = entry.group.userData.weaponPivot;
+    if (!pivot) return;
+    if (pivot.userData.parts) {
+      for (const part of pivot.userData.parts) {
+        pivot.remove(part);
+        part.geometry?.dispose?.();
+        disposeMaterial(part.material);
+      }
+    }
+    pivot.userData.parts = [];
+
+    const addPart = (mesh) => {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      pivot.add(mesh);
+      pivot.userData.parts.push(mesh);
+      return mesh;
+    };
+
+    const primaryColor = this._getColor(spec.primary);
+    const accentColor = this._getColor(spec.accent);
+    const pommelColor = this._getColor(spec.pommel);
+
+    pivot.visible = true;
+
+    if (spec.type === 'blade') {
+      const blade = addPart(
+        new Mesh(
+          new BoxGeometry(spec.bladeWidth, spec.bladeThickness, spec.length),
+          new MeshStandardMaterial({
+            color: primaryColor,
+            emissive: accentColor,
+            emissiveIntensity: 0.28,
+            roughness: 0.24,
+            metalness: 0.88,
+          })
+        )
+      );
+      blade.position.set(0, 0, spec.length / 2);
+
+      const guard = addPart(
+        new Mesh(
+          new BoxGeometry(spec.bladeWidth * 1.8, spec.bladeThickness * 2.2, 0.14),
+          new MeshStandardMaterial({
+            color: accentColor,
+            emissive: accentColor,
+            emissiveIntensity: 0.4,
+            roughness: 0.32,
+            metalness: 0.62,
+          })
+        )
+      );
+      guard.position.set(0, 0, 0.12);
+
+      const grip = addPart(
+        new Mesh(
+          new CylinderGeometry(spec.bladeThickness * 0.45, spec.bladeThickness * 0.45, 0.36, 14),
+          new MeshStandardMaterial({
+            color: pommelColor,
+            emissive: accentColor,
+            emissiveIntensity: 0.22,
+            roughness: 0.42,
+            metalness: 0.56,
+          })
+        )
+      );
+      grip.rotation.x = Math.PI / 2;
+      grip.position.set(0, 0, -0.18);
+    } else if (spec.type === 'staff') {
+      const rod = addPart(
+        new Mesh(
+          new CylinderGeometry(spec.thickness / 2, spec.thickness / 2, spec.length, 12),
+          new MeshStandardMaterial({
+            color: primaryColor,
+            emissive: accentColor,
+            emissiveIntensity: 0.2,
+            roughness: 0.48,
+            metalness: 0.36,
+          })
+        )
+      );
+      rod.rotation.x = Math.PI / 2;
+      rod.position.set(0, 0, spec.length / 2 - 0.12);
+
+      const cap = addPart(
+        new Mesh(
+          new SphereGeometry(spec.thickness * 0.7, 12, 10),
+          new MeshBasicMaterial({ color: accentColor, transparent: true, opacity: 0.9 })
+        )
+      );
+      cap.position.set(0, 0, spec.length - 0.12);
+    } else {
+      const gauntlet = addPart(
+        new Mesh(
+          new BoxGeometry(0.26, 0.24, 0.34),
+          new MeshStandardMaterial({
+            color: primaryColor,
+            emissive: accentColor,
+            emissiveIntensity: 0.45,
+            roughness: 0.38,
+            metalness: 0.55,
+          })
+        )
+      );
+      gauntlet.position.set(0, 0, 0.24);
+    }
+
+    const trail = entry.group.userData.weaponTrail;
+    if (trail?.material) {
+      trail.material.color.copy(accentColor);
+      trail.material.opacity = 0;
+      trail.visible = false;
+      trail.position.z = spec.type === 'fist' ? 0.3 : Math.min(1.4, (spec.length ?? 1) * 0.8);
+      trail.position.y = spec.type === 'fist' ? 0 : 0.1;
+    }
+    pivot.userData.spec = spec;
+    if (spec.type === 'fist') {
+      pivot.position.set(0.28, 0.4, 0.08);
+    } else {
+      pivot.position.set(0.32, 0.46, 0);
+    }
+    if (!pivot.userData.basePosition) {
+      pivot.userData.basePosition = new this.THREE.Vector3();
+    }
+    pivot.userData.basePosition.set(pivot.position.x, pivot.position.y, pivot.position.z);
+  }
+
+  _scheduleWeaponFollowThrough(ownerId, time, effect) {
+    if (!ownerId) return;
+  const lifetimeMs = Number(effect?.lifetime) || DEFAULT_EFFECT_LIFETIME;
+    const duration = Math.max(0.18, Math.min(0.6, lifetimeMs / 1000));
+    this.weaponSwingStates.set(ownerId, {
+      until: time + duration,
+      duration,
+    });
   }
 
   _buildTerrainDetail(walkableTiles) {
@@ -1434,6 +1722,7 @@ export class WorldIsometricRenderer {
         this.characterGroup.remove(mesh.group);
         mesh.dispose();
         this.playerMeshes.delete(id);
+        this.weaponSwingStates.delete(id);
       }
     }
   }
@@ -1450,22 +1739,111 @@ export class WorldIsometricRenderer {
       MeshBasicMaterial,
       CircleGeometry,
       SphereGeometry,
+      CylinderGeometry,
+      PlaneGeometry,
+  TorusGeometry,
+  DoubleSide,
+  Vector3,
     } = this.THREE;
     const style = isSelf ? PLAYER_STYLES.self : PLAYER_STYLES.ally;
+    const armorPalette = this._resolveArmorPalette(null);
     const group = new Group();
-    const body = new Mesh(
-      new CapsuleGeometry(0.32, 0.7, 8, 16),
+
+    const cloak = new Mesh(
+      new PlaneGeometry(1.32, 1.62, 1, 6),
       new MeshStandardMaterial({
-        color: style.base,
+        color: armorPalette.cloak.base,
+        emissive: armorPalette.cloak.edge,
+        emissiveIntensity: 0.12,
+        transparent: true,
+        opacity: 0.9,
+        side: DoubleSide,
+        roughness: 0.82,
+        metalness: 0.08,
+        depthWrite: false,
+      })
+    );
+    cloak.position.set(0, 0.38, -0.36);
+    cloak.rotation.x = -0.42;
+    cloak.castShadow = false;
+    cloak.receiveShadow = false;
+    group.add(cloak);
+
+    const body = new Mesh(
+      new CapsuleGeometry(0.3, 0.68, 8, 16),
+      new MeshStandardMaterial({
+        color: armorPalette.undersuit,
         emissive: style.emissive,
-        emissiveIntensity: 0.55,
-        roughness: 0.35,
-        metalness: 0.22,
+        emissiveIntensity: 0.4,
+        roughness: 0.42,
+        metalness: 0.18,
       })
     );
     body.castShadow = true;
     body.receiveShadow = true;
     group.add(body);
+
+    const armor = new Mesh(
+      new CapsuleGeometry(0.36, 0.32, 12, 18),
+      new MeshStandardMaterial({
+        color: armorPalette.torso,
+        emissive: armorPalette.emissive,
+        emissiveIntensity: 0.35,
+        roughness: 0.28,
+        metalness: 0.68,
+      })
+    );
+    armor.scale.set(1.14, 0.7, 0.82);
+    armor.position.y = 0.36;
+    armor.castShadow = true;
+    group.add(armor);
+
+    const shoulderL = new Mesh(
+      new TorusGeometry(0.32, 0.08, 12, 28, Math.PI),
+      new MeshStandardMaterial({
+        color: armorPalette.trim,
+        emissive: armorPalette.emissive,
+        emissiveIntensity: 0.25,
+        roughness: 0.32,
+        metalness: 0.52,
+      })
+    );
+    shoulderL.rotation.set(Math.PI / 2, 0, Math.PI / 2.4);
+    shoulderL.position.set(-0.28, 0.54, 0);
+    shoulderL.castShadow = true;
+    group.add(shoulderL);
+    const shoulderR = new Mesh(
+      new TorusGeometry(0.32, 0.08, 12, 28, Math.PI),
+      new MeshStandardMaterial({
+        color: armorPalette.trim,
+        emissive: armorPalette.emissive,
+        emissiveIntensity: 0.25,
+        roughness: 0.32,
+        metalness: 0.52,
+      })
+    );
+    shoulderR.rotation.set(Math.PI / 2, 0, -Math.PI / 2.4);
+    shoulderR.position.set(0.28, 0.54, 0);
+    shoulderR.castShadow = true;
+    group.add(shoulderR);
+
+    const belt = new Mesh(
+      new CylinderGeometry(0.36, 0.36, 0.18, 20, 1, true),
+      new MeshStandardMaterial({
+        color: armorPalette.trim,
+        emissive: armorPalette.emissive,
+        emissiveIntensity: 0.18,
+        roughness: 0.38,
+        metalness: 0.42,
+        transparent: true,
+        opacity: 0.92,
+      })
+    );
+    belt.rotation.y = Math.PI / 6;
+    belt.position.y = 0.15;
+    belt.scale.set(1, 0.9, 1);
+    belt.castShadow = false;
+    group.add(belt);
 
     const head = new Mesh(
       new SphereGeometry(0.24, 16, 16),
@@ -1484,15 +1862,52 @@ export class WorldIsometricRenderer {
     ring.userData.variant = 'ring';
     group.add(ring);
 
+    const weaponPivot = new Group();
+    weaponPivot.position.set(0.32, 0.46, 0);
+    weaponPivot.userData.parts = [];
+  weaponPivot.userData.basePosition = new Vector3().copy(weaponPivot.position);
+    group.add(weaponPivot);
+
+    const weaponTrail = new Mesh(
+      new PlaneGeometry(0.18, 1.4, 1, 12),
+      new MeshBasicMaterial({
+        color: style.ring,
+        transparent: true,
+        opacity: 0,
+        side: DoubleSide,
+        depthWrite: false,
+      })
+    );
+    weaponTrail.material.depthTest = false;
+  weaponTrail.material.toneMapped = false;
+  weaponTrail.renderOrder = 8;
+    weaponTrail.visible = false;
+    weaponTrail.rotation.y = Math.PI / 2;
+    weaponTrail.position.set(0, 0.1, 0.6);
+    weaponPivot.add(weaponTrail);
+
     group.userData.seed = hashString(id);
     group.userData.body = body;
     group.userData.head = head;
     group.userData.ring = ring;
+    group.userData.armor = armor;
+    group.userData.shoulderLeft = shoulderL;
+    group.userData.shoulderRight = shoulderR;
+    group.userData.belt = belt;
+    group.userData.cloak = cloak;
+    group.userData.weaponPivot = weaponPivot;
+    group.userData.weaponTrail = weaponTrail;
+    group.userData.accentHex = style.ring;
 
     this.characterGroup.add(group);
 
     const entry = {
       group,
+      state: {
+        armorId: null,
+        weaponId: null,
+        lastCharge: 0,
+      },
       dispose: () => {
         body.geometry?.dispose?.();
         disposeMaterial(body.material);
@@ -1500,6 +1915,22 @@ export class WorldIsometricRenderer {
         disposeMaterial(head.material);
         ring.geometry?.dispose?.();
         disposeMaterial(ring.material);
+        armor.geometry?.dispose?.();
+        disposeMaterial(armor.material);
+        belt.geometry?.dispose?.();
+        disposeMaterial(belt.material);
+        shoulderL.geometry?.dispose?.();
+        disposeMaterial(shoulderL.material);
+        shoulderR.geometry?.dispose?.();
+        disposeMaterial(shoulderR.material);
+        cloak.geometry?.dispose?.();
+        disposeMaterial(cloak.material);
+        weaponTrail.geometry?.dispose?.();
+        disposeMaterial(weaponTrail.material);
+        for (const part of weaponPivot.userData.parts || []) {
+          part.geometry?.dispose?.();
+          disposeMaterial(part.material);
+        }
       },
     };
     this.playerMeshes.set(id, entry);
@@ -1511,7 +1942,16 @@ export class WorldIsometricRenderer {
     const body = group.userData.body;
     const head = group.userData.head;
     const ring = group.userData.ring;
+    const cloak = group.userData.cloak;
+    const armor = group.userData.armor;
+    const shoulderLeft = group.userData.shoulderLeft;
+    const shoulderRight = group.userData.shoulderRight;
+    const weaponPivot = group.userData.weaponPivot;
+    const weaponTrail = group.userData.weaponTrail;
     const seed = group.userData.seed || 0;
+
+    this._refreshPlayerCosmetics(entry, player, isSelf);
+  const spec = entry.state.weaponSpec || this._resolveWeaponSpec(entry.state.weaponId || 'melee-fist');
 
     group.position.set(player.x, 0, player.y);
     const aim = player.aim || { x: 1, y: 0 };
@@ -1521,17 +1961,73 @@ export class WorldIsometricRenderer {
     const bob = Math.sin(time * 3.4 + seed * Math.PI * 2) * 0.08;
     body.position.y = 0.35 + bob * 0.4;
     head.position.y = 0.68 + bob * 0.55;
+    if (cloak) {
+      const cloakSway = Math.sin(time * 1.8 + seed * 5.3) * 0.12;
+      cloak.rotation.x = -0.42 - charge * 0.32 + cloakSway * 0.45;
+      cloak.position.z = -0.36 - Math.abs(cloakSway) * 0.12 - charge * 0.12;
+      cloak.material.opacity = Math.min(1, 0.82 + Math.min(0.15, Math.abs(cloakSway) * 0.2) + charge * 0.12);
+    }
 
     const charge = Math.max(0, Math.min(1, player.chargeRatio ?? 0));
     const charging = Boolean(player.charging) || charge > 0.05;
     ring.material.opacity = charging ? 0.45 + charge * 0.4 : 0.3;
     ring.scale.setScalar(1 + charge * 0.3);
     if (body.material?.emissive) {
-      body.material.emissiveIntensity = charging ? 0.75 + charge * 0.5 : 0.55;
+      body.material.emissiveIntensity = charging ? 0.75 + charge * 0.4 : 0.48;
+    }
+    if (armor?.material?.emissive) {
+      armor.material.emissiveIntensity = charging ? 0.4 + charge * 0.65 : 0.35;
+    }
+    if (shoulderLeft?.material?.emissive) {
+      const intensity = charging ? 0.32 + charge * 0.5 : 0.24;
+      shoulderLeft.material.emissiveIntensity = intensity;
+      shoulderRight.material.emissiveIntensity = intensity;
     }
     if (!isSelf && player.health != null && player.maxHealth) {
       const ratio = Math.max(0, Math.min(1, player.health / player.maxHealth));
       ring.material.color.copy(this._getColor(ratio > 0.45 ? '#fb923c' : '#f87171'));
+    } else if (isSelf) {
+      ring.material.color.copy(this._getColor(PLAYER_STYLES.self.ring));
+    }
+
+    if (weaponPivot) {
+      const swingState = this.weaponSwingStates.get(player.id) || null;
+      let swingProgress = 0;
+      if (swingState) {
+        const remaining = swingState.until - time;
+        if (remaining <= 0) {
+          this.weaponSwingStates.delete(player.id);
+        } else {
+          swingProgress = 1 - remaining / swingState.duration;
+        }
+      }
+      const followThrough = swingProgress > 0 ? Math.sin(Math.min(1, swingProgress) * Math.PI) : 0;
+      const windup = charging ? charge : charge * 0.3;
+      weaponPivot.rotation.x = -0.9 * windup + followThrough * 1.4;
+      weaponPivot.rotation.y = 0.24 * windup;
+      weaponPivot.rotation.z = -followThrough * 0.8;
+      const basePos = weaponPivot.userData.basePosition;
+      const baseY = basePos ? basePos.y : weaponPivot.position.y;
+      weaponPivot.position.y = baseY + Math.sin(time * 3.2 + seed * 4.1) * 0.02;
+      if (basePos) {
+        weaponPivot.position.x = basePos.x;
+        weaponPivot.position.z = basePos.z;
+      }
+
+      if (weaponTrail?.material) {
+        if (followThrough > 0.01 && spec && spec.type !== 'fist') {
+          weaponTrail.visible = true;
+          weaponTrail.material.opacity = 0.45 * followThrough;
+          const trailScale = 1 + (spec.length ?? 1) * 0.1;
+          weaponTrail.scale.set(trailScale, trailScale, 1);
+          weaponTrail.rotation.z = followThrough * 0.5;
+        } else {
+          weaponTrail.visible = false;
+          weaponTrail.material.opacity = 0;
+          weaponTrail.rotation.z = 0;
+          weaponTrail.scale.set(1, 1, 1);
+        }
+      }
     }
   }
 
@@ -1561,6 +2057,106 @@ export class WorldIsometricRenderer {
         this.enemyMeshes.delete(id);
       }
     }
+  }
+
+  _syncEffects(effectsInput, time, levelId) {
+    if (!this.effectGroup) return;
+    const effects = Array.isArray(effectsInput)
+      ? effectsInput
+      : effectsInput instanceof Map
+      ? Array.from(effectsInput.values())
+      : [];
+    const active = new Set();
+    for (const effect of effects) {
+      if (!effect) continue;
+      if ((effect.levelId || null) !== (levelId || null)) continue;
+      if (effect.type !== 'melee') continue;
+      const id = effect.id || `${effect.owner || 'unknown'}-${effect.expiresAt || ''}`;
+      active.add(id);
+      let entry = this.effectMeshes.get(id);
+      if (!entry) {
+        entry = this._createMeleeEffectEntry(effect);
+        this.effectMeshes.set(id, entry);
+        this.effectGroup.add(entry.group);
+        this._scheduleWeaponFollowThrough(effect.owner, time, effect);
+      }
+      this._updateMeleeEffectEntry(entry, effect, time);
+    }
+    for (const [id, entry] of this.effectMeshes.entries()) {
+      if (!active.has(id)) {
+        this.effectGroup.remove(entry.group);
+        entry.dispose();
+        this.effectMeshes.delete(id);
+      }
+    }
+  }
+
+  _createMeleeEffectEntry(effect) {
+    const { Group, Mesh, CircleGeometry, MeshBasicMaterial } = this.THREE;
+    const angle = Math.max(Math.PI / 6, typeof effect.angle === 'number' ? effect.angle : Math.PI * 0.6);
+    const group = new Group();
+    const geometry = new CircleGeometry(1, 48, -angle / 2, angle);
+    const color = this._getColor(this._resolveMeleeEffectColor(effect));
+    const material = new MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.38,
+      depthWrite: false,
+    });
+    material.depthTest = false;
+  material.toneMapped = false;
+    const mesh = new Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.renderOrder = 6;
+    group.add(mesh);
+
+    const halo = new Mesh(
+      new CircleGeometry(1, 48, -angle / 2, angle),
+      new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, depthWrite: false })
+    );
+    halo.material.depthTest = false;
+  halo.material.toneMapped = false;
+    halo.rotation.x = -Math.PI / 2;
+    halo.renderOrder = 5;
+    group.add(halo);
+
+    return {
+      group,
+      mesh,
+      halo,
+      angle,
+      dispose: () => {
+        mesh.geometry?.dispose?.();
+        disposeMaterial(mesh.material);
+        halo.geometry?.dispose?.();
+        disposeMaterial(halo.material);
+      },
+    };
+  }
+
+  _updateMeleeEffectEntry(entry, effect, time) {
+    const range = Math.max(0.4, effect.length ?? effect.range ?? 1);
+    entry.group.position.set(effect.x, 0.02, effect.y);
+    const aim = effect.aim || { x: 1, y: 0 };
+    const yaw = Math.atan2(aim.x || 0, aim.y || 1);
+    entry.group.rotation.y = yaw;
+
+    entry.mesh.scale.set(range, range, range);
+    entry.halo.scale.set(range * 0.62, range * 0.62, range * 0.62);
+
+    const lifetime = Math.max(0.1, (Number(effect.lifetime) || DEFAULT_EFFECT_LIFETIME) / 1000);
+    const ttl = Math.max(0, (Number(effect.ttl) || 0) / 1000);
+    const alpha = lifetime > 0 ? Math.max(0, Math.min(1, ttl / lifetime)) : 0;
+
+    const baseColor = this._getColor(this._resolveMeleeEffectColor(effect));
+    entry.mesh.material.color.copy(baseColor);
+    entry.mesh.material.opacity = 0.48 * alpha;
+    entry.halo.material.opacity = 0.18 * alpha;
+  }
+
+  _resolveMeleeEffectColor(effect) {
+    const key = effect?.variant && MELEE_VARIANT_COLORS[effect.variant] ? effect.variant : 'default';
+    return MELEE_VARIANT_COLORS[key];
   }
 
   _updateWalkabilityPulse(time) {
