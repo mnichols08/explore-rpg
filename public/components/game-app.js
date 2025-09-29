@@ -286,6 +286,51 @@ template.innerHTML = `
       border: 1px solid rgba(148, 163, 184, 0.25);
     }
 
+    .minimap-dock-notice {
+      display: grid;
+      gap: 0.5rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 0.75rem;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px dashed rgba(148, 163, 184, 0.4);
+      color: rgba(226, 232, 240, 0.85);
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+
+    .minimap-dock-notice strong {
+      color: rgba(125, 211, 252, 0.92);
+    }
+
+    .minimap-dock-notice button {
+      all: unset;
+      cursor: pointer;
+      justify-self: center;
+      padding: 0.35rem 0.75rem;
+      border-radius: 0.6rem;
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      color: #f0f9ff;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: background 140ms ease, border 140ms ease, transform 120ms ease;
+    }
+
+    .minimap-dock-notice button:hover {
+      background: rgba(56, 189, 248, 0.35);
+      border-color: rgba(125, 211, 252, 0.65);
+    }
+
+    .minimap-dock-notice button:active {
+      transform: translateY(1px);
+    }
+
+    .minimap-dock-notice[hidden] {
+      display: none !important;
+    }
+
     .minimap-card.floating {
       position: absolute;
       z-index: 12;
@@ -1936,6 +1981,10 @@ template.innerHTML = `
                 <div class="minimap-footer" data-minimap-portal-hint>Follow the gold arrow to reach a gateway.</div>
               </div>
             </div>
+            <div class="minimap-dock-notice" data-minimap-dock-notice hidden>
+              <span><strong>Minimap undocked.</strong> It's currently floating over the HUD.</span>
+              <button type="button" data-minimap-dock>Return to panel</button>
+            </div>
             <div
               class="map-overlay"
               hidden
@@ -2476,7 +2525,8 @@ const LEVEL_VIGNETTE = {
 };
 const PORTAL_INTERACT_RADIUS = 1.6;
 const MINIMAP_STORAGE_KEY = 'explore-rpg-minimap';
-const MINIMAP_FLOAT_STORAGE_KEY = 'explore-rpg-minimap-floating-v2';
+const MINIMAP_FLOAT_STORAGE_KEY = 'explore-rpg-minimap-floating-v3';
+const LEGACY_MINIMAP_FLOAT_KEYS = ['explore-rpg-minimap-floating', 'explore-rpg-minimap-floating-v2'];
 const MINIMAP_FLOAT_POSITION_KEY = 'explore-rpg-minimap-pos';
 const VISUAL_STORAGE_KEY = 'explore-rpg-visuals';
 const ISO_MODE_STORAGE_KEY = 'explore-rpg-isometric';
@@ -2584,6 +2634,8 @@ class GameApp extends HTMLElement {
     this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
     this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
     this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
+  this.minimapDockNoticeEl = this.shadowRoot.querySelector('[data-minimap-dock-notice]');
+  this.minimapDockButton = this.shadowRoot.querySelector('[data-minimap-dock]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
     this.toastStackEl = this.shadowRoot.querySelector('[data-toast-stack]');
     this.mapOverlayEl = this.shadowRoot.querySelector('[data-map-overlay]');
@@ -2863,6 +2915,7 @@ class GameApp extends HTMLElement {
   this._handleMapOverlayBackdropClick = this._handleMapOverlayBackdropClick.bind(this);
   this._handleMinimapDragStart = this._handleMinimapDragStart.bind(this);
   this._handleMinimapCardPointerDown = this._handleMinimapCardPointerDown.bind(this);
+  this._handleMinimapDockRequest = this._handleMinimapDockRequest.bind(this);
     this._handleMinimapDragMove = this._handleMinimapDragMove.bind(this);
     this._handleMinimapDragEnd = this._handleMinimapDragEnd.bind(this);
     this._handleMinimapDragCancel = this._handleMinimapDragCancel.bind(this);
@@ -2944,6 +2997,7 @@ class GameApp extends HTMLElement {
     }
   this.minimapExpandButton?.addEventListener('click', this._toggleMapOverlay);
   this.minimapCardEl?.addEventListener('pointerdown', this._handleMinimapCardPointerDown);
+  this.minimapDockButton?.addEventListener('click', this._handleMinimapDockRequest);
   this.mapOverlayCloseButton?.addEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.addEventListener('click', this._handleMapOverlayBackdropClick);
     this.accountManageButton?.addEventListener('click', this._handleAccountManage);
@@ -3034,6 +3088,7 @@ class GameApp extends HTMLElement {
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
   this.minimapExpandButton?.removeEventListener('click', this._toggleMapOverlay);
   this.minimapCardEl?.removeEventListener('pointerdown', this._handleMinimapCardPointerDown);
+  this.minimapDockButton?.removeEventListener('click', this._handleMinimapDockRequest);
   this.mapOverlayCloseButton?.removeEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.removeEventListener('click', this._handleMapOverlayBackdropClick);
   this.accountManageButton?.removeEventListener('click', this._handleAccountManage);
@@ -4650,6 +4705,9 @@ class GameApp extends HTMLElement {
   _setMinimapFloating(floating, persist = true) {
     if (!this.minimapCardEl) return;
     const next = Boolean(floating);
+    if (this.minimapDockNoticeEl) {
+      this.minimapDockNoticeEl.hidden = !next;
+    }
     if (this.minimapFloating === next) {
       if (next) {
         this._restoreMinimapFloatPosition();
@@ -4700,6 +4758,9 @@ class GameApp extends HTMLElement {
         }
       }
       this.minimapDockSibling = this.minimapCardEl?.nextElementSibling ?? null;
+      if (this.minimapDockNoticeEl) {
+        this.minimapDockNoticeEl.hidden = true;
+      }
       this.minimapDragPointerId = null;
       window.removeEventListener('pointermove', this._handleMinimapDragMove);
       window.removeEventListener('pointerup', this._handleMinimapDragEnd);
@@ -4718,16 +4779,18 @@ class GameApp extends HTMLElement {
   }
 
   _loadMinimapFloatPreference() {
-    let stored = null;
     try {
-      stored = window.localStorage?.getItem(MINIMAP_FLOAT_STORAGE_KEY);
+      for (const legacyKey of LEGACY_MINIMAP_FLOAT_KEYS) {
+        window.localStorage?.removeItem(legacyKey);
+      }
     } catch (err) {
-      stored = null;
+      // ignore
     }
-    if (stored === '1') {
-      this._setMinimapFloating(true, false);
-    } else {
-      this._setMinimapFloating(false, false);
+    this._setMinimapFloating(false, false);
+    try {
+      window.localStorage?.setItem(MINIMAP_FLOAT_STORAGE_KEY, '0');
+    } catch (err) {
+      // ignore
     }
   }
 
@@ -5313,6 +5376,11 @@ class GameApp extends HTMLElement {
   _handleMinimapCardPointerDown(event) {
     if (!event) return;
     this._handleMinimapDragStart(event);
+  }
+
+  _handleMinimapDockRequest(event) {
+    event?.preventDefault?.();
+    this._setMinimapFloating(false);
   }
 
   _handleMinimapDragMove(event) {
