@@ -2489,12 +2489,9 @@ class GameApp extends HTMLElement {
     if (this.minimapCtx) {
       this.minimapCtx.imageSmoothingEnabled = false;
     }
-    this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
-    this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
-    this.minimapToggleButton = this.shadowRoot.querySelector('[data-minimap-toggle]');
-    this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
-    this.minimapFloatButton = this.shadowRoot.querySelector('[data-minimap-float]');
-    this.minimapGhostButton = this.shadowRoot.querySelector('[data-minimap-ghost]');
+  this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
+  this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
+  this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
     this.toastStackEl = this.shadowRoot.querySelector('[data-toast-stack]');
     this.mapOverlayEl = this.shadowRoot.querySelector('[data-map-overlay]');
@@ -2768,11 +2765,9 @@ class GameApp extends HTMLElement {
     this._handlePointerLeave = this._handlePointerLeave.bind(this);
     this._handlePointerCancel = this._handlePointerCancel.bind(this);
     this._handleMusicToggle = this._handleMusicToggle.bind(this);
-  this._toggleMinimapVisibility = this._toggleMinimapVisibility.bind(this);
   this._toggleMapOverlay = this._toggleMapOverlay.bind(this);
   this._closeMapOverlay = this._closeMapOverlay.bind(this);
   this._handleMapOverlayBackdropClick = this._handleMapOverlayBackdropClick.bind(this);
-    this._handleMinimapFloatToggle = this._handleMinimapFloatToggle.bind(this);
   this._handleMinimapDragStart = this._handleMinimapDragStart.bind(this);
   this._handleMinimapCardPointerDown = this._handleMinimapCardPointerDown.bind(this);
     this._handleMinimapDragMove = this._handleMinimapDragMove.bind(this);
@@ -2823,9 +2818,8 @@ class GameApp extends HTMLElement {
     this._updateInventoryPanel();
     this._updateLevelStatus(null);
     this._updateMinimapLabel(null);
-  this._syncMinimapFloatButton();
     this._updatePortalHint(null, null);
-    this._setMinimapVisible(true, false);
+  this._setMinimapVisible(true);
     this._loadMinimapPreference();
   this._loadMinimapFloatPreference();
     this._loadUiCollapsePreference();
@@ -2855,10 +2849,7 @@ class GameApp extends HTMLElement {
     if (this.audioToggle) {
       this.audioToggle.active = this.audio.musicEnabled;
     }
-    this.minimapToggleButton?.addEventListener('click', this._toggleMinimapVisibility);
-    this.minimapGhostButton?.addEventListener('click', this._toggleMinimapVisibility);
   this.minimapExpandButton?.addEventListener('click', this._toggleMapOverlay);
-    this.minimapFloatButton?.addEventListener('click', this._handleMinimapFloatToggle);
   this.minimapCardEl?.addEventListener('pointerdown', this._handleMinimapCardPointerDown);
   this.mapOverlayCloseButton?.addEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.addEventListener('click', this._handleMapOverlayBackdropClick);
@@ -2948,10 +2939,7 @@ class GameApp extends HTMLElement {
     this.canvas.removeEventListener('pointerleave', this._handlePointerLeave);
     this.canvas.removeEventListener('pointercancel', this._handlePointerCancel);
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
-  this.minimapToggleButton?.removeEventListener('click', this._toggleMinimapVisibility);
-  this.minimapGhostButton?.removeEventListener('click', this._toggleMinimapVisibility);
   this.minimapExpandButton?.removeEventListener('click', this._toggleMapOverlay);
-  this.minimapFloatButton?.removeEventListener('click', this._handleMinimapFloatToggle);
   this.minimapCardEl?.removeEventListener('pointerdown', this._handleMinimapCardPointerDown);
   this.mapOverlayCloseButton?.removeEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.removeEventListener('click', this._handleMapOverlayBackdropClick);
@@ -4566,14 +4554,6 @@ class GameApp extends HTMLElement {
     this.portals = map;
   }
 
-  _handleMinimapFloatToggle(event) {
-    if (event) {
-      event.preventDefault?.();
-      event.stopPropagation?.();
-    }
-    this._setMinimapFloating(!this.minimapFloating);
-  }
-
   _setMinimapFloating(floating, persist = true) {
     if (!this.minimapCardEl) return;
     const next = Boolean(floating);
@@ -4631,7 +4611,6 @@ class GameApp extends HTMLElement {
       window.removeEventListener('pointerup', this._handleMinimapDragEnd);
       window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
     }
-    this._syncMinimapFloatButton();
     if (persist) {
       try {
         window.localStorage?.setItem(MINIMAP_FLOAT_STORAGE_KEY, next ? '1' : '0');
@@ -4642,14 +4621,6 @@ class GameApp extends HTMLElement {
         this._persistMinimapFloatPosition();
       }
     }
-  }
-
-  _syncMinimapFloatButton() {
-    if (!this.minimapFloatButton) return;
-    const label = this.minimapFloating ? 'Dock' : 'Float';
-    this.minimapFloatButton.textContent = label;
-    this.minimapFloatButton.setAttribute('aria-pressed', this.minimapFloating ? 'true' : 'false');
-    this.minimapFloatButton.setAttribute('aria-label', `${label} minimap`);
   }
 
   _loadMinimapFloatPreference() {
@@ -5353,17 +5324,8 @@ class GameApp extends HTMLElement {
     }
   }
 
-  _toggleMinimapVisibility(event) {
-    if (event) {
-      event.preventDefault?.();
-      event.stopPropagation?.();
-    }
-    this._setMinimapVisible(!this.minimapVisible);
-  }
-
-  _setMinimapVisible(visible, persist = true) {
+  _setMinimapVisible(visible) {
     const next = Boolean(visible);
-    const previous = this.minimapVisible;
     this.minimapVisible = next;
     if (this.minimapCardEl) {
       this.minimapCardEl.classList.toggle('collapsed', !next);
@@ -5372,40 +5334,6 @@ class GameApp extends HTMLElement {
     }
     if (this.minimapBodyEl) {
       this.minimapBodyEl.style.display = next ? '' : 'none';
-    }
-    if (this.minimapGhostButton) {
-      this.minimapGhostButton.hidden = next;
-      this.minimapGhostButton.setAttribute('aria-hidden', next ? 'true' : 'false');
-    }
-    if (this.minimapToggleButton) {
-      this.minimapToggleButton.textContent = next ? 'Hide' : 'Show';
-      this.minimapToggleButton.setAttribute('aria-pressed', next ? 'true' : 'false');
-    }
-    if (previous !== next) {
-      if (!next && this.minimapGhostButton) {
-        setTimeout(() => {
-          try {
-            this.minimapGhostButton.focus({ preventScroll: true });
-          } catch (err) {
-            // ignore focus errors
-          }
-        }, 0);
-      } else if (next && this.minimapToggleButton) {
-        setTimeout(() => {
-          try {
-            this.minimapToggleButton.focus({ preventScroll: true });
-          } catch (err) {
-            // ignore focus errors
-          }
-        }, 0);
-      }
-    }
-    if (persist) {
-      try {
-        window.localStorage?.setItem(MINIMAP_STORAGE_KEY, next ? '1' : '0');
-      } catch (err) {
-        // ignore storage failures
-      }
     }
   }
 
@@ -5526,7 +5454,7 @@ class GameApp extends HTMLElement {
         // ignore storage cleanup errors
       }
     }
-    this._setMinimapVisible(true, false);
+  this._setMinimapVisible(true);
   }
 
   _setVisualEffectsEnabled(enabled, persist = true) {
