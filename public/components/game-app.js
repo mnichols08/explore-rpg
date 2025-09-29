@@ -3,6 +3,7 @@ import './charge-meter.js';
 import './audio-toggle.js';
 import { AudioEngine } from '../audio/audio-engine.js';
 import { WorldWebGLRenderer } from '../renderers/world-webgl.js';
+import { WorldIsometricRenderer } from '../renderers/world-isometric.js';
 
 const template = document.createElement('template');
 
@@ -27,18 +28,24 @@ template.innerHTML = `
       height: 100%;
     }
 
-    canvas[data-webgl-canvas] {
-      z-index: 2;
+    canvas[data-iso-canvas] {
+      z-index: 1;
       pointer-events: none;
-      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 70%);
-      mix-blend-mode: screen;
+      background: transparent;
     }
 
     canvas[data-main-canvas] {
-      z-index: 1;
+      z-index: 2;
       cursor: crosshair;
       touch-action: none;
       background: transparent;
+    }
+
+    canvas[data-webgl-canvas] {
+      z-index: 3;
+      pointer-events: none;
+      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 70%);
+      mix-blend-mode: screen;
     }
 
     .hud {
@@ -46,7 +53,7 @@ template.innerHTML = `
       inset: 0;
       pointer-events: none;
       padding: var(--hud-gap);
-      z-index: 3;
+      z-index: 4;
       display: flex;
       flex-direction: column;
     }
@@ -1709,6 +1716,7 @@ template.innerHTML = `
       font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
     }
   </style>
+  <canvas data-iso-canvas></canvas>
   <canvas data-webgl-canvas></canvas>
   <canvas data-main-canvas></canvas>
   <div class="hud">
@@ -2320,9 +2328,14 @@ class GameApp extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
   this.hudEl = this.shadowRoot.querySelector('.hud');
+  this.isoCanvas = this.shadowRoot.querySelector('[data-iso-canvas]');
   this.webglCanvas = this.shadowRoot.querySelector('[data-webgl-canvas]');
     this.canvas = this.shadowRoot.querySelector('[data-main-canvas]');
     this.ctx = this.canvas.getContext('2d');
+    this.isoRenderer = this.isoCanvas ? new WorldIsometricRenderer(this.isoCanvas) : null;
+    if (this.isoRenderer && this.isoRenderer.supported === false) {
+      this.isoRenderer = null;
+    }
     this.webglRenderer = this.webglCanvas ? new WorldWebGLRenderer(this.webglCanvas) : null;
     if (this.webglRenderer && this.webglRenderer.supported === false) {
       this.webglRenderer = null;
@@ -2846,6 +2859,8 @@ class GameApp extends HTMLElement {
   window.removeEventListener('pointerup', this._handleMinimapDragEnd);
   window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
     this.audio.setMusicEnabled(false);
+      this.isoRenderer?.dispose?.();
+      this.isoRenderer = null;
     this.webglRenderer?.dispose?.();
     this.webglRenderer = null;
     this.webglEnabled = false;
@@ -3259,10 +3274,19 @@ class GameApp extends HTMLElement {
 
     ctx.clearRect(0, 0, width, height);
 
+    const isoReady = Boolean(this.isoRenderer?.isReady?.());
+
     if (!this.world) {
+      if (this.isoRenderer) {
+        if (isoReady) {
+          this.isoRenderer.renderFrame({ width, height, dpr, time: timeSeconds, world: null });
+        } else {
+          this.isoRenderer.setWorld(null);
+        }
+      }
       if (this.webglRenderer && this.webglEnabled) {
         this.webglRenderer.render({ width, height, dpr, time: timeSeconds, dangerClusters: [] });
-      } else {
+      } else if (!isoReady) {
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, width, height);
       }
@@ -3333,6 +3357,33 @@ class GameApp extends HTMLElement {
       ? this._collectChargeHighlights(local, cameraX, cameraY, width, height, currentLevelId)
       : [];
 
+    const usingIso = Boolean(this.isoRenderer && isoReady);
+    if (this.isoRenderer) {
+      this.isoRenderer.setWorld(this.world);
+      if (usingIso) {
+        this.isoRenderer.renderFrame({
+          width,
+          height,
+          dpr,
+          time: timeSeconds,
+          world: this.world,
+          cameraX,
+          cameraY,
+          levelId: currentLevelId,
+          levelTheme,
+          players: this.players,
+          enemies: this.enemies,
+          localId: this.youId,
+          portals: this.portals,
+          bank: this.bankInfo,
+          oreNodes: this.oreNodes,
+          lootDrops: this.lootDrops,
+          dungeonExit: this.currentLevelExit,
+          exitColor: this.currentLevelColor,
+        });
+      }
+    }
+
     if (this.webglRenderer && this.webglEnabled) {
       this.webglRenderer.render({
         width,
@@ -3352,67 +3403,69 @@ class GameApp extends HTMLElement {
         chargeHighlights,
         charge: chargeState,
       });
-    } else {
+    } else if (!usingIso) {
       ctx.fillStyle = levelTheme?.background || '#0f172a';
       ctx.fillRect(0, 0, width, height);
     }
 
-    const halfTilesX = width / (2 * this.tileSize);
-    const halfTilesY = height / (2 * this.tileSize);
+    if (!usingIso) {
+      const halfTilesX = width / (2 * this.tileSize);
+      const halfTilesY = height / (2 * this.tileSize);
 
-    const startX = Math.max(0, Math.floor(cameraX - halfTilesX - 1));
-    const endX = Math.min(this.world.width, Math.ceil(cameraX + halfTilesX + 1));
-    const startY = Math.max(0, Math.floor(cameraY - halfTilesY - 1));
-    const endY = Math.min(this.world.height, Math.ceil(cameraY + halfTilesY + 1));
+      const startX = Math.max(0, Math.floor(cameraX - halfTilesX - 1));
+      const endX = Math.min(this.world.width, Math.ceil(cameraX + halfTilesX + 1));
+      const startY = Math.max(0, Math.floor(cameraY - halfTilesY - 1));
+      const endY = Math.min(this.world.height, Math.ceil(cameraY + halfTilesY + 1));
 
-    for (let y = startY; y < endY; y += 1) {
-      for (let x = startX; x < endX; x += 1) {
-        const tile = this.world.tiles[y][x];
-        const screenX = (x - cameraX) * this.tileSize + width / 2;
-        const screenY = (y - cameraY) * this.tileSize + height / 2;
-        if (tile === 'lava') {
-          ctx.fillStyle = '#7c2d12';
+      for (let y = startY; y < endY; y += 1) {
+        for (let x = startX; x < endX; x += 1) {
+          const tile = this.world.tiles[y][x];
+          const screenX = (x - cameraX) * this.tileSize + width / 2;
+          const screenY = (y - cameraY) * this.tileSize + height / 2;
+          if (tile === 'lava') {
+            ctx.fillStyle = '#7c2d12';
+            ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+            const gradient = ctx.createRadialGradient(
+              screenX + this.tileSize / 2,
+              screenY + this.tileSize / 2,
+              this.tileSize * 0.15,
+              screenX + this.tileSize / 2,
+              screenY + this.tileSize / 2,
+              this.tileSize * 0.6
+            );
+            const pulse = Math.sin((time / 170) + x * 0.5 + y * 0.5) * 0.15 + 0.75;
+            gradient.addColorStop(0, `rgba(249, 115, 22, ${Math.min(0.85, 0.55 + pulse * 0.25)})`);
+            gradient.addColorStop(1, 'rgba(185, 28, 28, 0.12)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+            continue;
+          }
+          if (tile === 'void') {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+            const shimmer = Math.sin((time / 320) + x * 0.4 + y * 0.4) * 0.1 + 0.12;
+            ctx.fillStyle = `rgba(129, 140, 248, ${0.05 + shimmer})`;
+            ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+            continue;
+          }
+          ctx.fillStyle = TILE_STYLE[tile] || '#1e293b';
           ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
-          const gradient = ctx.createRadialGradient(
-            screenX + this.tileSize / 2,
-            screenY + this.tileSize / 2,
-            this.tileSize * 0.15,
-            screenX + this.tileSize / 2,
-            screenY + this.tileSize / 2,
-            this.tileSize * 0.6
-          );
-          const pulse = Math.sin((time / 170) + x * 0.5 + y * 0.5) * 0.15 + 0.75;
-          gradient.addColorStop(0, `rgba(249, 115, 22, ${Math.min(0.85, 0.55 + pulse * 0.25)})`);
-          gradient.addColorStop(1, 'rgba(185, 28, 28, 0.12)');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
-          continue;
-        }
-        if (tile === 'void') {
-          ctx.fillStyle = '#020617';
-          ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
-          const shimmer = Math.sin((time / 320) + x * 0.4 + y * 0.4) * 0.1 + 0.12;
-          ctx.fillStyle = `rgba(129, 140, 248, ${0.05 + shimmer})`;
-          ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
-          continue;
-        }
-        ctx.fillStyle = TILE_STYLE[tile] || '#1e293b';
-        ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
-        if (tile === 'obsidian') {
-          ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
-          ctx.globalAlpha = 0.45;
-          ctx.strokeRect(screenX, screenY, this.tileSize, this.tileSize);
-          ctx.globalAlpha = 1;
+          if (tile === 'obsidian') {
+            ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
+            ctx.globalAlpha = 0.45;
+            ctx.strokeRect(screenX, screenY, this.tileSize, this.tileSize);
+            ctx.globalAlpha = 1;
+          }
         }
       }
-    }
 
-    this._renderPortals(ctx, cameraX, cameraY, width, height, time, local, currentLevelId);
+      this._renderPortals(ctx, cameraX, cameraY, width, height, time, local, currentLevelId);
+    }
 
     ctx.save();
     ctx.translate(width / 2, height / 2);
 
-    if (this.bankInfo) {
+    if (this.bankInfo && !usingIso) {
       ctx.save();
       const offsetX = (this.bankInfo.x - cameraX) * this.tileSize;
       const offsetY = (this.bankInfo.y - cameraY) * this.tileSize;
@@ -3428,7 +3481,7 @@ class GameApp extends HTMLElement {
       ctx.restore();
     }
 
-    if (currentLevelId && this.currentLevelExit) {
+    if (currentLevelId && this.currentLevelExit && !usingIso) {
       ctx.save();
       const exitOffsetX = (this.currentLevelExit.x - cameraX) * this.tileSize;
       const exitOffsetY = (this.currentLevelExit.y - cameraY) * this.tileSize;
@@ -3453,7 +3506,7 @@ class GameApp extends HTMLElement {
       ctx.restore();
     }
 
-    if (!currentLevelId) {
+    if (!currentLevelId && !usingIso) {
       for (const node of this.oreNodes.values()) {
         if (!node) continue;
         ctx.save();
@@ -3486,31 +3539,33 @@ class GameApp extends HTMLElement {
       }
     }
 
-    for (const drop of this.lootDrops.values()) {
-      if (!drop) continue;
-      if ((drop.levelId || null) !== (currentLevelId || null)) continue;
-      const empty = (drop.currency || 0) <= 0 && Object.keys(drop.items || {}).length === 0;
-      if (empty) continue;
-      ctx.save();
-      const offsetX = (drop.x - cameraX) * this.tileSize;
-      const offsetY = (drop.y - cameraY) * this.tileSize;
-      const size = this.tileSize * 0.28;
-      ctx.translate(offsetX, offsetY);
-      const pulse = Math.sin((time / 220) % (Math.PI * 2)) * 0.08 + 0.4;
-      const alpha = 0.5 + pulse * 0.45;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = LOOT_COLOR;
-      ctx.beginPath();
-      ctx.moveTo(0, -size);
-      ctx.lineTo(size, 0);
-      ctx.lineTo(0, size);
-      ctx.lineTo(-size, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = '#fde68a';
-      ctx.stroke();
-      ctx.restore();
+    if (!usingIso) {
+      for (const drop of this.lootDrops.values()) {
+        if (!drop) continue;
+        if ((drop.levelId || null) !== (currentLevelId || null)) continue;
+        const empty = (drop.currency || 0) <= 0 && Object.keys(drop.items || {}).length === 0;
+        if (empty) continue;
+        ctx.save();
+        const offsetX = (drop.x - cameraX) * this.tileSize;
+        const offsetY = (drop.y - cameraY) * this.tileSize;
+        const size = this.tileSize * 0.28;
+        ctx.translate(offsetX, offsetY);
+        const pulse = Math.sin((time / 220) % (Math.PI * 2)) * 0.08 + 0.4;
+        const alpha = 0.5 + pulse * 0.45;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = LOOT_COLOR;
+        ctx.beginPath();
+        ctx.moveTo(0, -size);
+        ctx.lineTo(size, 0);
+        ctx.lineTo(0, size);
+        ctx.lineTo(-size, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = '#fde68a';
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // Effects
@@ -3623,13 +3678,23 @@ class GameApp extends HTMLElement {
       const offsetY = (enemy.y - cameraY) * this.tileSize;
       const style = ENEMY_STYLE[enemy.type] || ENEMY_STYLE.default;
       const radius = (enemy.radius ?? 0.5) * this.tileSize;
-      const gradient = ctx.createRadialGradient(offsetX, offsetY, radius * 0.25, offsetX, offsetY, radius);
-      gradient.addColorStop(0, style.inner);
-      gradient.addColorStop(1, style.outer);
-      ctx.beginPath();
-      ctx.fillStyle = gradient;
-      ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
-      ctx.fill();
+      if (!usingIso) {
+        const gradient = ctx.createRadialGradient(offsetX, offsetY, radius * 0.25, offsetX, offsetY, radius);
+        gradient.addColorStop(0, style.inner);
+        gradient.addColorStop(1, style.outer);
+        ctx.beginPath();
+        ctx.fillStyle = gradient;
+        ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+        ctx.beginPath();
+        ctx.arc(offsetX, offsetY, radius * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
 
       // Enemy health bar
       const hpRatio = enemy.maxHealth ? enemy.health / enemy.maxHealth : 0;
@@ -3650,18 +3715,38 @@ class GameApp extends HTMLElement {
       const serverChargeRatio = Math.max(0, Math.min(1, player.chargeRatio ?? 0));
       const chargeRatio = selfCharge ? selfCharge.ratio : serverChargeRatio;
       const chargeKind = selfCharge?.kind || player.actionKind || 'default';
-      ctx.beginPath();
-      const gradient = ctx.createRadialGradient(offsetX, offsetY, radius * 0.2, offsetX, offsetY, radius);
-      if (isSelf) {
-        gradient.addColorStop(0, '#38bdf8');
-        gradient.addColorStop(1, '#0ea5e9');
+      if (!usingIso) {
+        ctx.beginPath();
+        const gradient = ctx.createRadialGradient(offsetX, offsetY, radius * 0.2, offsetX, offsetY, radius);
+        if (isSelf) {
+          gradient.addColorStop(0, '#38bdf8');
+          gradient.addColorStop(1, '#0ea5e9');
+        } else {
+          gradient.addColorStop(0, '#f97316');
+          gradient.addColorStop(1, '#ea580c');
+        }
+        ctx.fillStyle = gradient;
+        ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
+        ctx.fill();
       } else {
-        gradient.addColorStop(0, '#f97316');
-        gradient.addColorStop(1, '#ea580c');
+        ctx.save();
+        ctx.globalAlpha = isSelf ? 0.6 : 0.4;
+        ctx.strokeStyle = isSelf ? '#38bdf8' : '#f97316';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(offsetX, offsetY, radius * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+        if (chargeRatio > 0.02) {
+          const glow = CHARGE_GLOW_STYLE[chargeKind] || CHARGE_GLOW_STYLE.default;
+          ctx.globalAlpha = 0.45 + chargeRatio * 0.35;
+          ctx.strokeStyle = glow.stroke;
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          ctx.arc(offsetX, offsetY, radius * (1 + chargeRatio * 0.35), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
-      ctx.fillStyle = gradient;
-      ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
-      ctx.fill();
 
       if (!isSelf) {
         const rawName = typeof player.name === 'string' ? player.name.trim() : '';
@@ -8469,6 +8554,16 @@ class GameApp extends HTMLElement {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr, dpr);
     this.ctx.imageSmoothingEnabled = false;
+    if (this.isoRenderer) {
+      this.isoRenderer.setSize(rect.width, rect.height, dpr);
+    } else if (this.isoCanvas) {
+      this.isoCanvas.width = rect.width * dpr;
+      this.isoCanvas.height = rect.height * dpr;
+      if (this.isoCanvas.style) {
+        this.isoCanvas.style.width = `${rect.width}px`;
+        this.isoCanvas.style.height = `${rect.height}px`;
+      }
+    }
     if (this.webglRenderer) {
       this.webglRenderer.setSize(rect.width, rect.height, dpr);
     } else if (this.webglCanvas) {

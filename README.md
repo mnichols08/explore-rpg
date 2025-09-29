@@ -19,6 +19,9 @@ A lightweight multiplayer top-down exploration sandbox built with pure Node.js, 
 - **Ambient recovery with safe haven boosts** &mdash; health slowly returns anywhere in the wild, but stepping into the safe zone accelerates regeneration about a thousand-fold.
 - **Battle Momentum streaks** &mdash; chain takedowns to ignite short-lived boosts to power, speed, and XP, all tracked right on your stat panel.
 - **Aurora WebGL backdrop** &mdash; a native shader paints portal beams, hero auras, danger flares around enemy clusters, and dynamic skies that react to dungeons, safe zones, and momentum streaks—with a Glow toggle for purists who want the classic flat look.
+- **Isometric diorama renderer** &mdash; a Three.js-powered layer extrudes the overworld into an isometric scene with height variation, ambient lighting, and stylized hero/enemy meshes while keeping the classic 2D HUD overlays intact.
+- **3D harvestables & loot caches** &mdash; ore nodes erupt as animated crystal clusters and loot drops levitate as faceted relics synchronized with their world data inside the isometric stage.
+- **Cinematic dungeon exits & enemy upgrades** &mdash; swirling portal pylons mark escape points while each enemy family now sports bespoke, higher-fidelity meshes and motion loops.
 - **Touch-first controls** &mdash; a virtual joystick, ability palette, chat toggle, and quick HUD hide button keep tablets and phones fully playable without a keyboard or mouse.
 - **Hero onboarding & tutorial** &mdash; first-time players name their adventurer, learn combat, gathering, and safe-zone mechanics in a guided (and skippable) walkthrough, then warp directly into the safe haven to start their journey.
 - **Player-controlled PvP opt-in** &mdash; a built-in settings overlay lets heroes flag themselves for PvP combat, see cooldown timers, and rerun the tutorial whenever they want.
@@ -117,8 +120,8 @@ README.md       # This file
 - **Procedural terrain** is generated via a seeded value-noise sampler so every session is identical across clients.
 - **Networking** relies on a handcrafted WebSocket implementation (handshake + frame encoder/decoder) to avoid external packages.
 - **Game loop** runs server-side: movement, combat, attribute updates, and effect resolution happen authoritatively.
-- **Client rendering** uses a canvas-based renderer with a stateless camera, plus Web Components for UI panels.
-- **Visual effects** layer a native WebGL shader beneath the HUD to generate aurora lighting, safe-zone halos, portal spotlights, and dynamic danger lighting without third-party libraries.
+- **Client rendering** blends a Three.js isometric stage for terrain, heroes, and NPCs with a stateless 2D canvas overlay for combat indicators, chat bubbles, and HUD adornments.
+- **Visual effects** layer a native WebGL shader beneath the HUD (and above the 3D stage) to generate aurora lighting, safe-zone halos, portal spotlights, and dynamic danger lighting without third-party libraries.
 
 ## Next steps
 
