@@ -350,6 +350,7 @@ const EXIT_STYLE = {
 };
 
 const MAX_PIXEL_RATIO = 2.5;
+const ENEMY_GLOW_TEXTURE_SIZE = 128;
 
 function pseudoRandom(x, y) {
   return (Math.sin(x * 136.424 + y * 329.393) * 43758.5453) % 1;
@@ -411,6 +412,7 @@ export class WorldIsometricRenderer {
     this._pointerVecFar = null;
     this._pointerDir = null;
     this._pointerIntersection = null;
+    this.enemyGlowTexture = null;
   }
 
   _syncDungeonExit(exitInfo, levelId, time, exitColor) {
@@ -2402,6 +2404,7 @@ export class WorldIsometricRenderer {
   const ringOpacityMin = meta.ringOpacityMin ?? ENEMY_VISIBILITY_DEFAULTS.ringOpacityMin;
   const ringOpacityMax = Math.max(ringOpacityMin, meta.ringOpacityMax ?? ENEMY_VISIBILITY_DEFAULTS.ringOpacityMax);
   const parts = {};
+    const glowTexture = this._getEnemyGlowTexture();
 
     const ring = addMesh(
       new Mesh(
@@ -2423,6 +2426,8 @@ export class WorldIsometricRenderer {
     const glow = addMesh(
       new Sprite(
         new SpriteMaterial({
+          map: glowTexture || null,
+          alphaMap: glowTexture || null,
           color: glowColor,
           transparent: true,
           opacity: (glowOpacityMin + glowOpacityMax) / 2,
@@ -2809,6 +2814,43 @@ export class WorldIsometricRenderer {
         node.geometry?.dispose?.();
       });
     }
+  }
+
+  _getEnemyGlowTexture() {
+    if (this.enemyGlowTexture) {
+      return this.enemyGlowTexture;
+    }
+    if (!this.THREE) {
+      return null;
+    }
+    const { CanvasTexture, LinearFilter, ClampToEdgeWrapping } = this.THREE;
+    const size = ENEMY_GLOW_TEXTURE_SIZE;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, size, size);
+      const radius = size / 2;
+      const gradient = ctx.createRadialGradient(radius, radius, radius * 0.08, radius, radius, radius);
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+      gradient.addColorStop(0.42, 'rgba(255, 255, 255, 0.7)');
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+    }
+    const texture = new CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    texture.generateMipmaps = false;
+    texture.minFilter = LinearFilter;
+    texture.magFilter = LinearFilter;
+    texture.wrapS = ClampToEdgeWrapping;
+    texture.wrapT = ClampToEdgeWrapping;
+    texture.flipY = false;
+    if (this.renderer?.outputEncoding !== undefined) {
+      texture.encoding = this.renderer.outputEncoding;
+    }
+    this.enemyGlowTexture = texture;
+    return texture;
   }
 
   _getColor(hex) {
