@@ -96,6 +96,19 @@ template.innerHTML = `
       max-width: var(--hud-panel-max-width);
     }
 
+    [data-draggable-panel] {
+      position: relative;
+    }
+
+    [data-draggable-panel].floating-panel {
+      cursor: grab;
+      pointer-events: auto;
+    }
+
+    [data-draggable-panel].floating-panel.dragging {
+      cursor: grabbing;
+    }
+
     .minimap-header button {
       all: unset;
       cursor: pointer;
@@ -1695,8 +1708,8 @@ template.innerHTML = `
   <div class="hud">
     <div class="hud-layout">
       <div class="hud-row top-row">
-        <div class="top-left"><stat-panel></stat-panel></div>
-        <div class="top-right">
+        <div class="top-left" data-draggable-panel="stats"><stat-panel></stat-panel></div>
+        <div class="top-right" data-draggable-panel="utility">
           <div class="utility-bar">
             <charge-meter></charge-meter>
             <audio-toggle></audio-toggle>
@@ -1736,7 +1749,7 @@ template.innerHTML = `
         </div>
       </div>
       <div class="hud-row bottom-row">
-        <div class="bottom-left">
+        <div class="bottom-left" data-draggable-panel="identity">
           <div class="desktop-help">
             <h4>Core controls</h4>
             <ul class="help-list">
@@ -1775,7 +1788,7 @@ template.innerHTML = `
             <button type="button" data-admin-panel hidden>Admin Panel</button>
           </div>
         </div>
-        <div class="bottom-right">
+  <div class="bottom-right" data-draggable-panel="inventory">
           <div class="resource-panel" data-inventory-panel>
             <div>
               <h4>Inventory</h4>
@@ -1871,7 +1884,7 @@ template.innerHTML = `
   <p class="touch-hint">Move with the pad • Slash, Volley, Spell attack • Chat to talk • HUD reveals panels • Interact scoops loot and portals</p>
       </div>
     </div>
-    <div class="compact-status" hidden data-compact-status>
+  <div class="compact-status" hidden data-compact-status data-draggable-panel="compact-status">
       <div class="metric" data-kind="health">
         <div class="label-row">
           <span>HP</span>
@@ -2231,6 +2244,7 @@ const MINIMAP_FLOAT_STORAGE_KEY = 'explore-rpg-minimap-floating';
 const MINIMAP_FLOAT_POSITION_KEY = 'explore-rpg-minimap-pos';
 const VISUAL_STORAGE_KEY = 'explore-rpg-visuals';
 const ISO_MODE_STORAGE_KEY = 'explore-rpg-isometric';
+const PANEL_POSITION_STORAGE_PREFIX = 'explore-rpg-panel-';
 const UI_COLLAPSE_STORAGE_KEY = 'explore-rpg-ui-collapsed';
 const CONTROL_HINTS_STORAGE_KEY = 'explore-rpg-control-hints';
 const MINIMAP_SIZE = 176;
@@ -2447,6 +2461,8 @@ class GameApp extends HTMLElement {
       this.equipmentLabels[slot] = this.shadowRoot.querySelector(`[data-equipped-label="${slot}"]`);
       this.equipmentOptionLists[slot] = this.shadowRoot.querySelector(`[data-gear-options="${slot}"]`);
     }
+    this.panelDragEntries = [];
+    this._panelsRestored = false;
     this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
     this._submitChatMessage = this._submitChatMessage.bind(this);
     this._exitChatMode = this._exitChatMode.bind(this);
@@ -2673,6 +2689,7 @@ class GameApp extends HTMLElement {
     this._updateCompactStatus();
     this._syncCompactOverlayVisibility();
     this._loadControlHintsPreference();
+    this._setupDraggablePanels();
     this._minimapWorldRef = null;
   }
 
@@ -2753,6 +2770,15 @@ class GameApp extends HTMLElement {
     }
     this._resizeCanvas();
     this._syncMapOverlaySize();
+    if (!this._panelsRestored) {
+      requestAnimationFrame(() => {
+        this._restoreStoredPanelPositions();
+        this._reclampDraggablePanels();
+        this._panelsRestored = true;
+      });
+    } else {
+      this._reclampDraggablePanels();
+    }
     this._initializeIdentity();
     requestAnimationFrame(this._loop);
   }
@@ -2850,6 +2876,12 @@ class GameApp extends HTMLElement {
   window.removeEventListener('pointermove', this._handleMinimapDragMove);
   window.removeEventListener('pointerup', this._handleMinimapDragEnd);
   window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
+  if (Array.isArray(this.panelDragEntries)) {
+    for (const entry of this.panelDragEntries) {
+      this._releasePanelPointer(entry, true);
+    }
+  }
+  this._panelsRestored = false;
     this.audio.setMusicEnabled(false);
       this.isoRenderer?.dispose?.();
       this.isoRenderer = null;
@@ -4611,6 +4643,259 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _setupDraggablePanels() {
+    const nodes = Array.from(this.shadowRoot?.querySelectorAll('[data-draggable-panel]') || []);
+    if (!Array.isArray(this.panelDragEntries)) {
+      this.panelDragEntries = [];
+    }
+    if (this.panelDragEntries.length) {
+      for (const entry of this.panelDragEntries) {
+        if (!entry?.element) continue;
+        entry.element.removeEventListener('pointerdown', entry.onPointerDown);
+        this._releasePanelPointer(entry, true);
+      }
+      this.panelDragEntries.length = 0;
+    }
+    if (!nodes.length) {
+      return;
+    }
+    for (const element of nodes) {
+      this._registerDraggablePanel(element);
+    }
+  }
+
+  _registerDraggablePanel(element) {
+    if (!element) return;
+    const id = element.getAttribute('data-draggable-panel') || `panel-${this.panelDragEntries.length}`;
+    const entry = {
+      id,
+      element,
+      storageKey: `${PANEL_POSITION_STORAGE_PREFIX}${id}`,
+      floating: false,
+      pointerId: null,
+      pointerType: null,
+      offsetX: 0,
+      offsetY: 0,
+    };
+    entry.onPointerDown = (event) => this._handlePanelPointerDown(event, entry);
+    entry.onPointerMove = (event) => this._handlePanelPointerMove(event, entry);
+    entry.onPointerUp = (event) => this._handlePanelPointerUp(event, entry);
+    entry.onPointerCancel = (event) => this._handlePanelPointerCancel(event, entry);
+    element.addEventListener('pointerdown', entry.onPointerDown);
+    element.classList.add('draggable-panel');
+    this.panelDragEntries.push(entry);
+  }
+
+  _restoreStoredPanelPositions() {
+    if (!Array.isArray(this.panelDragEntries)) return;
+    for (const entry of this.panelDragEntries) {
+      this._restorePanelPosition(entry);
+    }
+  }
+
+  _restorePanelPosition(entry) {
+    if (!entry || entry.floating) return;
+    let stored = null;
+    try {
+      stored = window.localStorage?.getItem(entry.storageKey);
+    } catch (err) {
+      stored = null;
+    }
+    if (!stored) return;
+    let parsed = null;
+    try {
+      parsed = JSON.parse(stored);
+    } catch (err) {
+      parsed = null;
+    }
+    if (!parsed || !Number.isFinite(parsed.left) || !Number.isFinite(parsed.top)) {
+      return;
+    }
+    this._ensurePanelFloating(entry, parsed);
+  }
+
+  _ensurePanelFloating(entry, initialPosition = null) {
+    if (!entry || !entry.element || entry.floating) {
+      if (entry?.floating && initialPosition) {
+        this._applyPanelPosition(entry, initialPosition.left, initialPosition.top, false);
+      }
+      return;
+    }
+    if (!this.hudEl) return;
+    const element = entry.element;
+    const hudRect = this.hudEl.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    entry.dockParent = element.parentElement || null;
+    entry.dockSibling = element.nextElementSibling || null;
+  const baseWidth = Number.isFinite(initialPosition?.width) ? initialPosition.width : rect.width;
+    let left = Number.isFinite(initialPosition?.left) ? initialPosition.left : rect.left - hudRect.left;
+    let top = Number.isFinite(initialPosition?.top) ? initialPosition.top : rect.top - hudRect.top;
+    if (!Number.isFinite(left)) left = 0;
+    if (!Number.isFinite(top)) top = 0;
+    this.hudEl.appendChild(element);
+    element.classList.add('floating-panel');
+    element.style.position = 'absolute';
+    element.style.left = `${Math.round(left)}px`;
+    element.style.top = `${Math.round(top)}px`;
+  element.style.width = `${Math.round(baseWidth)}px`;
+  element.style.minWidth = `${Math.round(baseWidth)}px`;
+  element.style.maxWidth = '';
+  element.style.height = '';
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
+    element.style.zIndex = '14';
+    element.style.pointerEvents = 'auto';
+    entry.floating = true;
+    const clamped = this._clampPanelPosition(entry, left, top);
+    element.style.left = `${Math.round(clamped.left)}px`;
+    element.style.top = `${Math.round(clamped.top)}px`;
+  }
+
+  _clampPanelPosition(entry, left, top) {
+    const hudRect = this.hudEl?.getBoundingClientRect();
+    const element = entry?.element;
+    const width = element ? element.offsetWidth || element.getBoundingClientRect().width || 0 : 0;
+    const height = element ? element.offsetHeight || element.getBoundingClientRect().height || 0 : 0;
+    const boundsWidth = hudRect?.width ?? this.viewportWidth ?? 0;
+    const boundsHeight = hudRect?.height ?? this.viewportHeight ?? 0;
+    const maxLeft = Math.max(0, boundsWidth - width);
+    const maxTop = Math.max(0, boundsHeight - height);
+    const safeLeft = Number.isFinite(left) ? left : 0;
+    const safeTop = Number.isFinite(top) ? top : 0;
+    return {
+      left: Math.min(Math.max(safeLeft, 0), maxLeft),
+      top: Math.min(Math.max(safeTop, 0), maxTop),
+    };
+  }
+
+  _applyPanelPosition(entry, left, top, persist = false) {
+    if (!entry?.element) return;
+    const clamped = this._clampPanelPosition(entry, left, top);
+    entry.element.style.left = `${Math.round(clamped.left)}px`;
+    entry.element.style.top = `${Math.round(clamped.top)}px`;
+    if (persist) {
+      this._persistPanelPosition(entry);
+    }
+  }
+
+  _shouldIgnorePanelDrag(event) {
+    const target = event?.target;
+    if (!target) return false;
+    if (target.closest('[data-no-drag]')) return true;
+    if (target.closest('[data-minimap-card]')) return true;
+    if (target.closest('[data-map-overlay]')) return true;
+    if (target.closest('[data-settings-overlay]')) return true;
+    if (target.closest('[data-identity-overlay]')) return true;
+    if (target.closest('button, input, select, textarea, a, [role="button"], [contenteditable="true"]')) return true;
+    return false;
+  }
+
+  _handlePanelPointerDown(event, entry) {
+    if (!entry || !event) return;
+    if (entry.pointerId != null) return;
+    if (event.button != null && event.pointerType !== 'touch' && event.button !== 0) return;
+    if (this._shouldIgnorePanelDrag(event)) return;
+    this._ensurePanelFloating(entry);
+    if (!entry.floating) return;
+    const hudRect = this.hudEl?.getBoundingClientRect();
+    const rect = entry.element.getBoundingClientRect();
+    if (!hudRect || !rect) return;
+    entry.offsetX = event.clientX - rect.left;
+    entry.offsetY = event.clientY - rect.top;
+    entry.pointerId = event.pointerId;
+    entry.pointerType = event.pointerType || 'mouse';
+    entry.element.classList.add('dragging');
+    entry.element.setPointerCapture?.(event.pointerId);
+    window.addEventListener('pointermove', entry.onPointerMove);
+    window.addEventListener('pointerup', entry.onPointerUp);
+    window.addEventListener('pointercancel', entry.onPointerCancel);
+    event.preventDefault();
+  }
+
+  _handlePanelPointerMove(event, entry) {
+    if (!entry || entry.pointerId == null) return;
+    if (!event || event.pointerId !== entry.pointerId) return;
+    const hudRect = this.hudEl?.getBoundingClientRect();
+    if (!hudRect) return;
+    const left = event.clientX - hudRect.left - entry.offsetX;
+    const top = event.clientY - hudRect.top - entry.offsetY;
+    this._applyPanelPosition(entry, left, top, false);
+    event.preventDefault();
+  }
+
+  _handlePanelPointerUp(event, entry) {
+    if (!entry || entry.pointerId == null) return;
+    if (!event || event.pointerId !== entry.pointerId) return;
+    this._releasePanelPointer(entry, false);
+    this._persistPanelPosition(entry);
+  }
+
+  _handlePanelPointerCancel(event, entry) {
+    if (!entry || entry.pointerId == null) return;
+    if (event && event.pointerId !== entry.pointerId) return;
+    this._releasePanelPointer(entry, true);
+  }
+
+  _releasePanelPointer(entry, cancel = false) {
+    if (!entry) return;
+    if (entry.pointerId != null) {
+      entry.element?.releasePointerCapture?.(entry.pointerId);
+    }
+    entry.pointerId = null;
+    entry.pointerType = null;
+    entry.offsetX = 0;
+    entry.offsetY = 0;
+    entry.element?.classList.remove('dragging');
+    window.removeEventListener('pointermove', entry.onPointerMove);
+    window.removeEventListener('pointerup', entry.onPointerUp);
+    window.removeEventListener('pointercancel', entry.onPointerCancel);
+    if (cancel && entry?.floating) {
+      this._persistPanelPosition(entry);
+    }
+  }
+
+  _persistPanelPosition(entry) {
+    if (!entry) return;
+    if (!entry.floating) {
+      try {
+        window.localStorage?.removeItem(entry.storageKey);
+      } catch (err) {
+        // ignore storage errors
+      }
+      return;
+    }
+    const left = parseFloat(entry.element?.style?.left || '0') || 0;
+    const top = parseFloat(entry.element?.style?.top || '0') || 0;
+    const width = entry.element?.offsetWidth || entry.element?.getBoundingClientRect?.().width || 0;
+    const height = entry.element?.offsetHeight || entry.element?.getBoundingClientRect?.().height || 0;
+    try {
+      window.localStorage?.setItem(
+        entry.storageKey,
+        JSON.stringify({
+          left: Math.round(left),
+          top: Math.round(top),
+          width: Math.round(width),
+          height: Math.round(height),
+        })
+      );
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
+
+  _reclampDraggablePanels() {
+    if (!Array.isArray(this.panelDragEntries) || !this.panelDragEntries.length) return;
+    for (const entry of this.panelDragEntries) {
+      if (!entry?.floating || !entry.element) continue;
+      const currentLeft = parseFloat(entry.element.style.left || '0') || 0;
+      const currentTop = parseFloat(entry.element.style.top || '0') || 0;
+      const clamped = this._clampPanelPosition(entry, currentLeft, currentTop);
+      if (Math.round(clamped.left) !== Math.round(currentLeft) || Math.round(clamped.top) !== Math.round(currentTop)) {
+        this._applyPanelPosition(entry, clamped.left, clamped.top, true);
+      }
+    }
+  }
+
   _handleMinimapDragStart(event) {
     if (!this.minimapCardEl) return;
     if (event && typeof event.button === 'number' && event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') {
@@ -5054,6 +5339,7 @@ class GameApp extends HTMLElement {
         this.removeAttribute('data-compact');
       }
       this._syncCompactOverlayVisibility();
+      this._reclampDraggablePanels();
       return shouldCompact;
     }
     this.compactMode = shouldCompact;
@@ -5076,6 +5362,7 @@ class GameApp extends HTMLElement {
         this._updateCompactStatus();
       }
     }
+    this._reclampDraggablePanels();
     return shouldCompact;
   }
 
@@ -5447,6 +5734,8 @@ class GameApp extends HTMLElement {
     if (!width || !height) return;
     this._renderMapSurface(this.mapOverlayCtx, width, height, local, currentLevelId, nearestPortal, {
       includeViewport: true,
+      centerOnAnchor: true,
+      overlayZoom: 1.35,
     });
   }
 
@@ -5460,18 +5749,52 @@ class GameApp extends HTMLElement {
     if (!this.levels) {
       this.levels = new Map();
     }
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(this.minimapBase, 0, 0, width, height);
+
+    const anchor = local || this.lastKnownPosition || null;
+    const anchorX = anchor?.x ?? null;
+    const anchorY = anchor?.y ?? null;
 
     const baseWidth = this.minimapBase.width || width;
     const baseHeight = this.minimapBase.height || height;
-    const scaleMultiplierX = baseWidth ? width / baseWidth : 1;
-    const scaleMultiplierY = baseHeight ? height / baseHeight : 1;
-    const scaleX = (this.minimapScaleX || 1) * scaleMultiplierX;
-    const scaleY = (this.minimapScaleY || 1) * scaleMultiplierY;
+    const baseScaleX = this.minimapScaleX || 1;
+    const baseScaleY = this.minimapScaleY || 1;
+    const zoom = Number.isFinite(options.overlayZoom) && options.overlayZoom > 0 ? options.overlayZoom : 1;
+    const centerOnAnchor = !!options.centerOnAnchor && anchorX != null && anchorY != null;
+
+    let sourceWidth = baseWidth;
+    let sourceHeight = baseHeight;
+    let sourceX = 0;
+    let sourceY = 0;
+
+    if (zoom !== 1 || centerOnAnchor) {
+      const minSourceSpan = Math.max(32, Math.min(baseWidth, baseHeight) * 0.25);
+      sourceWidth = Math.min(baseWidth, Math.max(minSourceSpan, Math.round(baseWidth / zoom)));
+      sourceHeight = Math.min(baseHeight, Math.max(minSourceSpan, Math.round(baseHeight / zoom)));
+      if (centerOnAnchor) {
+        const anchorBaseX = anchorX * baseScaleX;
+        const anchorBaseY = anchorY * baseScaleY;
+        sourceX = Math.round(anchorBaseX - sourceWidth / 2);
+        sourceY = Math.round(anchorBaseY - sourceHeight / 2);
+      } else {
+        sourceX = Math.round((baseWidth - sourceWidth) / 2);
+        sourceY = Math.round((baseHeight - sourceHeight) / 2);
+      }
+      const maxX = Math.max(0, baseWidth - sourceWidth);
+      const maxY = Math.max(0, baseHeight - sourceHeight);
+      sourceX = Math.min(Math.max(0, sourceX), maxX);
+      sourceY = Math.min(Math.max(0, sourceY), maxY);
+    }
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(this.minimapBase, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+
+    const scaleMultiplierX = sourceWidth ? width / sourceWidth : 1;
+    const scaleMultiplierY = sourceHeight ? height / sourceHeight : 1;
+    const offsetX = sourceX * scaleMultiplierX;
+    const offsetY = sourceY * scaleMultiplierY;
+    const scaleX = baseScaleX * scaleMultiplierX;
+    const scaleY = baseScaleY * scaleMultiplierY;
     const levelKey = currentLevelId || null;
-    const anchorX = local?.x ?? this.lastKnownPosition?.x ?? null;
-    const anchorY = local?.y ?? this.lastKnownPosition?.y ?? null;
 
     ctx.save();
 
@@ -5479,8 +5802,8 @@ class GameApp extends HTMLElement {
       if (!level) continue;
       const origin = level.origin || { x: 0, y: 0 };
       const size = Math.max(0, level.size || 0);
-      const rectX = origin.x * scaleX;
-      const rectY = origin.y * scaleY;
+  const rectX = origin.x * scaleX - offsetX;
+  const rectY = origin.y * scaleY - offsetY;
       const rectW = Math.max(2, size * scaleX);
       const rectH = Math.max(2, size * scaleY);
       const color = level.color || DEFAULT_PORTAL_COLOR;
@@ -5497,8 +5820,8 @@ class GameApp extends HTMLElement {
     }
 
     if (this.bankInfo && Number.isFinite(this.bankInfo.x) && Number.isFinite(this.bankInfo.y) && Number.isFinite(this.bankInfo.radius)) {
-      const centerX = this.bankInfo.x * scaleX;
-      const centerY = this.bankInfo.y * scaleY;
+  const centerX = this.bankInfo.x * scaleX - offsetX;
+  const centerY = this.bankInfo.y * scaleY - offsetY;
       const radiusX = Math.max(2, this.bankInfo.radius * scaleX);
       const radiusY = Math.max(2, this.bankInfo.radius * scaleY);
       ctx.save();
@@ -5517,8 +5840,8 @@ class GameApp extends HTMLElement {
     if ((!this.levels || this.levels.size === 0) || levelKey === null) {
       for (const portal of this.portals.values()) {
         if (!portal) continue;
-        const px = portal.x * scaleX;
-        const py = portal.y * scaleY;
+  const px = portal.x * scaleX - offsetX;
+  const py = portal.y * scaleY - offsetY;
         const size = Math.max(2.5, (scaleX + scaleY) * 0.9);
         ctx.save();
         ctx.globalAlpha = 0.85;
@@ -5535,10 +5858,10 @@ class GameApp extends HTMLElement {
     }
 
     if (!levelKey && nearestPortal && anchorX != null && anchorY != null) {
-      const px = nearestPortal.portal.x * scaleX;
-      const py = nearestPortal.portal.y * scaleY;
-      const cx = anchorX * scaleX;
-      const cy = anchorY * scaleY;
+  const px = nearestPortal.portal.x * scaleX - offsetX;
+  const py = nearestPortal.portal.y * scaleY - offsetY;
+  const cx = anchorX * scaleX - offsetX;
+  const cy = anchorY * scaleY - offsetY;
       ctx.save();
       ctx.globalAlpha = 0.75;
       ctx.setLineDash([6, 4]);
@@ -5552,8 +5875,8 @@ class GameApp extends HTMLElement {
     }
 
     if (levelKey && this.currentLevelExit && Number.isFinite(this.currentLevelExit.x) && Number.isFinite(this.currentLevelExit.y)) {
-      const ex = this.currentLevelExit.x * scaleX;
-      const ey = this.currentLevelExit.y * scaleY;
+  const ex = this.currentLevelExit.x * scaleX - offsetX;
+  const ey = this.currentLevelExit.y * scaleY - offsetY;
       const radius = Math.max(3.6, (scaleX + scaleY) * 1.3);
       const accent = this.currentLevelColor || DEFAULT_PORTAL_COLOR;
       ctx.save();
@@ -5575,8 +5898,8 @@ class GameApp extends HTMLElement {
     for (const player of this.players.values()) {
       if (!player) continue;
       if ((player.levelId || null) !== levelKey) continue;
-      const px = player.x * scaleX;
-      const py = player.y * scaleY;
+  const px = player.x * scaleX - offsetX;
+  const py = player.y * scaleY - offsetY;
       const isSelf = player.id === this.youId;
       const radius = Math.max(isSelf ? 3.4 : 2.4, (scaleX + scaleY) * (isSelf ? 1.1 : 0.8));
       ctx.save();
@@ -5596,8 +5919,8 @@ class GameApp extends HTMLElement {
     }
 
     if (!drewSelf && this.lastKnownPosition && (this.lastKnownPosition.levelId || null) === levelKey) {
-      const px = this.lastKnownPosition.x * scaleX;
-      const py = this.lastKnownPosition.y * scaleY;
+  const px = this.lastKnownPosition.x * scaleX - offsetX;
+  const py = this.lastKnownPosition.y * scaleY - offsetY;
       ctx.save();
       ctx.globalAlpha = 0.95;
       ctx.fillStyle = MINIMAP_PLAYER_COLORS.you;
@@ -5608,7 +5931,6 @@ class GameApp extends HTMLElement {
     }
 
     const includeViewport = options.includeViewport !== false;
-    const anchor = local || this.lastKnownPosition;
     if (includeViewport && anchor && this.canvas && this.canvas.clientWidth && this.canvas.clientHeight) {
       const halfX = (this.canvas.clientWidth / this.tileSize) / 2;
       const halfY = (this.canvas.clientHeight / this.tileSize) / 2;
@@ -5617,8 +5939,8 @@ class GameApp extends HTMLElement {
         const top = Math.max(0, anchor.y - halfY);
         const right = Math.min(this.world.width, anchor.x + halfX);
         const bottom = Math.min(this.world.height, anchor.y + halfY);
-        const rectX = left * scaleX;
-        const rectY = top * scaleY;
+        const rectX = left * scaleX - offsetX;
+        const rectY = top * scaleY - offsetY;
         const rectW = Math.max(2, (right - left) * scaleX);
         const rectH = Math.max(2, (bottom - top) * scaleY);
         ctx.save();
@@ -8753,6 +9075,7 @@ class GameApp extends HTMLElement {
     this._evaluateCompactLayout();
     this._syncCompactOverlayVisibility();
     this._syncMapOverlaySize();
+    this._reclampDraggablePanels();
   }
 }
 
