@@ -135,12 +135,9 @@ template.innerHTML = `
     .map-overlay {
       position: fixed;
       inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 1.2rem;
-      padding: 2.5rem clamp(1.5rem, 4vw, 3rem);
+      display: grid;
+      place-items: center;
+      padding: clamp(1.5rem, 4vw, 3rem);
       background: rgba(15, 23, 42, 0.86);
       backdrop-filter: blur(8px);
       z-index: 40;
@@ -149,6 +146,15 @@ template.innerHTML = `
 
     .map-overlay[hidden] {
       display: none;
+    }
+
+    .map-overlay-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.2rem;
+      max-width: 84vw;
     }
 
     .map-overlay header {
@@ -234,37 +240,6 @@ template.innerHTML = `
       cursor: grabbing;
     }
 
-    .minimap-ghost {
-      all: unset;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-left: auto;
-      margin-bottom: 0.45rem;
-      padding: 0.35rem 0.65rem;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.82);
-      border: 1px solid rgba(148, 163, 184, 0.45);
-      color: rgba(226, 232, 240, 0.85);
-      font-size: 0.68rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      box-shadow: 0 0.9rem 1.8rem rgba(15, 23, 42, 0.35);
-      pointer-events: auto;
-      transition: background 140ms ease, border 140ms ease, transform 80ms ease;
-    }
-
-    .minimap-ghost:hover {
-      background: rgba(30, 41, 59, 0.88);
-      border-color: rgba(148, 163, 184, 0.6);
-      transform: translateY(-1px);
-    }
-
-    .minimap-ghost:active {
-      transform: translateY(0);
-    }
-
     canvas[data-minimap] {
       width: clamp(120px, 20vw, 160px);
       height: clamp(120px, 20vw, 160px);
@@ -275,18 +250,18 @@ template.innerHTML = `
       box-shadow: inset 0 0 1.1rem rgba(8, 15, 31, 0.42);
     }
 
-    [data-draggable-panel]:not(.compact-status) {
+    [data-draggable-panel] {
       position: relative;
       display: grid;
       grid-template-rows: auto 1fr;
       gap: 0.4rem;
     }
 
-    [data-draggable-panel]:not(.compact-status).panel-collapsed {
+    [data-draggable-panel].panel-collapsed {
       grid-template-rows: auto;
     }
 
-    [data-draggable-panel]:not(.compact-status).panel-collapsed > [data-panel-content] {
+    [data-draggable-panel].panel-collapsed > [data-panel-content] {
       display: none !important;
     }
 
@@ -339,11 +314,11 @@ template.innerHTML = `
       transform: scale(0.9);
     }
 
-    [data-draggable-panel]:not(.compact-status).panel-collapsed .panel-header {
+    [data-draggable-panel].panel-collapsed .panel-header {
       margin-bottom: 0;
     }
 
-    [data-draggable-panel]:not(.compact-status).panel-collapsed .panel-toggle {
+    [data-draggable-panel].panel-collapsed .panel-toggle {
       background: rgba(30, 41, 59, 0.68);
       border-color: rgba(148, 163, 184, 0.35);
     }
@@ -1282,7 +1257,25 @@ template.innerHTML = `
       top: 0.85rem;
       left: 50%;
       transform: translateX(-50%);
-      display: flex;
+      display: grid;
+      gap: 0.35rem;
+      min-width: 240px;
+      z-index: 18;
+      pointer-events: auto;
+    }
+
+    .compact-status[hidden] {
+      display: none;
+    }
+
+    .compact-status .panel-header {
+      padding: 0.3rem 0.55rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+    }
+
+    .compact-status .panel-content {
+      display: grid;
       gap: 0.4rem;
       padding: 0.4rem 0.55rem;
       border-radius: 0.65rem;
@@ -1293,12 +1286,6 @@ template.innerHTML = `
       letter-spacing: 0.04em;
       text-transform: uppercase;
       box-shadow: 0 0.65rem 1.4rem rgba(15, 23, 42, 0.45);
-      z-index: 6;
-      pointer-events: none;
-    }
-
-    .compact-status[hidden] {
-      display: none;
     }
 
     .compact-status .metric {
@@ -1838,24 +1825,12 @@ template.innerHTML = `
               <charge-meter></charge-meter>
               <audio-toggle></audio-toggle>
             </div>
-            <button
-              type="button"
-              class="minimap-ghost"
-              data-minimap-ghost
-              hidden
-              aria-hidden="true"
-              aria-label="Show minimap"
-            >
-              Show Minimap
-            </button>
             <div class="minimap-card" data-minimap-card>
               <div class="minimap-header" data-minimap-header>
                 <span>Minimap</span>
                 <div class="minimap-header-actions">
                   <span data-minimap-label>Overworld</span>
                   <button type="button" data-minimap-expand aria-haspopup="dialog" aria-pressed="false">Expand</button>
-                  <button type="button" data-minimap-float aria-pressed="false">Float</button>
-                  <button type="button" data-minimap-toggle aria-pressed="false">Hide</button>
                 </div>
               </div>
               <div class="minimap-body" data-minimap-body>
@@ -2037,25 +2012,39 @@ template.innerHTML = `
   <p class="touch-hint">Move with the pad • Slash, Volley, Spell attack • Chat to talk • HUD reveals panels • Interact scoops loot and portals</p>
       </div>
     </div>
-  <div class="compact-status" hidden data-compact-status data-draggable-panel="compact-status">
-      <div class="metric" data-kind="health">
-        <div class="label-row">
-          <span>HP</span>
-          <span data-compact-health-text>0 / 0</span>
+      <div class="compact-status" hidden data-compact-status data-draggable-panel="compact-status" data-panel-title="Vitals">
+        <div class="panel-header" data-panel-header>
+          <span class="panel-title">Vitals</span>
+          <button
+            type="button"
+            class="panel-toggle"
+            data-panel-toggle="compact-status"
+            aria-expanded="true"
+            aria-controls="panel-content-compact-status"
+          >
+            −
+          </button>
         </div>
-        <div class="bar">
-          <span data-compact-health-bar></span>
+        <div class="panel-content" data-panel-content="compact-status" id="panel-content-compact-status">
+          <div class="metric" data-kind="health">
+            <div class="label-row">
+              <span>HP</span>
+              <span data-compact-health-text>0 / 0</span>
+            </div>
+            <div class="bar">
+              <span data-compact-health-bar></span>
+            </div>
+          </div>
+          <div class="metric" data-kind="momentum">
+            <div class="label-row">
+              <span>Momentum</span>
+              <span data-compact-momentum-label>Ready</span>
+            </div>
+            <div class="bar">
+              <span data-compact-momentum-bar></span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="metric" data-kind="momentum">
-        <div class="label-row">
-          <span>Momentum</span>
-          <span data-compact-momentum-label>Ready</span>
-        </div>
-        <div class="bar">
-          <span data-compact-momentum-bar></span>
-        </div>
-      </div>
     </div>
   </div>
   <div class="chat-entry" hidden data-chat-entry>
@@ -2167,22 +2156,24 @@ template.innerHTML = `
   </div>
   <div class="toast-stack" data-toast-stack></div>
   <div
-    class="map-overlay"
-    hidden
-    data-map-overlay
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="map-overlay-title"
-    aria-hidden="true"
-  >
-    <header>
-      <h3 id="map-overlay-title">World Map</h3>
-      <p>Press M or Escape to close • Alt+M toggles music • Drag the minimap anytime to reposition</p>
-    </header>
-    <canvas data-map-canvas></canvas>
-    <div class="map-controls">
-      <button type="button" data-map-close>Close Map</button>
-    </div>
+    <div class="map-overlay"
+      hidden
+      data-map-overlay
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="map-overlay-title"
+      aria-hidden="true"
+    >
+      <div class="map-overlay-card">
+        <header>
+          <h3 id="map-overlay-title">World Map</h3>
+          <p>Press M or Escape to close • Alt+M toggles music • Drag the minimap anytime to reposition</p>
+        </header>
+        <canvas data-map-canvas></canvas>
+        <div class="map-controls">
+          <button type="button" data-map-close>Close Map</button>
+        </div>
+      </div>
   </div>
 `;
 
@@ -4258,12 +4249,12 @@ class GameApp extends HTMLElement {
     const settingsOverlayActive = Boolean(this.settingsOverlay && this.settingsOverlay.hidden === false);
     if (event.code === 'KeyC' && noModifiers && !identityOverlayActive && !settingsOverlayActive) {
       event.preventDefault();
-      this._showPanelById('stats', { focus: true });
+      this._togglePanelShortcut('stats', { focus: true });
       return;
     }
     if (event.code === 'KeyI' && noModifiers && !identityOverlayActive && !settingsOverlayActive) {
       event.preventDefault();
-      this._showPanelById('inventory', { focus: true });
+      this._togglePanelShortcut('inventory', { focus: true });
       return;
     }
     if (event.code === 'Escape' && noModifiers) {
@@ -5183,25 +5174,35 @@ class GameApp extends HTMLElement {
     return true;
   }
 
+  _togglePanelShortcut(id, options = {}) {
+    const entry = this._getPanelEntry(id);
+    if (!entry) return false;
+    if (!entry.collapsed) {
+      this._setPanelCollapsed(entry, true);
+      return true;
+    }
+    return this._showPanelById(id, options);
+  }
+
   _handleEscapePanelShortcut() {
+    if (this.identityOverlay && this.identityOverlay.hidden === false) {
+      this._hideIdentityOverlay();
+      return true;
+    }
     if (this.settingsOverlay && this.settingsOverlay.hidden === false) {
       this._closeSettingsPanel();
       return true;
     }
     const identityEntry = this._getPanelEntry('identity');
-    if (identityEntry && identityEntry.collapsed) {
+    if (!identityEntry) {
+      return false;
+    }
+    if (identityEntry.collapsed) {
       this._showPanelById('identity', { focus: true });
-      return true;
+    } else {
+      this._setPanelCollapsed(identityEntry, true);
     }
-    if (this.settingsOverlay && this.settingsOverlay.hidden !== false) {
-      this._openSettingsPanel();
-      return true;
-    }
-    if (identityEntry) {
-      this._showPanelById('identity', { focus: true });
-      return true;
-    }
-    return false;
+    return true;
   }
 
   _reclampDraggablePanels() {
@@ -5519,10 +5520,13 @@ class GameApp extends HTMLElement {
       stored = null;
     }
     if (stored === '0') {
-      this._setMinimapVisible(false, false);
-    } else {
-      this._setMinimapVisible(true, false);
+      try {
+        window.localStorage?.removeItem(MINIMAP_STORAGE_KEY);
+      } catch (err) {
+        // ignore storage cleanup errors
+      }
     }
+    this._setMinimapVisible(true, false);
   }
 
   _setVisualEffectsEnabled(enabled, persist = true) {
