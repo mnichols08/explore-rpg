@@ -357,6 +357,13 @@ template.innerHTML = `
       transition: background 150ms ease, border 150ms ease, transform 150ms ease;
     }
 
+    .identity-tools button[data-attention='true'] {
+      border-color: rgba(250, 191, 36, 0.8);
+      box-shadow: 0 0 0.6rem rgba(250, 191, 36, 0.35);
+      background: rgba(30, 41, 59, 0.95);
+      color: #fef3c7;
+    }
+
     .identity-tools button:hover {
       background: rgba(51, 65, 85, 0.9);
       border-color: rgba(148, 163, 184, 0.6);
@@ -412,6 +419,13 @@ template.innerHTML = `
       font-weight: 600;
       letter-spacing: 0.05em;
       color: #f8fafc;
+    }
+
+    .hero-account {
+      font-size: 0.8rem;
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+      color: rgba(148, 163, 184, 0.85);
+      word-break: break-all;
     }
 
     .identity-legend {
@@ -474,10 +488,18 @@ template.innerHTML = `
       font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
       font-size: 0.85rem;
       color: #f8fafc;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .identity-card input::placeholder {
       color: rgba(148, 163, 184, 0.6);
+    }
+
+    .identity-feedback {
+      min-height: 1.05rem;
+      font-size: 0.78rem;
+      color: #fbbf24;
     }
 
     .identity-card .actions {
@@ -516,6 +538,26 @@ template.innerHTML = `
 
     .identity-card button:active {
       transform: translateY(1px);
+    }
+
+    .identity-secondary {
+      all: unset;
+      cursor: pointer;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(147, 197, 253, 0.9);
+      transition: color 120ms ease;
+    }
+
+    .identity-secondary:hover {
+      color: rgba(191, 219, 254, 1);
+      text-decoration: underline;
+    }
+
+    .account-card {
+      text-align: left;
+      gap: 0.65rem;
     }
 
     .onboarding-feedback {
@@ -1601,13 +1643,18 @@ template.innerHTML = `
         <div class="hero-name" data-hero-name>New Adventurer</div>
       </div>
       <div>
+        <span class="identity-legend">Account</span>
+        <div class="hero-account" data-hero-account>Not linked</div>
+      </div>
+      <div>
         <span class="identity-legend">Hero ID</span>
         <div class="hero-id" data-hero-id>—</div>
       </div>
       <div class="identity-tools">
-        <button type="button" data-copy-id>Copy ID</button>
+        <button type="button" data-account-manage>Account</button>
+        <button type="button" data-sign-out hidden>Sign Out</button>
         <button type="button" data-new-hero>Start New Hero</button>
-        <button type="button" data-use-id>Use Hero ID</button>
+        <button type="button" data-copy-id>Copy ID</button>
         <button type="button" data-control-hints-toggle>Show Controls</button>
         <button type="button" data-settings-panel>Settings</button>
         <button type="button" data-admin-panel hidden>Admin Panel</button>
@@ -1731,15 +1778,45 @@ template.innerHTML = `
   <div class="chat-entry" hidden data-chat-entry>
     <input type="text" maxlength="140" placeholder="Type a message" data-chat-input />
   </div>
-  <div class="identity-overlay" hidden data-identity-overlay>
-    <div class="identity-card">
-      <h3>Hero Login</h3>
-      <p>Paste an existing Hero ID to continue, or launch a fresh hero.</p>
-      <input type="text" placeholder="Paste Hero ID" data-identity-input />
+  <div class="identity-overlay" hidden data-auth-overlay>
+    <div class="identity-card auth-card">
+      <h3>Hero Account</h3>
+      <p data-auth-description>Sign in or create an account to continue your adventure.</p>
+      <input type="text" placeholder="Account name" data-auth-account />
+      <input type="password" placeholder="Password" data-auth-password />
+      <p class="identity-feedback" data-auth-feedback></p>
       <div class="actions">
-        <button type="button" class="primary" data-identity-load>Load Hero</button>
-        <button type="button" data-identity-new>Start New Hero</button>
-        <button type="button" data-identity-cancel>Cancel</button>
+        <button type="button" class="primary" data-auth-login>Sign In</button>
+        <button type="button" data-auth-register>Create Account</button>
+        <button type="button" data-auth-cancel>Cancel</button>
+      </div>
+      <button type="button" class="identity-secondary" data-auth-legacy>Use Hero ID instead</button>
+    </div>
+  </div>
+  <div class="identity-overlay" hidden data-legacy-overlay>
+    <div class="identity-card legacy-card">
+      <h3>Hero ID Login</h3>
+      <p>Paste an existing Hero ID to continue.</p>
+      <input type="text" placeholder="Paste Hero ID" data-legacy-input />
+      <p class="identity-feedback" data-legacy-feedback></p>
+      <div class="actions">
+        <button type="button" class="primary" data-legacy-load>Load Hero</button>
+        <button type="button" data-legacy-back>Back</button>
+      </div>
+    </div>
+  </div>
+  <div class="identity-overlay" hidden data-account-overlay>
+    <div class="identity-card account-card">
+      <h3>Account Security</h3>
+      <p>Set or update your password to log in from any device.</p>
+      <input type="text" placeholder="Account name" data-account-name />
+      <input type="password" placeholder="Current password (optional)" data-account-current />
+      <input type="password" placeholder="New password" data-account-password />
+      <input type="password" placeholder="Confirm new password" data-account-confirm />
+      <p class="identity-feedback" data-account-feedback></p>
+      <div class="actions">
+        <button type="button" class="primary" data-account-save>Save Password</button>
+        <button type="button" data-account-cancel>Close</button>
       </div>
     </div>
   </div>
@@ -1973,6 +2050,11 @@ const EFFECT_VARIANT_COLORS = {
 };
 
 const PROFILE_STORAGE_KEY = 'explore-rpg-profile-id';
+const ACCOUNT_STORAGE_KEY = 'explore-rpg-account-name';
+const SESSION_STORAGE_KEY = 'explore-rpg-session-token';
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 128;
+const ACCOUNT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$/;
 const ENEMY_STYLE = {
   slime: { inner: '#0ea5e9', outer: '#0369a1' },
   wolf: { inner: '#facc15', outer: '#f97316' },
@@ -2137,17 +2219,36 @@ class GameApp extends HTMLElement {
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
     this.visualToggleButton = this.shadowRoot.querySelector('[data-visual-toggle]');
   this.heroNameEl = this.shadowRoot.querySelector('[data-hero-name]');
+  this.heroAccountEl = this.shadowRoot.querySelector('[data-hero-account]');
   this.heroIdEl = this.shadowRoot.querySelector('[data-hero-id]');
+  this.accountManageButton = this.shadowRoot.querySelector('[data-account-manage]');
+  this.signOutButton = this.shadowRoot.querySelector('[data-sign-out]');
   this.copyHeroButton = this.shadowRoot.querySelector('[data-copy-id]');
   this.newHeroButton = this.shadowRoot.querySelector('[data-new-hero]');
-  this.useHeroButton = this.shadowRoot.querySelector('[data-use-id]');
   this.adminPanelButton = this.shadowRoot.querySelector('[data-admin-panel]');
   this.settingsPanelButton = this.shadowRoot.querySelector('[data-settings-panel]');
-  this.identityOverlay = this.shadowRoot.querySelector('[data-identity-overlay]');
-  this.identityInput = this.shadowRoot.querySelector('[data-identity-input]');
-  this.identityLoadButton = this.shadowRoot.querySelector('[data-identity-load]');
-  this.identityNewButton = this.shadowRoot.querySelector('[data-identity-new]');
-  this.identityCancelButton = this.shadowRoot.querySelector('[data-identity-cancel]');
+  this.authOverlay = this.shadowRoot.querySelector('[data-auth-overlay]');
+  this.authDescriptionEl = this.shadowRoot.querySelector('[data-auth-description]');
+  this.authAccountInput = this.shadowRoot.querySelector('[data-auth-account]');
+  this.authPasswordInput = this.shadowRoot.querySelector('[data-auth-password]');
+  this.authFeedbackEl = this.shadowRoot.querySelector('[data-auth-feedback]');
+  this.authLoginButton = this.shadowRoot.querySelector('[data-auth-login]');
+  this.authRegisterButton = this.shadowRoot.querySelector('[data-auth-register]');
+  this.authCancelButton = this.shadowRoot.querySelector('[data-auth-cancel]');
+  this.authLegacyButton = this.shadowRoot.querySelector('[data-auth-legacy]');
+  this.legacyOverlay = this.shadowRoot.querySelector('[data-legacy-overlay]');
+  this.legacyInput = this.shadowRoot.querySelector('[data-legacy-input]');
+  this.legacyFeedbackEl = this.shadowRoot.querySelector('[data-legacy-feedback]');
+  this.legacyLoadButton = this.shadowRoot.querySelector('[data-legacy-load]');
+  this.legacyBackButton = this.shadowRoot.querySelector('[data-legacy-back]');
+  this.accountOverlay = this.shadowRoot.querySelector('[data-account-overlay]');
+  this.accountNameInput = this.shadowRoot.querySelector('[data-account-name]');
+  this.accountCurrentInput = this.shadowRoot.querySelector('[data-account-current]');
+  this.accountPasswordInput = this.shadowRoot.querySelector('[data-account-password]');
+  this.accountConfirmInput = this.shadowRoot.querySelector('[data-account-confirm]');
+  this.accountFeedbackEl = this.shadowRoot.querySelector('[data-account-feedback]');
+  this.accountSaveButton = this.shadowRoot.querySelector('[data-account-save]');
+  this.accountCancelButton = this.shadowRoot.querySelector('[data-account-cancel]');
   this.onboardingOverlay = this.shadowRoot.querySelector('[data-onboarding-overlay]');
   this.heroNameInput = this.shadowRoot.querySelector('[data-hero-name-input]');
   this.heroNameSubmitButton = this.shadowRoot.querySelector('[data-hero-name-submit]');
@@ -2298,6 +2399,18 @@ class GameApp extends HTMLElement {
     this.knownEffects = new Set();
   this.profileId = null;
   this.pendingProfileId = undefined;
+  this.accountName = null;
+  this.sessionToken = null;
+  this.authPolicy = {
+    passwordMinLength: PASSWORD_MIN_LENGTH,
+    passwordMaxLength: PASSWORD_MAX_LENGTH,
+  };
+  this.authPending = false;
+  this.legacyPending = false;
+  this.accountPending = false;
+  this.expectingLogout = false;
+  this.legacyProfileWarningShown = false;
+  this._messageTimer = null;
     this.profileMeta = {
       name: null,
       tutorialCompleted: false,
@@ -2364,11 +2477,19 @@ class GameApp extends HTMLElement {
     this._handleMinimapDragCancel = this._handleMinimapDragCancel.bind(this);
   this._handleCopyHeroId = this._handleCopyHeroId.bind(this);
   this._handleNewHeroRequest = this._handleNewHeroRequest.bind(this);
-  this._handleUseHeroRequest = this._handleUseHeroRequest.bind(this);
-  this._handleIdentityLoad = this._handleIdentityLoad.bind(this);
-  this._handleIdentityNew = this._handleIdentityNew.bind(this);
-  this._handleIdentityCancel = this._handleIdentityCancel.bind(this);
-  this._handleIdentityInputKeydown = this._handleIdentityInputKeydown.bind(this);
+  this._handleAuthLogin = this._handleAuthLogin.bind(this);
+  this._handleAuthRegister = this._handleAuthRegister.bind(this);
+  this._handleAuthCancel = this._handleAuthCancel.bind(this);
+  this._handleAuthInputKeydown = this._handleAuthInputKeydown.bind(this);
+  this._handleAuthLegacy = this._handleAuthLegacy.bind(this);
+  this._handleLegacyLoad = this._handleLegacyLoad.bind(this);
+  this._handleLegacyBack = this._handleLegacyBack.bind(this);
+  this._handleLegacyInputKeydown = this._handleLegacyInputKeydown.bind(this);
+  this._handleAccountManage = this._handleAccountManage.bind(this);
+  this._handleAccountSave = this._handleAccountSave.bind(this);
+  this._handleAccountCancel = this._handleAccountCancel.bind(this);
+  this._handleAccountInputKeydown = this._handleAccountInputKeydown.bind(this);
+  this._handleSignOut = this._handleSignOut.bind(this);
   this._handleHeroNameSubmit = this._handleHeroNameSubmit.bind(this);
   this._handleHeroNameCancel = this._handleHeroNameCancel.bind(this);
   this._handleHeroNameInputKeydown = this._handleHeroNameInputKeydown.bind(this);
@@ -2434,13 +2555,25 @@ class GameApp extends HTMLElement {
     this.minimapHeaderEl?.addEventListener('pointerdown', this._handleMinimapDragStart);
   this.mapOverlayCloseButton?.addEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.addEventListener('click', this._handleMapOverlayBackdropClick);
+    this.accountManageButton?.addEventListener('click', this._handleAccountManage);
+    this.signOutButton?.addEventListener('click', this._handleSignOut);
     this.copyHeroButton?.addEventListener('click', this._handleCopyHeroId);
     this.newHeroButton?.addEventListener('click', this._handleNewHeroRequest);
-    this.useHeroButton?.addEventListener('click', this._handleUseHeroRequest);
-    this.identityLoadButton?.addEventListener('click', this._handleIdentityLoad);
-    this.identityNewButton?.addEventListener('click', this._handleIdentityNew);
-    this.identityCancelButton?.addEventListener('click', this._handleIdentityCancel);
-    this.identityInput?.addEventListener('keydown', this._handleIdentityInputKeydown);
+    this.authLoginButton?.addEventListener('click', this._handleAuthLogin);
+    this.authRegisterButton?.addEventListener('click', this._handleAuthRegister);
+    this.authCancelButton?.addEventListener('click', this._handleAuthCancel);
+    this.authAccountInput?.addEventListener('keydown', this._handleAuthInputKeydown);
+    this.authPasswordInput?.addEventListener('keydown', this._handleAuthInputKeydown);
+    this.authLegacyButton?.addEventListener('click', this._handleAuthLegacy);
+    this.legacyLoadButton?.addEventListener('click', this._handleLegacyLoad);
+    this.legacyBackButton?.addEventListener('click', this._handleLegacyBack);
+    this.legacyInput?.addEventListener('keydown', this._handleLegacyInputKeydown);
+    this.accountSaveButton?.addEventListener('click', this._handleAccountSave);
+    this.accountCancelButton?.addEventListener('click', this._handleAccountCancel);
+    this.accountNameInput?.addEventListener('keydown', this._handleAccountInputKeydown);
+    this.accountCurrentInput?.addEventListener('keydown', this._handleAccountInputKeydown);
+    this.accountPasswordInput?.addEventListener('keydown', this._handleAccountInputKeydown);
+    this.accountConfirmInput?.addEventListener('keydown', this._handleAccountInputKeydown);
   this.heroNameSubmitButton?.addEventListener('click', this._handleHeroNameSubmit);
   this.heroNameCancelButton?.addEventListener('click', this._handleHeroNameCancel);
   this.heroNameInput?.addEventListener('keydown', this._handleHeroNameInputKeydown);
@@ -2505,13 +2638,25 @@ class GameApp extends HTMLElement {
   this.minimapHeaderEl?.removeEventListener('pointerdown', this._handleMinimapDragStart);
   this.mapOverlayCloseButton?.removeEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.removeEventListener('click', this._handleMapOverlayBackdropClick);
+  this.accountManageButton?.removeEventListener('click', this._handleAccountManage);
+  this.signOutButton?.removeEventListener('click', this._handleSignOut);
   this.copyHeroButton?.removeEventListener('click', this._handleCopyHeroId);
   this.newHeroButton?.removeEventListener('click', this._handleNewHeroRequest);
-  this.useHeroButton?.removeEventListener('click', this._handleUseHeroRequest);
-  this.identityLoadButton?.removeEventListener('click', this._handleIdentityLoad);
-  this.identityNewButton?.removeEventListener('click', this._handleIdentityNew);
-  this.identityCancelButton?.removeEventListener('click', this._handleIdentityCancel);
-  this.identityInput?.removeEventListener('keydown', this._handleIdentityInputKeydown);
+  this.authLoginButton?.removeEventListener('click', this._handleAuthLogin);
+  this.authRegisterButton?.removeEventListener('click', this._handleAuthRegister);
+  this.authCancelButton?.removeEventListener('click', this._handleAuthCancel);
+  this.authAccountInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
+  this.authPasswordInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
+  this.authLegacyButton?.removeEventListener('click', this._handleAuthLegacy);
+  this.legacyLoadButton?.removeEventListener('click', this._handleLegacyLoad);
+  this.legacyBackButton?.removeEventListener('click', this._handleLegacyBack);
+  this.legacyInput?.removeEventListener('keydown', this._handleLegacyInputKeydown);
+  this.accountSaveButton?.removeEventListener('click', this._handleAccountSave);
+  this.accountCancelButton?.removeEventListener('click', this._handleAccountCancel);
+  this.accountNameInput?.removeEventListener('keydown', this._handleAccountInputKeydown);
+  this.accountCurrentInput?.removeEventListener('keydown', this._handleAccountInputKeydown);
+  this.accountPasswordInput?.removeEventListener('keydown', this._handleAccountInputKeydown);
+  this.accountConfirmInput?.removeEventListener('keydown', this._handleAccountInputKeydown);
   this.heroNameSubmitButton?.removeEventListener('click', this._handleHeroNameSubmit);
   this.heroNameCancelButton?.removeEventListener('click', this._handleHeroNameCancel);
   this.heroNameInput?.removeEventListener('keydown', this._handleHeroNameInputKeydown);
@@ -2551,6 +2696,10 @@ class GameApp extends HTMLElement {
     clearTimeout(this.levelBannerTimer);
     this.levelBannerTimer = null;
   }
+  if (this._messageTimer) {
+    clearTimeout(this._messageTimer);
+    this._messageTimer = null;
+  }
   window.removeEventListener('pointermove', this._handleMinimapDragMove);
   window.removeEventListener('pointerup', this._handleMinimapDragEnd);
   window.removeEventListener('pointercancel', this._handleMinimapDragCancel);
@@ -2578,29 +2727,44 @@ class GameApp extends HTMLElement {
     this._updateHeroNameDisplay();
     this._updateAdminButtonVisibility();
     this._updateSettingsState();
-    let storedId = null;
+    let storedProfileId = null;
+    let storedAccount = null;
+    let storedSession = null;
     try {
-      storedId = window.localStorage?.getItem(PROFILE_STORAGE_KEY) ?? null;
+      const storage = window.localStorage;
+      storedProfileId = storage?.getItem(PROFILE_STORAGE_KEY) ?? null;
+      storedAccount = storage?.getItem(ACCOUNT_STORAGE_KEY) ?? null;
+      storedSession = storage?.getItem(SESSION_STORAGE_KEY) ?? null;
     } catch (err) {
-      storedId = null;
+      storedProfileId = null;
+      storedAccount = null;
+      storedSession = null;
     }
-    if (storedId) {
-      this.profileId = storedId;
-      this._updateHeroIdDisplay();
-      this._connect();
+    this.accountName = storedAccount || null;
+    this.sessionToken = storedSession || null;
+    if (this.sessionToken) {
+      this.profileId = null;
+    } else if (storedProfileId) {
+      this.profileId = storedProfileId;
     } else {
       this.profileId = null;
-      this._updateHeroIdDisplay();
-      this._connect();
     }
+    this._updateAccountDisplay();
+    this._updateSignOutVisibility();
+    this._updateHeroIdDisplay();
+      this._updateAuthDescription();
+    this._connect();
   }
 
   _connect() {
     if (this.socket) return;
+    this.expectingLogout = false;
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host || `localhost:${window.location.port || 8080}`;
     const params = [];
-    if (this.profileId) {
+    if (this.sessionToken) {
+      params.push(`session=${encodeURIComponent(this.sessionToken)}`);
+    } else if (this.profileId) {
       params.push(`profile=${encodeURIComponent(this.profileId)}`);
     }
     const wsUrl = `${protocol}://${host}${params.length ? `/?${params.join('&')}` : '/'}`;
@@ -2613,13 +2777,69 @@ class GameApp extends HTMLElement {
 
     socket.onopen = () => {
       this.socket = socket;
+      this.expectingLogout = false;
       this.messageEl.hidden = true;
-      this._hideIdentityOverlay();
+      this._hideAuthOverlay();
+      this._hideLegacyOverlay();
+      this._hideAccountOverlay();
     };
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'init') {
+        this.authPending = false;
+        this.legacyPending = false;
+        this.accountPending = false;
+  this.legacyProfileWarningShown = false;
+        this._setAuthFormDisabled(false);
+        this._setLegacyFormDisabled(false);
+        this._setAccountFormDisabled(false);
+        this._setAuthFeedback('', 'info');
+        this._setLegacyFeedback('', 'info');
+        this._setAccountFeedback('', 'info');
+        this._hideAuthOverlay();
+        this._hideLegacyOverlay();
+
+        const authInfo = data?.auth || {};
+        const sessionToken =
+          typeof data.sessionToken === 'string' && data.sessionToken.length ? data.sessionToken : null;
+        if (sessionToken) {
+          this.sessionToken = sessionToken;
+          this._persistSessionToken(sessionToken);
+        } else {
+          this.sessionToken = null;
+          this._clearStoredSessionToken();
+        }
+
+        const passwordMin = Number(authInfo.passwordMinLength) || PASSWORD_MIN_LENGTH;
+        const passwordMax = Number(authInfo.passwordMaxLength) || PASSWORD_MAX_LENGTH;
+        this.authPolicy = {
+          passwordMinLength: passwordMin,
+          passwordMaxLength: passwordMax,
+        };
+        this._updateAuthDescription();
+
+        let nextAccountName = null;
+        if (typeof authInfo.accountName === 'string' && authInfo.accountName.trim()) {
+          nextAccountName = authInfo.accountName.trim();
+        } else if (typeof data?.account?.name === 'string' && data.account.name.trim()) {
+          nextAccountName = data.account.name.trim();
+        }
+        this.accountName = nextAccountName;
+        if (this.accountName) {
+          this._persistAccountName(this.accountName);
+        } else {
+          this._clearStoredAccountName();
+        }
+        this._updateAccountDisplay();
+
+        this._updateSignOutVisibility();
+
+        if (authInfo.legacyProfile && !this.legacyProfileWarningShown) {
+          this.legacyProfileWarningShown = true;
+          this._showTransientMessage('Secure this hero via Account to set a password.', 4800);
+        }
+
         this.world = data.world;
         this._ingestLevels(data.levels);
         this._prepareMinimap(true);
@@ -2628,7 +2848,15 @@ class GameApp extends HTMLElement {
         this._applyProfileSnapshot(data.profile || null);
         if (data.profileId) {
           this.profileId = data.profileId;
-          this._persistProfileId(data.profileId);
+          if (this.sessionToken) {
+            this._clearStoredProfileId();
+          } else {
+            this._persistProfileId(data.profileId);
+          }
+          this._updateHeroIdDisplay();
+        }
+        if (!data.profileId && this.sessionToken) {
+          this._clearStoredProfileId();
           this._updateHeroIdDisplay();
         }
         this._updateHeroNameDisplay();
@@ -2758,6 +2986,8 @@ class GameApp extends HTMLElement {
         this._handleProfileEvent(data);
       } else if (data.type === 'admin') {
         this._handleAdminEvent(data);
+      } else if (data.type === 'auth') {
+        this._handleAuthEvent(data);
       } else if (data.type === 'control') {
         this._handleControlEvent(data);
       } else if (data.type === 'loot-collected') {
@@ -2829,15 +3059,28 @@ class GameApp extends HTMLElement {
       }
       this._exitChatMode();
       this.chats.clear();
+      this._hideAccountOverlay(true);
+      this.authPending = false;
+      this.legacyPending = false;
+      this._setAuthFormDisabled(false);
+      this._setLegacyFormDisabled(false);
       if (nextProfile !== undefined) {
         this.profileId = nextProfile;
         this.pendingProfileId = undefined;
         this._connect();
       } else {
-        this.messageEl.textContent = 'Connection lost. Refresh to retry.';
-        this.messageEl.hidden = false;
-        if (!this.profileId) {
-          this._showIdentityOverlay('');
+        if (this.expectingLogout) {
+          this.expectingLogout = false;
+          if (this.messageEl) {
+            this.messageEl.hidden = true;
+          }
+          setTimeout(() => this._connect(), 120);
+        } else {
+          this.messageEl.textContent = 'Connection lost. Refresh to retry.';
+          this.messageEl.hidden = false;
+        }
+        if (!this.sessionToken) {
+          this._showAuthOverlay(this.accountName || '');
         }
       }
     };
@@ -5717,6 +5960,24 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _showTransientMessage(message, duration = 3200) {
+    if (!this.messageEl) return;
+    if (this._messageTimer) {
+      clearTimeout(this._messageTimer);
+      this._messageTimer = null;
+    }
+    this.messageEl.textContent = message || '';
+    this.messageEl.hidden = !message;
+    if (message && duration > 0) {
+      this._messageTimer = setTimeout(() => {
+        if (this.messageEl?.textContent === message) {
+          this.messageEl.hidden = true;
+        }
+        this._messageTimer = null;
+      }, duration);
+    }
+  }
+
   _isPlayerInSafeZone(player) {
     if (!player || !this.bankInfo) return false;
     const dx = player.x - this.bankInfo.x;
@@ -5908,6 +6169,465 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _showAuthOverlay(presetAccount = this.accountName || '') {
+    if (!this.authOverlay) return;
+    this._hideIdentityOverlay();
+    this._hideLegacyOverlay();
+    this.authOverlay.hidden = false;
+    this.authPending = false;
+    this.legacyPending = false;
+    this._setAuthFormDisabled(false);
+    this._clearAuthForm(presetAccount);
+    this._updateAuthDescription();
+    requestAnimationFrame(() => {
+      const target = this.authAccountInput || this.authPasswordInput;
+      target?.focus();
+      target?.select?.();
+    });
+  }
+
+  _hideAuthOverlay() {
+    if (!this.authOverlay) return;
+    this.authOverlay.hidden = true;
+    this._clearAuthForm(this.accountName || '');
+    this.authAccountInput?.blur();
+    this.authPasswordInput?.blur();
+  }
+
+  _clearAuthForm(presetAccount = this.accountName || '') {
+    if (this.authAccountInput) {
+      this.authAccountInput.value = typeof presetAccount === 'string' ? presetAccount : '';
+    }
+    if (this.authPasswordInput) {
+      this.authPasswordInput.value = '';
+    }
+    this._setAuthFeedback('', 'info');
+  }
+
+  _setAuthFormDisabled(disabled) {
+    if (this.authAccountInput) {
+      this.authAccountInput.disabled = Boolean(disabled);
+    }
+    if (this.authPasswordInput) {
+      this.authPasswordInput.disabled = Boolean(disabled);
+    }
+    if (this.authLoginButton) {
+      this.authLoginButton.disabled = Boolean(disabled);
+    }
+    if (this.authRegisterButton) {
+      this.authRegisterButton.disabled = Boolean(disabled);
+    }
+    if (this.authLegacyButton) {
+      this.authLegacyButton.disabled = Boolean(disabled);
+    }
+  }
+
+  _setAuthFeedback(message, variant = 'info') {
+    if (!this.authFeedbackEl) return;
+    this.authFeedbackEl.textContent = message || '';
+    const color =
+      variant === 'success' ? '#bbf7d0' : variant === 'error' ? '#fca5a5' : '#bae6fd';
+    this.authFeedbackEl.style.color = color;
+  }
+
+  _updateAuthDescription() {
+    if (!this.authDescriptionEl) return;
+    const min = Number(this.authPolicy?.passwordMinLength) || PASSWORD_MIN_LENGTH;
+    const max = Number(this.authPolicy?.passwordMaxLength) || PASSWORD_MAX_LENGTH;
+    this.authDescriptionEl.textContent = `Sign in or create an account to continue your adventure. Passwords must be ${min}-${max} characters.`;
+  }
+
+  _handleAuthLogin(event) {
+    event?.preventDefault?.();
+    if (this.authPending) return;
+    const account = this.authAccountInput?.value?.trim?.() || '';
+    const password = this.authPasswordInput?.value || '';
+    if (!account) {
+      this._setAuthFeedback('Enter your account name to continue.', 'error');
+      this.authAccountInput?.focus();
+      return;
+    }
+    if (!password) {
+      this._setAuthFeedback('Enter your password to sign in.', 'error');
+      this.authPasswordInput?.focus();
+      return;
+    }
+    this.authPending = true;
+    this._setAuthFormDisabled(true);
+    this._setAuthFeedback('Signing in...', 'info');
+    if (!this._sendAuthMessage('login', { account, password })) {
+      this.authPending = false;
+      this._setAuthFormDisabled(false);
+      this._setAuthFeedback('Unable to contact the server. Please try again.', 'error');
+    }
+  }
+
+  _handleAuthRegister(event) {
+    event?.preventDefault?.();
+    if (this.authPending) return;
+    const account = this.authAccountInput?.value?.trim?.() || '';
+    const password = this.authPasswordInput?.value || '';
+    if (!account) {
+      this._setAuthFeedback('Choose an account name to register.', 'error');
+      this.authAccountInput?.focus();
+      return;
+    }
+    if (!ACCOUNT_NAME_PATTERN.test(account)) {
+      this._setAuthFeedback('Account names use letters, numbers, underscores, or hyphens (3-32 chars).', 'error');
+      this.authAccountInput?.focus();
+      return;
+    }
+    const min = Number(this.authPolicy?.passwordMinLength) || PASSWORD_MIN_LENGTH;
+    const max = Number(this.authPolicy?.passwordMaxLength) || PASSWORD_MAX_LENGTH;
+    if (password.length < min || password.length > max) {
+      this._setAuthFeedback(`Password must be ${min}-${max} characters.`, 'error');
+      this.authPasswordInput?.focus();
+      return;
+    }
+    this.authPending = true;
+    this._setAuthFormDisabled(true);
+    this._setAuthFeedback('Creating account...', 'info');
+    if (!this._sendAuthMessage('register', { account, password })) {
+      this.authPending = false;
+      this._setAuthFormDisabled(false);
+      this._setAuthFeedback('Unable to reach the server. Please retry shortly.', 'error');
+    }
+  }
+
+  _handleAuthCancel(event) {
+    event?.preventDefault?.();
+    if (this.authPending) return;
+    this._hideAuthOverlay();
+  }
+
+  _handleAuthInputKeydown(event) {
+    if (!event) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this._handleAuthLogin();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this._handleAuthCancel();
+    }
+  }
+
+  _handleAuthLegacy(event) {
+    event?.preventDefault?.();
+    if (this.authPending) return;
+    this._hideAuthOverlay();
+    this._showLegacyOverlay(this.profileId || this.pendingProfileId || '');
+  }
+
+  _showLegacyOverlay(preset = this.profileId || '') {
+    if (!this.legacyOverlay) return;
+    this.legacyOverlay.hidden = false;
+    this.legacyPending = false;
+    this._setLegacyFormDisabled(false);
+    if (this.legacyInput) {
+      this.legacyInput.value = typeof preset === 'string' ? preset : '';
+    }
+    this._setLegacyFeedback('', 'info');
+    requestAnimationFrame(() => {
+      this.legacyInput?.focus();
+      this.legacyInput?.select?.();
+    });
+  }
+
+  _hideLegacyOverlay() {
+    if (!this.legacyOverlay) return;
+    this.legacyOverlay.hidden = true;
+    if (this.legacyInput) {
+      this.legacyInput.blur();
+    }
+    this._setLegacyFeedback('', 'info');
+  }
+
+  _setLegacyFeedback(message, variant = 'info') {
+    if (!this.legacyFeedbackEl) return;
+    this.legacyFeedbackEl.textContent = message || '';
+    const color =
+      variant === 'success' ? '#bbf7d0' : variant === 'error' ? '#fca5a5' : '#bae6fd';
+    this.legacyFeedbackEl.style.color = color;
+  }
+
+  _setLegacyFormDisabled(disabled) {
+    if (this.legacyInput) {
+      this.legacyInput.disabled = Boolean(disabled);
+    }
+    if (this.legacyLoadButton) {
+      this.legacyLoadButton.disabled = Boolean(disabled);
+    }
+    if (this.legacyBackButton) {
+      this.legacyBackButton.disabled = Boolean(disabled);
+    }
+  }
+
+  _handleLegacyLoad(event) {
+    event?.preventDefault?.();
+    if (this.legacyPending) return;
+    const value = this.legacyInput?.value?.trim?.() || '';
+    if (!value) {
+      this._setLegacyFeedback('Enter a Hero ID to continue.', 'error');
+      this.legacyInput?.focus();
+      return;
+    }
+    this.legacyPending = true;
+    this._setLegacyFormDisabled(true);
+    this._setLegacyFeedback('Loading hero profile...', 'info');
+    if (!this._sendAuthMessage('hero-id', { profileId: value })) {
+      this.legacyPending = false;
+      this._setLegacyFormDisabled(false);
+      this._setLegacyFeedback('Unable to reach the server. Try again shortly.', 'error');
+    }
+  }
+
+  _handleLegacyBack(event) {
+    event?.preventDefault?.();
+    if (this.legacyPending) return;
+    this._hideLegacyOverlay();
+    this._showAuthOverlay(this.accountName || '');
+  }
+
+  _handleLegacyInputKeydown(event) {
+    if (!event) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this._handleLegacyLoad();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this._handleLegacyBack();
+    }
+  }
+
+  _showAccountOverlay() {
+    if (!this.accountOverlay) return;
+    this.accountOverlay.hidden = false;
+    this.accountPending = false;
+    this._setAccountFormDisabled(false);
+    this._setAccountFeedback('', 'info');
+    this._resetAccountForm();
+    requestAnimationFrame(() => {
+      this.accountNameInput?.focus();
+      this.accountNameInput?.select?.();
+    });
+  }
+
+  _hideAccountOverlay(reset = false) {
+    if (!this.accountOverlay) return;
+    this.accountOverlay.hidden = true;
+    if (reset) {
+      this._resetAccountForm();
+    }
+    this.accountNameInput?.blur();
+    this.accountCurrentInput?.blur();
+    this.accountPasswordInput?.blur();
+    this.accountConfirmInput?.blur();
+  }
+
+  _resetAccountForm() {
+    if (this.accountNameInput) {
+      this.accountNameInput.value = this.accountName || '';
+    }
+    if (this.accountCurrentInput) {
+      this.accountCurrentInput.value = '';
+    }
+    if (this.accountPasswordInput) {
+      this.accountPasswordInput.value = '';
+    }
+    if (this.accountConfirmInput) {
+      this.accountConfirmInput.value = '';
+    }
+    this._setAccountFeedback('', 'info');
+  }
+
+  _setAccountFeedback(message, variant = 'info') {
+    if (!this.accountFeedbackEl) return;
+    this.accountFeedbackEl.textContent = message || '';
+    const color =
+      variant === 'success' ? '#bbf7d0' : variant === 'error' ? '#fca5a5' : '#bae6fd';
+    this.accountFeedbackEl.style.color = color;
+  }
+
+  _setAccountFormDisabled(disabled) {
+    const blocked = Boolean(disabled);
+    if (this.accountNameInput) {
+      this.accountNameInput.disabled = blocked;
+    }
+    if (this.accountCurrentInput) {
+      this.accountCurrentInput.disabled = blocked;
+    }
+    if (this.accountPasswordInput) {
+      this.accountPasswordInput.disabled = blocked;
+    }
+    if (this.accountConfirmInput) {
+      this.accountConfirmInput.disabled = blocked;
+    }
+    if (this.accountSaveButton) {
+      this.accountSaveButton.disabled = blocked;
+    }
+    if (this.accountCancelButton) {
+      this.accountCancelButton.disabled = blocked;
+    }
+  }
+
+  _handleAccountManage(event) {
+    event?.preventDefault?.();
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      this._showTransientMessage('Connect to the server before updating your account.');
+      return;
+    }
+    this._showAccountOverlay();
+  }
+
+  _handleAccountSave(event) {
+    event?.preventDefault?.();
+    if (this.accountPending) return;
+    const account = this.accountNameInput?.value?.trim?.() || '';
+    const currentPassword = this.accountCurrentInput?.value || '';
+    const newPassword = this.accountPasswordInput?.value || '';
+    const confirmPassword = this.accountConfirmInput?.value || '';
+    if (!account) {
+      this._setAccountFeedback('Account name is required.', 'error');
+      this.accountNameInput?.focus();
+      return;
+    }
+    if (!ACCOUNT_NAME_PATTERN.test(account)) {
+      this._setAccountFeedback('Use letters, numbers, underscores, or hyphens (3-32 chars).', 'error');
+      this.accountNameInput?.focus();
+      return;
+    }
+    const min = Number(this.authPolicy?.passwordMinLength) || PASSWORD_MIN_LENGTH;
+    const max = Number(this.authPolicy?.passwordMaxLength) || PASSWORD_MAX_LENGTH;
+    if (newPassword.length < min || newPassword.length > max) {
+      this._setAccountFeedback(`Password must be ${min}-${max} characters.`, 'error');
+      this.accountPasswordInput?.focus();
+      return;
+    }
+    if (confirmPassword !== newPassword) {
+      this._setAccountFeedback('Confirm password does not match.', 'error');
+      this.accountConfirmInput?.focus();
+      return;
+    }
+    const payload = {
+      account,
+      password: newPassword,
+    };
+    if (currentPassword) {
+      payload.currentPassword = currentPassword;
+    }
+    this.accountPending = true;
+    this._setAccountFormDisabled(true);
+    this._setAccountFeedback('Saving password...', 'info');
+    if (!this._sendAuthMessage('set-password', payload)) {
+      this.accountPending = false;
+      this._setAccountFormDisabled(false);
+      this._setAccountFeedback('Unable to reach the server. Try again shortly.', 'error');
+    }
+  }
+
+  _handleAccountCancel(event) {
+    event?.preventDefault?.();
+    if (this.accountPending) return;
+    this._hideAccountOverlay(true);
+  }
+
+  _handleAccountInputKeydown(event) {
+    if (!event) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this._handleAccountSave();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this._handleAccountCancel();
+    }
+  }
+
+  _handleSignOut(event) {
+    event?.preventDefault?.();
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      this._showTransientMessage('You are already offline.');
+      return;
+    }
+    if (!this._sendAuthMessage('logout')) {
+      this._showTransientMessage('Unable to contact the server. Try again.');
+      return;
+    }
+    this.expectingLogout = true;
+    this._showTransientMessage('Signing out...');
+  }
+
+  _handleAuthEvent(data) {
+    const event = data?.event;
+    if (!event) return;
+
+    if (event === 'error') {
+      this.accountPending = false;
+      this._setAccountFormDisabled(false);
+      const message = data?.message || 'Unable to update account.';
+      this._setAccountFeedback(message, 'error');
+      const field = data?.field;
+      if (field === 'account') {
+        this.accountNameInput?.focus();
+      } else if (field === 'currentPassword') {
+        this.accountCurrentInput?.focus();
+      } else if (field === 'password') {
+        this.accountPasswordInput?.focus();
+      } else if (field === 'confirmPassword') {
+        this.accountConfirmInput?.focus();
+      }
+      return;
+    }
+
+    if (event === 'password-set') {
+      this.accountPending = false;
+      this._setAccountFormDisabled(false);
+      const accountName = typeof data?.account?.name === 'string' ? data.account.name.trim() : this.accountName;
+      this.accountName = accountName && accountName.length ? accountName : this.accountName;
+      if (this.accountName) {
+        this._persistAccountName(this.accountName);
+      } else {
+        this._clearStoredAccountName();
+      }
+
+      const sessionToken =
+        typeof data?.sessionToken === 'string' && data.sessionToken.length ? data.sessionToken : null;
+      if (sessionToken) {
+        this.sessionToken = sessionToken;
+        this._persistSessionToken(sessionToken);
+        this._clearStoredProfileId();
+      }
+
+      this._updateSignOutVisibility();
+      this._updateAccountDisplay();
+      const feedback = data?.message || 'Account password updated.';
+      this._setAccountFeedback(feedback, 'success');
+      this._showTransientMessage(feedback, 3600);
+      setTimeout(() => {
+        this._hideAccountOverlay(true);
+      }, 900);
+      return;
+    }
+
+    if (event === 'logged-out') {
+      this.accountPending = false;
+      this.authPending = false;
+      this.legacyPending = false;
+      this.sessionToken = null;
+      this._clearStoredSessionToken();
+      this.profileId = null;
+      this.pendingProfileId = null;
+      this._clearStoredProfileId();
+      this._setAccountFormDisabled(false);
+      this._setAccountFeedback('', 'info');
+      this._updateAccountDisplay();
+      this._updateSignOutVisibility();
+      this._hideAccountOverlay(true);
+      this._hideLegacyOverlay();
+      this._showAuthOverlay(this.accountName || '');
+      this._showTransientMessage('Signed out.', 3200);
+    }
+  }
+
   _updateHeroIdDisplay() {
     if (!this.heroIdEl) return;
   this.heroIdEl.textContent = this.profileId || '—';
@@ -5926,6 +6646,46 @@ class GameApp extends HTMLElement {
   _clearStoredProfileId() {
     try {
       window.localStorage?.removeItem(PROFILE_STORAGE_KEY);
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
+
+  _persistAccountName(name) {
+    if (!name) {
+      this._clearStoredAccountName();
+      return;
+    }
+    try {
+      window.localStorage?.setItem(ACCOUNT_STORAGE_KEY, name);
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
+
+  _clearStoredAccountName() {
+    try {
+      window.localStorage?.removeItem(ACCOUNT_STORAGE_KEY);
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
+
+  _persistSessionToken(token) {
+    if (!token) {
+      this._clearStoredSessionToken();
+      return;
+    }
+    try {
+      window.localStorage?.setItem(SESSION_STORAGE_KEY, token);
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
+
+  _clearStoredSessionToken() {
+    try {
+      window.localStorage?.removeItem(SESSION_STORAGE_KEY);
     } catch (err) {
       // ignore storage errors
     }
@@ -6066,6 +6826,30 @@ class GameApp extends HTMLElement {
     this.heroNameEl.textContent = name && name.length ? name : 'New Adventurer';
   }
 
+  _updateAccountDisplay() {
+    if (!this.heroAccountEl) return;
+    if (this.accountName) {
+      this.heroAccountEl.textContent = this.accountName;
+    } else {
+      this.heroAccountEl.textContent = 'Not linked';
+    }
+    if (this.accountManageButton) {
+      if (this.accountName) {
+        this.accountManageButton.removeAttribute('data-attention');
+        this.accountManageButton.title = 'Manage your hero account';
+      } else {
+        this.accountManageButton.setAttribute('data-attention', 'true');
+        this.accountManageButton.title = 'Link this hero to an account to play anywhere';
+      }
+    }
+  }
+
+  _updateSignOutVisibility() {
+    if (!this.signOutButton) return;
+    const show = Boolean(this.sessionToken);
+    this.signOutButton.hidden = !show;
+  }
+
   _updateAdminButtonVisibility() {
     if (!this.adminPanelButton) return;
     const isAdmin = Boolean(this.profileMeta?.isAdmin);
@@ -6178,6 +6962,24 @@ class GameApp extends HTMLElement {
     } else if (event.key === 'Escape') {
       event.preventDefault();
       this._handleHeroNameCancel();
+    }
+  }
+
+  _sendAuthMessage(action, payload = {}) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    try {
+      this.socket.send(
+        JSON.stringify({
+          type: 'auth',
+          action,
+          ...payload,
+        })
+      );
+      return true;
+    } catch (err) {
+      return false;
     }
   }
 
@@ -6420,29 +7222,81 @@ class GameApp extends HTMLElement {
   _handleControlEvent(data) {
     const { event } = data || {};
     if (!event) return;
+    if (event === 'auth-required') {
+      const policy = data?.policy || {};
+      this.authPolicy = {
+        passwordMinLength: Number(policy.passwordMinLength) || PASSWORD_MIN_LENGTH,
+        passwordMaxLength: Number(policy.passwordMaxLength) || PASSWORD_MAX_LENGTH,
+      };
+      this.sessionToken = null;
+      this._clearStoredSessionToken();
+      this._updateSignOutVisibility();
+      this._updateAuthDescription();
+      this.authPending = false;
+      this.legacyPending = false;
+      this._setAuthFormDisabled(false);
+      this._setLegacyFormDisabled(false);
+      this._setAuthFeedback('', 'info');
+      this._setLegacyFeedback('', 'info');
+      this._showAuthOverlay(this.accountName || '');
+  this._hideIdentityOverlay();
+      this._hideLegacyOverlay();
+      this._hideAccountOverlay(false);
+      if (this.messageEl) {
+        this.messageEl.textContent = 'Sign in to continue your adventure.';
+        this.messageEl.hidden = false;
+      }
+      return;
+    }
+    if (event === 'auth-error') {
+      const field = data?.field;
+      const message = data?.message || 'Authentication failed.';
+      this.authPending = false;
+      this.legacyPending = false;
+      this._setAuthFormDisabled(false);
+      this._setLegacyFormDisabled(false);
+      if (field === 'profile') {
+        this._showLegacyOverlay(this.legacyInput?.value || this.profileId || '');
+        this._setLegacyFeedback(message, 'error');
+        this.legacyInput?.focus();
+      } else {
+        const preset = this.authAccountInput?.value?.trim?.() || this.accountName || '';
+        this._showAuthOverlay(preset);
+        this._setAuthFeedback(message, 'error');
+        if (field === 'password') {
+          this.authPasswordInput?.focus();
+        } else {
+          this.authAccountInput?.focus();
+        }
+      }
+      return;
+    }
     if (event === 'forced-logout') {
       this._clearStoredProfileId();
       this.profileId = null;
       this.pendingProfileId = null;
-      this.messageEl.textContent = data.reason || 'Disconnected by server.';
-      this.messageEl.hidden = false;
+      this.sessionToken = null;
+      this._clearStoredSessionToken();
+      this._updateSignOutVisibility();
+      this._hideIdentityOverlay();
+      this._showAuthOverlay(this.accountName || '');
+      this._showTransientMessage(data.reason || 'Disconnected by server.', 4200);
       return;
     }
     if (event === 'teleport-safe') {
-      if (this.messageEl) {
-        this.messageEl.textContent = 'Teleported to the safe zone by an admin.';
-        this.messageEl.hidden = false;
-        setTimeout(() => {
-          this.messageEl.hidden = true;
-        }, 2200);
-      }
+      this._showTransientMessage('Teleported to the safe zone by an admin.', 2800);
       return;
     }
     if (event === 'connection-rejected') {
       this._clearStoredProfileId();
       this.profileId = null;
-      this.messageEl.textContent = data.reason || 'Connection rejected.';
-      this.messageEl.hidden = false;
+      this.pendingProfileId = null;
+      this.sessionToken = null;
+      this._clearStoredSessionToken();
+      this._updateSignOutVisibility();
+      this._hideIdentityOverlay();
+      this._showAuthOverlay(this.accountName || '');
+      this._showTransientMessage(data.reason || 'Connection rejected.', 4200);
     }
   }
 
