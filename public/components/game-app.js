@@ -188,6 +188,18 @@ template.innerHTML = `
       box-shadow: 0 1.8rem 3.4rem rgba(8, 15, 31, 0.55);
       background: rgba(10, 17, 31, 0.92);
       position: relative;
+      transition: transform 260ms ease, filter 260ms ease;
+    }
+
+    :host([data-isometric-map]) .map-overlay-card {
+      perspective: 1400px;
+    }
+
+    :host([data-isometric-map]) .map-overlay canvas {
+      transform: rotateX(58deg) rotateZ(45deg) scale(0.82);
+      filter: drop-shadow(0 2.2rem 3rem rgba(8, 15, 31, 0.6));
+      transform-origin: center;
+      image-rendering: pixelated;
     }
 
     .map-overlay button {
@@ -423,6 +435,24 @@ template.innerHTML = `
       border: 1px solid rgba(148, 163, 184, 0.28);
       box-shadow: inset 0 0 1.1rem rgba(8, 15, 31, 0.42);
       position: relative;
+      transition: transform 220ms ease, filter 220ms ease;
+    }
+
+    :host([data-isometric-map]) .minimap-card {
+      overflow: visible;
+    }
+
+    :host([data-isometric-map]) .minimap-body {
+      justify-items: center;
+      overflow: visible;
+      perspective: 1000px;
+    }
+
+    :host([data-isometric-map]) canvas[data-minimap] {
+      transform: rotateX(58deg) rotateZ(45deg) scale(0.9);
+      filter: drop-shadow(0 1.1rem 1.8rem rgba(8, 15, 31, 0.5));
+      transform-origin: center;
+      image-rendering: pixelated;
     }
 
     [data-draggable-panel] {
@@ -2637,6 +2667,8 @@ const MINIMAP_VIEWPORT_STROKE = 'rgba(148, 163, 184, 0.55)';
 const MINIMAP_VIEWPORT_FILL = 'rgba(30, 41, 59, 0.22)';
 const MINIMAP_BACKGROUND = 'rgba(12, 20, 32, 0.95)';
 const TOAST_DEFAULT_DURATION = 4000;
+const MAP_OVERLAY_HINT_CLASSIC = 'Press M or Escape to close • Alt+M toggles music • Use Expand Map to view larger details';
+const MAP_OVERLAY_HINT_ISO = 'Press M or Escape to close • Alt+M toggles music • Isometric 3D view active';
 
 function wrapChatLines(ctx, text, maxWidth) {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -2720,6 +2752,8 @@ class GameApp extends HTMLElement {
       this.mapOverlayCtx.imageSmoothingEnabled = false;
     }
     this.mapOverlayCloseButton = this.shadowRoot.querySelector('[data-map-close]');
+    this.mapOverlayTitleEl = this.shadowRoot.querySelector('#map-overlay-title');
+    this.mapOverlaySubtitleEl = this.mapOverlayEl ? this.mapOverlayEl.querySelector('header p') : null;
     this.minimapDockParent = this.minimapCardEl?.parentElement ?? null;
     this.minimapDockSibling = this.minimapCardEl?.nextElementSibling ?? null;
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
@@ -2907,7 +2941,7 @@ class GameApp extends HTMLElement {
     this.lastKnownPosition = null;
     this.keys = new Set();
     this.pointerAim = { x: 1, y: 0 };
-    this.isometricControlsEnabled = true;
+  this.isometricControlsEnabled = false;
     this.lastInputSent = 0;
     this.lastInteractSent = 0;
     this.tileSize = 36;
@@ -3242,8 +3276,10 @@ class GameApp extends HTMLElement {
   this.panelDragEntries = [];
   this._panelsRestored = false;
     this.audio.setMusicEnabled(false);
-      this.isoRenderer?.dispose?.();
-      this.isoRenderer = null;
+  this.isoRenderer?.dispose?.();
+  this.isoRenderer = null;
+  this.isometricControlsEnabled = false;
+  this._syncIsometricMapState();
     this.webglRenderer?.dispose?.();
     this.webglRenderer = null;
     this.webglEnabled = false;
@@ -5653,6 +5689,7 @@ class GameApp extends HTMLElement {
       this.isoCanvas.style.visibility = next ? 'visible' : 'hidden';
       this.isoCanvas.style.opacity = next ? '1' : '0';
     }
+    this._syncIsometricMapState();
     if (persist) {
       try {
         window.localStorage?.setItem(ISO_MODE_STORAGE_KEY, next ? '1' : '0');
@@ -5661,6 +5698,42 @@ class GameApp extends HTMLElement {
       }
     }
     this._updateSettingsState();
+  }
+
+  _syncIsometricMapState() {
+    const isoPreferred = Boolean(this.isometricControlsEnabled);
+    this.toggleAttribute('data-isometric-map', isoPreferred);
+    if (this.minimapCardEl) {
+      this.minimapCardEl.setAttribute('data-map-mode', isoPreferred ? 'isometric' : 'classic');
+      this.minimapCardEl.setAttribute('aria-label', isoPreferred ? 'Isometric minimap panel' : 'World minimap panel');
+    }
+    if (this.minimapCanvas) {
+      this.minimapCanvas.setAttribute('aria-label', isoPreferred ? 'Isometric minimap view' : 'World minimap view');
+      if (!isoPreferred) {
+        this.minimapCanvas.removeAttribute('data-map-mode');
+      } else {
+        this.minimapCanvas.setAttribute('data-map-mode', 'isometric');
+      }
+    }
+    if (this.minimapExpandButton) {
+      this.minimapExpandButton.setAttribute('aria-label', isoPreferred ? 'Expand isometric world map' : 'Expand world map');
+    }
+    if (this.mapOverlayTitleEl) {
+      this.mapOverlayTitleEl.textContent = isoPreferred ? 'World Map (Isometric)' : 'World Map';
+    }
+    if (this.mapOverlaySubtitleEl) {
+      this.mapOverlaySubtitleEl.textContent = isoPreferred ? MAP_OVERLAY_HINT_ISO : MAP_OVERLAY_HINT_CLASSIC;
+    }
+    if (this.mapOverlayCanvas) {
+      this.mapOverlayCanvas.setAttribute('aria-label', isoPreferred ? 'Isometric world map' : 'World map');
+      if (isoPreferred) {
+        this.mapOverlayCanvas.setAttribute('data-map-mode', 'isometric');
+      } else {
+        this.mapOverlayCanvas.removeAttribute('data-map-mode');
+      }
+    }
+    const info = this.currentLevelInfo ?? null;
+    this._updateMinimapLabel(info);
   }
 
   _loadVisualPreference() {
@@ -6338,21 +6411,29 @@ class GameApp extends HTMLElement {
   _updateMinimapLabel(info) {
     if (!this.minimapLabelEl) return;
     const header = this.minimapHeaderEl;
+    const segments = [];
+    let accent = '#38bdf8';
     if (info) {
-  const difficulty = info.difficulty ? ` • ${info.difficulty}` : '';
-      this.minimapLabelEl.textContent = info.name ? `${info.name}${difficulty}` : info.id || 'Stronghold';
+      const baseName = info.name || info.id || 'Stronghold';
+      segments.push(baseName);
       if (info.difficulty) {
-  this.minimapLabelEl.title = `${info.name || info.id} • ${info.difficulty}`;
-      } else {
-        this.minimapLabelEl.removeAttribute('title');
+        segments.push(info.difficulty);
       }
-      const accent = info.color || DEFAULT_PORTAL_COLOR;
-      header?.style.setProperty('--minimap-accent', accent);
+      accent = info.color || DEFAULT_PORTAL_COLOR;
     } else {
-      this.minimapLabelEl.textContent = 'Overworld';
-      this.minimapLabelEl.removeAttribute('title');
-      header?.style.setProperty('--minimap-accent', '#38bdf8');
+      segments.push('Overworld');
     }
+    if (this.isometricControlsEnabled) {
+      segments.push('Isometric 3D');
+    }
+    const text = segments.join(' • ');
+    this.minimapLabelEl.textContent = text;
+    if ((info && info.difficulty) || this.isometricControlsEnabled) {
+      this.minimapLabelEl.title = text;
+    } else {
+      this.minimapLabelEl.removeAttribute('title');
+    }
+    header?.style.setProperty('--minimap-accent', accent);
   }
 
   _applyLevelInfoFromPayload(you) {
