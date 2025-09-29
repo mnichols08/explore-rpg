@@ -231,6 +231,75 @@ template.innerHTML = `
       background: rgba(10, 18, 32, 0.92);
       border-radius: 0.85rem;
       border: 1px solid rgba(148, 163, 184, 0.34);
+
+    .minimap-compass {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.6rem 0.65rem;
+      border-radius: 0.7rem;
+      background: rgba(12, 20, 36, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      box-shadow: inset 0 0.8rem 1.4rem rgba(8, 15, 31, 0.22);
+      color: rgba(226, 232, 240, 0.92);
+    }
+
+    .minimap-compass[hidden] {
+      display: none !important;
+    }
+
+    .minimap-compass-arrow {
+      --heading: 0deg;
+      --compass-accent: #38bdf8;
+      position: relative;
+      width: 2.45rem;
+      aspect-ratio: 1;
+      border-radius: 999px;
+      background: radial-gradient(circle at 45% 35%, rgba(56, 189, 248, 0.45) 0%, rgba(8, 15, 31, 0.2) 55%, rgba(8, 15, 31, 0.9) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 0.8rem rgba(14, 116, 144, 0.45);
+    }
+
+    .minimap-compass-arrow::before {
+      content: "";
+      position: absolute;
+      inset: 0.45rem;
+      border-radius: 999px;
+      border: 1px dashed rgba(148, 163, 184, 0.35);
+      opacity: 0.9;
+    }
+
+    .minimap-compass-arrow::after {
+      content: "";
+      position: absolute;
+      top: 0.35rem;
+      left: 50%;
+      width: 0.7rem;
+      height: 1.4rem;
+      transform: translateX(-50%) rotate(var(--heading));
+      transform-origin: 50% 85%;
+      background: var(--compass-accent, #38bdf8);
+      clip-path: polygon(50% 0%, 100% 70%, 58% 70%, 58% 100%, 42% 100%, 42% 70%, 0% 70%);
+      box-shadow: 0 0 0.45rem rgba(56, 189, 248, 0.55);
+      transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+    }
+
+    .minimap-compass-label {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      line-height: 1.45;
+      color: rgba(226, 232, 240, 0.92);
+    }
+
+    .minimap-compass-meta {
+      display: grid;
+      gap: 0.2rem;
+    }
       box-shadow: 0 1.1rem 2rem rgba(8, 15, 31, 0.45);
       max-width: 100%;
     }
@@ -1978,6 +2047,12 @@ template.innerHTML = `
                   <li data-type="portal">Portals</li>
                   <li data-type="safe">Safe Zone</li>
                 </ul>
+                <div class="minimap-compass" data-minimap-compass hidden aria-hidden="true">
+                  <div class="minimap-compass-arrow" data-minimap-compass-arrow></div>
+                  <div class="minimap-compass-meta">
+                    <span class="minimap-compass-label" data-minimap-compass-label>Gateway • 0 tiles</span>
+                  </div>
+                </div>
                 <div class="minimap-footer" data-minimap-portal-hint>Follow the gold arrow to reach a gateway.</div>
               </div>
             </div>
@@ -2558,12 +2633,6 @@ const MINIMAP_SAFE_STROKE = 'rgba(125, 211, 252, 0.75)';
 const MINIMAP_VIEWPORT_STROKE = 'rgba(148, 163, 184, 0.55)';
 const MINIMAP_VIEWPORT_FILL = 'rgba(30, 41, 59, 0.22)';
 const MINIMAP_BACKGROUND = 'rgba(12, 20, 32, 0.95)';
-const PORTAL_COMPASS_RADIUS_FACTOR = 0.42;
-const PORTAL_COMPASS_MIN_DISTANCE = 2.5;
-const PORTAL_ARROW_COLOR = '#fbbf24';
-const PORTAL_ARROW_OUTLINE = 'rgba(15, 23, 42, 0.85)';
-const PORTAL_COMPASS_TEXT_COLOR = '#fde68a';
-const PORTAL_COMPASS_LABEL_BACKGROUND = 'rgba(15, 23, 42, 0.68)';
 const TOAST_DEFAULT_DURATION = 4000;
 
 function wrapChatLines(ctx, text, maxWidth) {
@@ -2634,6 +2703,9 @@ class GameApp extends HTMLElement {
     this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
     this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
     this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
+  this.minimapCompassEl = this.shadowRoot.querySelector('[data-minimap-compass]');
+  this.minimapCompassArrowEl = this.shadowRoot.querySelector('[data-minimap-compass-arrow]');
+  this.minimapCompassLabelEl = this.shadowRoot.querySelector('[data-minimap-compass-label]');
   this.minimapDockNoticeEl = this.shadowRoot.querySelector('[data-minimap-dock-notice]');
   this.minimapDockButton = this.shadowRoot.querySelector('[data-minimap-dock]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
@@ -3668,7 +3740,6 @@ class GameApp extends HTMLElement {
       if (magnitude > 0.0001) {
         portalDir = { x: nearestPortal.dx / magnitude, y: nearestPortal.dy / magnitude };
       }
-      portalIntensity = Math.max(0, 1 - Math.min(nearestPortal.distance / 14, 1));
     }
     const accentColorVec = this._cssColorToVec3(
       this.currentLevelColor || levelTheme?.shadow || '#38bdf8',
@@ -4151,8 +4222,6 @@ class GameApp extends HTMLElement {
     }
 
   ctx.restore();
-
-  this._renderPortalCompass(ctx, anchor, nearestPortal, cameraX, cameraY, width, height, currentLevelId, time);
 
   this._renderMinimap(local, currentLevelId, nearestPortal);
   this._renderMapOverlay(local, currentLevelId, nearestPortal);
@@ -5874,7 +5943,40 @@ class GameApp extends HTMLElement {
     return best;
   }
 
+  _updateMinimapCompass(currentLevelId, nearest) {
+    if (!this.minimapCompassEl || !this.minimapCompassArrowEl || !this.minimapCompassLabelEl) {
+      return;
+    }
+    const shouldHide = currentLevelId || !nearest || !nearest.portal;
+    if (shouldHide) {
+      if (!this.minimapCompassEl.hidden) {
+        this.minimapCompassEl.hidden = true;
+      }
+      this.minimapCompassEl.setAttribute('aria-hidden', 'true');
+      this.minimapCompassArrowEl.style.setProperty('--heading', '0deg');
+      this.minimapCompassArrowEl.style.setProperty('--compass-accent', '#38bdf8');
+      return;
+    }
+    const distanceLabel = this._formatDistance(nearest.distance);
+    const direction = this._describeDirection(nearest.dx, nearest.dy);
+    const labelParts = [`${nearest.portal.name || 'Gateway'}`, distanceLabel];
+    if (direction) {
+      labelParts.push(direction);
+    }
+    this.minimapCompassLabelEl.textContent = labelParts.join(' • ');
+    const color = nearest.portal.color || MINIMAP_PORTAL_COLOR;
+    this.minimapCompassArrowEl.style.setProperty('--compass-accent', color);
+    const headingDegrees = (Math.atan2(nearest.dx, -nearest.dy) * 180) / Math.PI;
+    const normalizedHeading = Number.isFinite(headingDegrees) ? (headingDegrees + 360) % 360 : 0;
+    this.minimapCompassArrowEl.style.setProperty('--heading', `${normalizedHeading}deg`);
+    if (this.minimapCompassEl.hidden) {
+      this.minimapCompassEl.hidden = false;
+    }
+    this.minimapCompassEl.setAttribute('aria-hidden', 'false');
+  }
+
   _updatePortalHint(currentLevelId, nearest) {
+    this._updateMinimapCompass(currentLevelId, nearest);
     if (!this.minimapPortalHintEl) return;
     if (currentLevelId) {
       this.minimapPortalHintEl.textContent = 'Find the exit sigil to return to the overworld.';
@@ -5934,84 +6036,6 @@ class GameApp extends HTMLElement {
       this.portalPromptEl.hidden = true;
       this.portalPromptEl.textContent = '';
     }
-  }
-
-  _renderPortalCompass(ctx, anchor, nearest, cameraX, cameraY, width, height, currentLevelId, time) {
-    if (!ctx || !nearest || !anchor || currentLevelId) return;
-    const { portal, distance, dx, dy } = nearest;
-    if (!portal || !Number.isFinite(distance) || distance < PORTAL_COMPASS_MIN_DISTANCE) return;
-    const screenX = (portal.x - cameraX) * this.tileSize + width / 2;
-    const screenY = (portal.y - cameraY) * this.tileSize + height / 2;
-    const margin = this.tileSize * 1.2;
-    if (screenX >= -margin && screenX <= width + margin && screenY >= -margin && screenY <= height + margin) {
-      return;
-    }
-    const nx = dx / distance;
-    const ny = dy / distance;
-    const radius = Math.min(width, height) * PORTAL_COMPASS_RADIUS_FACTOR;
-    const centerX = width / 2 + nx * radius;
-    const centerY = height / 2 + ny * radius;
-    const angle = Math.atan2(ny, nx);
-    const color = portal.color || PORTAL_ARROW_COLOR;
-    const pulse = Math.sin((time / 240) + distance * 0.15) * 0.08 + 0.88;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(angle);
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = this._withAlpha(color, pulse);
-    const arrowLength = 30;
-    const arrowWidth = 12;
-    ctx.beginPath();
-    ctx.moveTo(arrowLength / 2, 0);
-    ctx.lineTo(-arrowLength / 2, arrowWidth / 2);
-    ctx.lineTo(-arrowLength / 3, 0);
-    ctx.lineTo(-arrowLength / 2, -arrowWidth / 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = PORTAL_ARROW_OUTLINE;
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.save();
-    ctx.globalAlpha = 0.6;
-    ctx.setLineDash([6, 10]);
-    ctx.lineWidth = 1.4;
-    ctx.strokeStyle = this._withAlpha(color, 0.5);
-    ctx.beginPath();
-    ctx.arc(width / 2, height / 2, radius, angle - 0.04, angle + 0.04);
-    ctx.stroke();
-    ctx.restore();
-
-    const direction = this._describeDirection(dx, dy);
-    const labelParts = [portal.name || 'Gateway', this._formatDistance(distance)];
-    if (direction) {
-      labelParts.push(direction);
-    }
-  const label = labelParts.join(' • ');
-    const metricsCtx = ctx;
-    metricsCtx.save();
-    metricsCtx.font = '600 13px "Segoe UI"';
-    metricsCtx.textAlign = 'center';
-    metricsCtx.textBaseline = 'middle';
-    const textWidth = metricsCtx.measureText(label).width;
-    const paddingX = 12;
-    const paddingY = 6;
-    const boxWidth = textWidth + paddingX * 2;
-    const boxHeight = 26;
-    const labelX = width / 2;
-    const labelY = 54;
-    metricsCtx.globalAlpha = 0.82;
-    metricsCtx.fillStyle = PORTAL_COMPASS_LABEL_BACKGROUND;
-    metricsCtx.fillRect(labelX - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight);
-    metricsCtx.globalAlpha = 0.9;
-    metricsCtx.strokeStyle = this._withAlpha(color, 0.65);
-    metricsCtx.lineWidth = 1.2;
-    metricsCtx.strokeRect(labelX - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight);
-    metricsCtx.fillStyle = PORTAL_COMPASS_TEXT_COLOR;
-    metricsCtx.fillText(label, labelX, labelY);
-    metricsCtx.restore();
   }
 
   _normalizeLevel(level) {
