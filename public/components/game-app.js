@@ -2341,6 +2341,9 @@ class GameApp extends HTMLElement {
   this.levels = new Map();
   this.enemies = new Map();
   this.chats = new Map();
+    this._chargeHighlightSnapshot = new Map();
+    this._chargeHighlightCache = [];
+    this._chargeHighlightCacheTime = 0;
     this.touchMoveVector = { x: 0, y: 0 };
     this.joystickPointerId = null;
     this.joystickActive = false;
@@ -2380,9 +2383,9 @@ class GameApp extends HTMLElement {
   this.minimapFloatPosition = null;
   this.minimapDragPointerId = null;
   this.minimapDragOffset = { x: 0, y: 0 };
-  this.mapOverlayVisible = false;
-  this.mapOverlayLastFocus = null;
-  this.mapOverlayRenderSize = 0;
+    this._chargeHighlightSnapshot.clear();
+    this._chargeHighlightCache = [];
+    this._chargeHighlightCacheTime = 0;
     this.currentLevelId = null;
     this.currentLevelExit = null;
     this.currentLevelInfo = null;
@@ -3526,25 +3529,92 @@ class GameApp extends HTMLElement {
           const wedgeAlpha = isSelf ? 0.85 : 0.58;
           ctx.globalAlpha = wedgeAlpha;
           ctx.translate(offsetX, offsetY);
-          ctx.rotate(Math.atan2(wedgeDirection.y ?? 0, wedgeDirection.x ?? 1));
+          const wedgeAngle = Math.atan2(wedgeDirection.y ?? 0, wedgeDirection.x ?? 1);
+          ctx.rotate(wedgeAngle);
           const wedgeLength = this.tileSize * (isSelf ? 1.4 + chargeRatio * 4.2 : 1.1 + chargeRatio * 3.2);
           const wedgeWidth = this.tileSize * (isSelf ? 0.75 + chargeRatio * 1.6 : 0.55 + chargeRatio * 1.2);
-          const gradient = ctx.createLinearGradient(0, 0, wedgeLength, 0);
-          gradient.addColorStop(0, this._withAlpha(glow.stroke, 0));
-          gradient.addColorStop(0.25, this._withAlpha(glow.stroke, isSelf ? 0.35 : 0.24));
-          gradient.addColorStop(0.9, this._withAlpha(glow.stroke, isSelf ? 0.95 : 0.7));
-          ctx.fillStyle = gradient;
           const startPadding = Math.min(this.tileSize * 0.25, wedgeLength * 0.28);
-          ctx.beginPath();
-          ctx.moveTo(startPadding, -wedgeWidth / 2);
-          ctx.lineTo(wedgeLength, 0);
-          ctx.lineTo(startPadding, wedgeWidth / 2);
-          ctx.closePath();
-          ctx.fill();
-          ctx.globalAlpha = 1;
-          ctx.lineWidth = (isSelf ? 1.8 : 1.1) + chargeRatio * (isSelf ? 1.4 : 0.9);
-          ctx.strokeStyle = this._withAlpha(glow.stroke, isSelf ? 0.8 : 0.55);
-          ctx.stroke();
+
+          if (chargeKind === 'spell') {
+            const crest = wedgeLength * (0.52 + 0.22 * chargeRatio);
+            const tipWidth = wedgeWidth * (0.26 + 0.18 * chargeRatio);
+            const outerGradient = ctx.createLinearGradient(startPadding, 0, wedgeLength, 0);
+            outerGradient.addColorStop(0, this._withAlpha(glow.stroke, 0));
+            outerGradient.addColorStop(0.18, this._withAlpha(glow.stroke, isSelf ? 0.28 : 0.18));
+            outerGradient.addColorStop(0.55, this._withAlpha(glow.stroke, isSelf ? 0.7 : 0.5));
+            outerGradient.addColorStop(1, this._withAlpha('#f8fafc', isSelf ? 0.92 : 0.72));
+            ctx.fillStyle = outerGradient;
+            ctx.beginPath();
+            ctx.moveTo(startPadding, -wedgeWidth * 0.48);
+            ctx.quadraticCurveTo(crest, -tipWidth, wedgeLength, 0);
+            ctx.quadraticCurveTo(crest, tipWidth, startPadding, wedgeWidth * 0.48);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.lineWidth = (isSelf ? 1.6 : 1.1) + chargeRatio * (isSelf ? 2.1 : 1.3);
+            ctx.strokeStyle = this._withAlpha(glow.stroke, isSelf ? 0.82 : 0.6);
+            ctx.stroke();
+
+            const innerWidth = wedgeWidth * (0.28 + 0.32 * chargeRatio);
+            const shimmer = 0.12 + Math.sin(time / 90 + chargeRatio * 5) * 0.08;
+            ctx.beginPath();
+            ctx.moveTo(startPadding * 1.04, -innerWidth);
+            ctx.quadraticCurveTo(crest, -innerWidth * 0.35, wedgeLength * 0.9, -innerWidth * shimmer);
+            ctx.quadraticCurveTo(crest, innerWidth * 0.35, startPadding * 1.04, innerWidth);
+            ctx.closePath();
+            ctx.globalAlpha = wedgeAlpha * (0.65 + 0.25 * chargeRatio);
+            ctx.fillStyle = this._withAlpha('#dbeafe', isSelf ? 0.82 : 0.68);
+            ctx.fill();
+            ctx.globalAlpha = wedgeAlpha;
+
+            const runeCount = isSelf ? 3 : 2;
+            ctx.save();
+            for (let i = 0; i < runeCount; i += 1) {
+              const t = (i + 1) / (runeCount + 1);
+              const dist = startPadding + (wedgeLength - startPadding) * t;
+              const arcRadius = wedgeWidth * (0.18 + 0.28 * t);
+              ctx.beginPath();
+              ctx.setLineDash([arcRadius * 1.6, arcRadius * 0.7]);
+              ctx.lineDashOffset = -time / 140 * arcRadius * (1.1 + t);
+              ctx.strokeStyle = this._withAlpha(glow.stroke, 0.6 + chargeRatio * 0.28);
+              ctx.lineWidth = 0.9 + chargeRatio * 1.1;
+              ctx.arc(dist, 0, arcRadius, -Math.PI * 0.85, Math.PI * 0.85);
+              ctx.stroke();
+            }
+            ctx.restore();
+            ctx.setLineDash([]);
+            ctx.lineDashOffset = 0;
+
+            ctx.globalAlpha = wedgeAlpha * (0.78 + 0.18 * Math.sin(time / 70 + chargeRatio * 4));
+            const flareRadius = wedgeWidth * (0.3 + 0.32 * chargeRatio);
+            const flareGradient = ctx.createRadialGradient(wedgeLength, 0, flareRadius * 0.2, wedgeLength, 0, flareRadius);
+            flareGradient.addColorStop(0, this._withAlpha('#f0f9ff', 0.9));
+            flareGradient.addColorStop(1, this._withAlpha(glow.stroke, 0.2));
+            ctx.fillStyle = flareGradient;
+            ctx.beginPath();
+            ctx.arc(wedgeLength, 0, flareRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.lineWidth = 1.2 + chargeRatio * 1.6;
+            ctx.strokeStyle = this._withAlpha(glow.stroke, 0.65 + chargeRatio * 0.25);
+            ctx.stroke();
+            ctx.globalAlpha = wedgeAlpha;
+          } else {
+            const gradient = ctx.createLinearGradient(0, 0, wedgeLength, 0);
+            gradient.addColorStop(0, this._withAlpha(glow.stroke, 0));
+            gradient.addColorStop(0.25, this._withAlpha(glow.stroke, isSelf ? 0.35 : 0.24));
+            gradient.addColorStop(0.9, this._withAlpha(glow.stroke, isSelf ? 0.95 : 0.7));
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(startPadding, -wedgeWidth / 2);
+            ctx.lineTo(wedgeLength, 0);
+            ctx.lineTo(startPadding, wedgeWidth / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.lineWidth = (isSelf ? 1.8 : 1.1) + chargeRatio * (isSelf ? 1.4 : 0.9);
+            ctx.strokeStyle = this._withAlpha(glow.stroke, isSelf ? 0.8 : 0.55);
+            ctx.stroke();
+          }
           ctx.restore();
         }
         ctx.restore();
@@ -5713,10 +5783,24 @@ class GameApp extends HTMLElement {
 
   _collectChargeHighlights(localPlayer, cameraX, cameraY, width, height, currentLevelId) {
     const maxHighlights = this.webglRenderer?.maxChargeHighlights || 0;
-    if (!maxHighlights || !this.players || this.players.size <= 1) return [];
-    const results = [];
+  const snapshot = this._chargeHighlightSnapshot;
+    const now = typeof performance !== 'undefined' && performance && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+    const throttleMs = 90;
+    if (!maxHighlights || !this.players || this.players.size <= 1) {
+      if (snapshot.size || (this._chargeHighlightCache?.length ?? 0)) {
+        snapshot.clear();
+        this._chargeHighlightCache = [];
+        this._chargeHighlightCacheTime = now;
+      }
+      return [];
+    }
+
     const denomW = Math.max(1, width);
     const denomH = Math.max(1, height);
+    const candidates = [];
+
     for (const player of this.players.values()) {
       if (!player) continue;
       if (player.id === this.youId) continue;
@@ -5735,21 +5819,95 @@ class GameApp extends HTMLElement {
       const direction = this._normalize({ x: Number(dirSource?.x) || 1, y: Number(dirSource?.y) || 0 });
       const reachBase = kind === 'spell' ? 0.4 : kind === 'ranged' ? 0.32 : 0.26;
       const reach = Math.max(0.08, Math.min(0.6, 0.14 + ratio * reachBase));
-      results.push({
-        x: Math.max(0, Math.min(1, normX)),
-        y: Math.max(0, Math.min(1, normY)),
-        ratio,
-        reach,
-        dirX: direction.x,
-        dirY: direction.y,
-        color: this._cssColorToVec3(glow.stroke, [0.72, 0.8, 1.0]),
+      const colorVec = this._cssColorToVec3(glow.stroke, [0.72, 0.8, 1.0]);
+      candidates.push({
+        id: player.id,
+        highlight: {
+          x: Math.max(0, Math.min(1, normX)),
+          y: Math.max(0, Math.min(1, normY)),
+          ratio,
+          reach,
+          dirX: direction.x,
+          dirY: direction.y,
+          color: colorVec,
+        },
       });
     }
-    if (results.length <= maxHighlights) {
-      return results;
+
+    if (!candidates.length) {
+      if (snapshot.size || (this._chargeHighlightCache?.length ?? 0)) {
+        snapshot.clear();
+        this._chargeHighlightCache = [];
+        this._chargeHighlightCacheTime = now;
+      }
+      return [];
     }
-    results.sort((a, b) => b.ratio - a.ratio);
-    return results.slice(0, maxHighlights);
+
+    if (candidates.length > maxHighlights) {
+      candidates.sort((a, b) => b.highlight.ratio - a.highlight.ratio);
+    }
+    const trimmed = candidates.slice(0, maxHighlights);
+    const nextSnapshot = new Map();
+    const positionEpsilon = 0.004;
+    const ratioEpsilon = 0.02;
+    const reachEpsilon = 0.01;
+    const directionEpsilon = 0.02;
+    const colorEpsilon = 0.04;
+
+    let changed = snapshot.size !== trimmed.length;
+    for (const { id, highlight } of trimmed) {
+      const color = Array.isArray(highlight.color) ? highlight.color : [0.7, 0.8, 1.0];
+      nextSnapshot.set(id, {
+        x: highlight.x,
+        y: highlight.y,
+        ratio: highlight.ratio,
+        reach: highlight.reach,
+        dirX: highlight.dirX,
+        dirY: highlight.dirY,
+        color,
+      });
+      const previous = snapshot.get(id);
+      if (!previous) {
+        changed = true;
+        continue;
+      }
+      if (
+        Math.abs(previous.x - highlight.x) > positionEpsilon ||
+        Math.abs(previous.y - highlight.y) > positionEpsilon ||
+        Math.abs(previous.ratio - highlight.ratio) > ratioEpsilon ||
+        Math.abs(previous.reach - highlight.reach) > reachEpsilon ||
+        Math.abs(previous.dirX - highlight.dirX) > directionEpsilon ||
+        Math.abs(previous.dirY - highlight.dirY) > directionEpsilon ||
+        Math.abs((previous.color?.[0] ?? 0) - color[0]) > colorEpsilon ||
+        Math.abs((previous.color?.[1] ?? 0) - color[1]) > colorEpsilon ||
+        Math.abs((previous.color?.[2] ?? 0) - color[2]) > colorEpsilon
+      ) {
+        changed = true;
+      }
+    }
+
+    if (!changed) {
+      for (const key of snapshot.keys()) {
+        if (!nextSnapshot.has(key)) {
+          changed = true;
+          break;
+        }
+      }
+    }
+
+    const elapsed = now - (this._chargeHighlightCacheTime || 0);
+    const timeExceeded = !Number.isFinite(elapsed) || elapsed >= throttleMs;
+
+    if (changed || timeExceeded) {
+      snapshot.clear();
+      for (const [id, data] of nextSnapshot) {
+        snapshot.set(id, data);
+      }
+      this._chargeHighlightCache = trimmed.map(({ highlight }) => ({ ...highlight }));
+      this._chargeHighlightCacheTime = now;
+    }
+
+    return Array.isArray(this._chargeHighlightCache) ? this._chargeHighlightCache : [];
   }
 
   _renderPortals(ctx, cameraX, cameraY, width, height, time, local, currentLevelId) {
@@ -6254,6 +6412,9 @@ class GameApp extends HTMLElement {
         momentum: null,
       };
     }
+    this._chargeHighlightSnapshot.clear();
+    this._chargeHighlightCache = [];
+    this._chargeHighlightCacheTime = 0;
     this.activeAction = null;
     this.actionStart = 0;
   this.activeActionAim = null;
