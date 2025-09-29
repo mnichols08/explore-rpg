@@ -26,6 +26,10 @@ const TILE_HEIGHTS = {
   void: 0.16,
 };
 
+const WALKABLE_TILE_TYPES = new Set(['sand', 'grass', 'forest', 'ember', 'glyph']);
+const WALKABLE_OVERLAY_COLOR = '#38bdf8';
+const WALKABLE_BARRIER_COLOR = '#1d4ed8';
+
 const PLAYER_STYLES = {
   self: {
     base: '#38bdf8',
@@ -114,12 +118,20 @@ export class WorldIsometricRenderer {
     this.oreGroup = null;
     this.lootGroup = null;
     this.exitGroup = null;
+  this.walkabilityGroup = null;
+  this.walkOverlayMaterial = null;
+  this.walkBarrierMaterial = null;
+  this.walkBarrierCrossMaterial = null;
     this.cameraDistance = 32;
     this.cameraElevation = Math.PI / 3.2;
     this.cameraAzimuth = Math.PI / 4;
     this.cameraLerp = 0.12;
     this._cameraTarget = null;
     this._cameraFocus = null;
+    this._pointerVecNear = null;
+    this._pointerVecFar = null;
+    this._pointerDir = null;
+    this._pointerIntersection = null;
   }
 
   _syncDungeonExit(exitInfo, levelId, time, exitColor) {
@@ -321,17 +333,19 @@ export class WorldIsometricRenderer {
       this.decorGroup = new Group();
       this.portalGroup = new Group();
       this.safeGroup = new Group();
-    this.oreGroup = new Group();
-    this.lootGroup = new Group();
-    this.exitGroup = new Group();
+      this.walkabilityGroup = new Group();
+      this.oreGroup = new Group();
+      this.lootGroup = new Group();
+      this.exitGroup = new Group();
       this.characterGroup = new Group();
       this.scene.add(this.tileGroup);
       this.scene.add(this.decorGroup);
       this.scene.add(this.portalGroup);
       this.scene.add(this.safeGroup);
-    this.scene.add(this.oreGroup);
-    this.scene.add(this.lootGroup);
-    this.scene.add(this.exitGroup);
+      this.scene.add(this.walkabilityGroup);
+      this.scene.add(this.oreGroup);
+      this.scene.add(this.lootGroup);
+      this.scene.add(this.exitGroup);
       this.scene.add(this.characterGroup);
 
       this.ambientLight = new AmbientLight(0xf8fafc, 0.65);
@@ -395,6 +409,41 @@ export class WorldIsometricRenderer {
     this.camera.updateProjectionMatrix();
   }
 
+  screenPointToWorld(screenX, screenY, width, height) {
+    if (!this.isReady()) return null;
+    if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) return null;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      return null;
+    }
+
+    const { Vector3 } = this.THREE;
+    if (!this._pointerVecNear) {
+      this._pointerVecNear = new Vector3();
+      this._pointerVecFar = new Vector3();
+      this._pointerDir = new Vector3();
+      this._pointerIntersection = new Vector3();
+    }
+
+    const ndcX = (screenX / width) * 2 - 1;
+    const ndcY = -(screenY / height) * 2 + 1;
+
+    this._pointerVecNear.set(ndcX, ndcY, -1).unproject(this.camera);
+    this._pointerVecFar.set(ndcX, ndcY, 1).unproject(this.camera);
+    this._pointerDir.copy(this._pointerVecFar).sub(this._pointerVecNear).normalize();
+
+    const denom = this._pointerDir.y;
+    if (!Number.isFinite(denom) || Math.abs(denom) < 1e-5) {
+      return null;
+    }
+    const distance = -this._pointerVecNear.y / denom;
+    if (!Number.isFinite(distance) || distance < 0) {
+      return null;
+    }
+
+    this._pointerIntersection.copy(this._pointerVecNear).addScaledVector(this._pointerDir, distance);
+    return { x: this._pointerIntersection.x, y: this._pointerIntersection.z };
+  }
+
   setWorld(world) {
     if (!world) {
       this._worldRef = null;
@@ -402,6 +451,10 @@ export class WorldIsometricRenderer {
       if (this.isReady()) {
         this._disposeGroup(this.tileGroup);
         this._disposeGroup(this.decorGroup);
+        this._disposeGroup(this.walkabilityGroup, false);
+        this.walkOverlayMaterial = null;
+        this.walkBarrierMaterial = null;
+        this.walkBarrierCrossMaterial = null;
       } else {
         this._pendingWorld = null;
       }
@@ -454,6 +507,7 @@ export class WorldIsometricRenderer {
     this._syncDungeonExit(state.dungeonExit || null, currentLevelId, time, state.exitColor || null);
     this._syncPlayers(state.players || [], state.localId ?? null, time, currentLevelId, state.chargeSnapshot || null);
     this._syncEnemies(state.enemies || [], time, currentLevelId);
+    this._updateWalkabilityPulse(time, currentLevelId);
 
     const cameraX = state.cameraX ?? world.width / 2;
     const cameraY = state.cameraY ?? world.height / 2;
@@ -500,6 +554,12 @@ export class WorldIsometricRenderer {
     if (this.safeGroup) {
       this._disposeGroup(this.safeGroup, false);
     }
+    if (this.walkabilityGroup) {
+      this._disposeGroup(this.walkabilityGroup);
+      this.walkOverlayMaterial = null;
+      this.walkBarrierMaterial = null;
+      this.walkBarrierCrossMaterial = null;
+    }
     this.renderer?.dispose?.();
   }
 
@@ -511,6 +571,10 @@ export class WorldIsometricRenderer {
     if (!rows || !cols) {
       this._disposeGroup(this.tileGroup);
       this._disposeGroup(this.decorGroup);
+      this._disposeGroup(this.walkabilityGroup, false);
+      this.walkOverlayMaterial = null;
+      this.walkBarrierMaterial = null;
+      this.walkBarrierCrossMaterial = null;
       return;
     }
 
@@ -518,6 +582,10 @@ export class WorldIsometricRenderer {
 
     this._disposeGroup(this.tileGroup);
     this._disposeGroup(this.decorGroup);
+    this._disposeGroup(this.walkabilityGroup, false);
+    this.walkOverlayMaterial = null;
+    this.walkBarrierMaterial = null;
+    this.walkBarrierCrossMaterial = null;
 
     const baseGeometry = new BoxGeometry(1, 1, 1);
     const baseMaterial = new MeshStandardMaterial({
@@ -536,6 +604,9 @@ export class WorldIsometricRenderer {
     const stones = [];
     const crystals = [];
     const embers = [];
+    const walkableTiles = [];
+    const barrierX = [];
+    const barrierZ = [];
     let index = 0;
     for (let y = 0; y < rows; y += 1) {
       const row = tiles[y];
@@ -554,6 +625,35 @@ export class WorldIsometricRenderer {
         tileMesh.setColorAt(index, color);
 
         const seed = pseudoRandom(x, y);
+        const isWalkable = WALKABLE_TILE_TYPES.has(tile);
+        if (isWalkable) {
+          walkableTiles.push({ x: px, z: pz, height });
+          const neighborOffsets = [
+            { dx: 1, dz: 0 },
+            { dx: -1, dz: 0 },
+            { dx: 0, dz: 1 },
+            { dx: 0, dz: -1 },
+          ];
+          for (const { dx, dz } of neighborOffsets) {
+            const nx = x + dx;
+            const nz = y + dz;
+            const neighborTile = tiles[nz]?.[nx] ?? null;
+            const neighborWalkable = neighborTile ? WALKABLE_TILE_TYPES.has(neighborTile) : false;
+            if (!neighborWalkable) {
+              const neighborHeight = neighborTile ? (TILE_HEIGHTS[neighborTile] ?? height) : height;
+              const entry = {
+                x: px + dx * 0.5,
+                z: pz + dz * 0.5,
+                height: Math.max(height, neighborHeight),
+              };
+              if (dz !== 0) {
+                barrierX.push(entry);
+              } else {
+                barrierZ.push(entry);
+              }
+            }
+          }
+        }
         if (tile === 'forest' && seed > 0.35) {
           forest.push({
             x: px,
@@ -598,6 +698,7 @@ export class WorldIsometricRenderer {
     this.tileGroup.add(tileMesh);
 
     this._buildDecor(forest, stones, crystals, embers);
+    this._buildWalkabilityOverlay(walkableTiles, barrierX, barrierZ);
   }
 
   _buildDecor(forest, stones, crystals, embers) {
@@ -649,6 +750,91 @@ export class WorldIsometricRenderer {
       { color: 0xfb923c, emissive: 0xc2410c, emissiveIntensity: 0.7, roughness: 0.55, metalness: 0.25 },
       0.45
     );
+  }
+
+  _buildWalkabilityOverlay(walkableTiles, barrierX, barrierZ) {
+    if (!this.walkabilityGroup) return;
+    this._disposeGroup(this.walkabilityGroup, false);
+    if ((!walkableTiles || walkableTiles.length === 0) && (!barrierX || barrierX.length === 0) && (!barrierZ || barrierZ.length === 0)) {
+      this.walkOverlayMaterial = null;
+      this.walkBarrierMaterial = null;
+      this.walkBarrierCrossMaterial = null;
+      return;
+    }
+
+    const { Object3D, InstancedMesh, MeshBasicMaterial, PlaneGeometry, BoxGeometry, DoubleSide } = this.THREE;
+    const dummy = new Object3D();
+
+    if (walkableTiles && walkableTiles.length) {
+      this.walkOverlayMaterial = new MeshBasicMaterial({
+        color: WALKABLE_OVERLAY_COLOR,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false,
+        side: DoubleSide,
+      });
+      const overlayGeometry = new PlaneGeometry(1, 1);
+      const overlayMesh = new InstancedMesh(overlayGeometry, this.walkOverlayMaterial, walkableTiles.length);
+      overlayMesh.renderOrder = 2;
+      for (let i = 0; i < walkableTiles.length; i += 1) {
+        const tile = walkableTiles[i];
+        dummy.position.set(tile.x, tile.height + 0.025, tile.z);
+        dummy.rotation.set(-Math.PI / 2, 0, 0);
+        dummy.scale.set(0.94, 0.94, 0.94);
+        dummy.updateMatrix();
+        overlayMesh.setMatrixAt(i, dummy.matrix);
+      }
+      overlayMesh.instanceMatrix.needsUpdate = true;
+      this.walkabilityGroup.add(overlayMesh);
+    }
+
+    if (barrierX && barrierX.length) {
+      this.walkBarrierMaterial = new MeshBasicMaterial({
+        color: WALKABLE_BARRIER_COLOR,
+        transparent: true,
+        opacity: 0.24,
+        depthWrite: false,
+      });
+      const barrierGeometryX = new BoxGeometry(1, 0.52, 0.08);
+      const barrierMeshX = new InstancedMesh(barrierGeometryX, this.walkBarrierMaterial, barrierX.length);
+      barrierMeshX.renderOrder = 3;
+      for (let i = 0; i < barrierX.length; i += 1) {
+        const segment = barrierX[i];
+        dummy.position.set(segment.x, segment.height + 0.26, segment.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(0.96, 1, 0.9);
+        dummy.updateMatrix();
+        barrierMeshX.setMatrixAt(i, dummy.matrix);
+      }
+      barrierMeshX.instanceMatrix.needsUpdate = true;
+      this.walkabilityGroup.add(barrierMeshX);
+    } else {
+      this.walkBarrierMaterial = null;
+    }
+
+    if (barrierZ && barrierZ.length) {
+      this.walkBarrierCrossMaterial = new MeshBasicMaterial({
+        color: WALKABLE_BARRIER_COLOR,
+        transparent: true,
+        opacity: 0.24,
+        depthWrite: false,
+      });
+      const barrierGeometryZ = new BoxGeometry(0.08, 0.52, 1);
+      const barrierMeshZ = new InstancedMesh(barrierGeometryZ, this.walkBarrierCrossMaterial, barrierZ.length);
+      barrierMeshZ.renderOrder = 3;
+      for (let i = 0; i < barrierZ.length; i += 1) {
+        const segment = barrierZ[i];
+        dummy.position.set(segment.x, segment.height + 0.26, segment.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(0.9, 1, 0.96);
+        dummy.updateMatrix();
+        barrierMeshZ.setMatrixAt(i, dummy.matrix);
+      }
+      barrierMeshZ.instanceMatrix.needsUpdate = true;
+      this.walkabilityGroup.add(barrierMeshZ);
+    } else {
+      this.walkBarrierCrossMaterial = null;
+    }
   }
 
   _syncLighting(theme, levelId) {
@@ -1148,6 +1334,24 @@ export class WorldIsometricRenderer {
         entry.dispose();
         this.enemyMeshes.delete(id);
       }
+    }
+  }
+
+  _updateWalkabilityPulse(time) {
+    if (this.walkOverlayMaterial) {
+      const base = 0.16;
+      const pulse = Math.sin(time * 1.6) * 0.04;
+      this.walkOverlayMaterial.opacity = Math.max(0.08, base + pulse);
+    }
+    if (this.walkBarrierMaterial) {
+      const base = 0.22;
+      const pulse = Math.sin(time * 2.3) * 0.05;
+      this.walkBarrierMaterial.opacity = Math.max(0.1, base + pulse);
+    }
+    if (this.walkBarrierCrossMaterial) {
+      const base = 0.22;
+      const pulse = Math.sin(time * 2.3 + Math.PI / 2) * 0.05;
+      this.walkBarrierCrossMaterial.opacity = Math.max(0.1, base + pulse);
     }
   }
 

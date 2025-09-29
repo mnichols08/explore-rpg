@@ -2257,13 +2257,13 @@ const MINIMAP_SIZE = 176;
 const MINIMAP_TILE_COLORS = {
   water: '#0f172a',
   sand: '#fbbf24',
-  grass: '#2dd4bf',
+  grass: '#22d3ee',
   forest: '#166534',
-  rock: '#475569',
+  rock: '#94a3b8',
   ember: '#fb923c',
-  glyph: '#6366f1',
-  obsidian: '#111827',
-  lava: '#b91c1c',
+  glyph: '#818cf8',
+  obsidian: '#0f172a',
+  lava: '#ef4444',
   void: '#1e1b4b',
 };
 const MINIMAP_PLAYER_COLORS = {
@@ -2327,9 +2327,9 @@ class GameApp extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.shadowRoot.appendChild(template.content.cloneNode(true));
-  this.hudEl = this.shadowRoot.querySelector('.hud');
-  this.isoCanvas = this.shadowRoot.querySelector('[data-iso-canvas]');
-  this.webglCanvas = this.shadowRoot.querySelector('[data-webgl-canvas]');
+    this.hudEl = this.shadowRoot.querySelector('.hud');
+    this.isoCanvas = this.shadowRoot.querySelector('[data-iso-canvas]');
+    this.webglCanvas = this.shadowRoot.querySelector('[data-webgl-canvas]');
     this.canvas = this.shadowRoot.querySelector('[data-main-canvas]');
     this.ctx = this.canvas.getContext('2d');
     this.isoRenderer = this.isoCanvas ? new WorldIsometricRenderer(this.isoCanvas) : null;
@@ -2354,10 +2354,10 @@ class GameApp extends HTMLElement {
     this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
     this.minimapToggleButton = this.shadowRoot.querySelector('[data-minimap-toggle]');
     this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
-  this.minimapFloatButton = this.shadowRoot.querySelector('[data-minimap-float]');
+    this.minimapFloatButton = this.shadowRoot.querySelector('[data-minimap-float]');
     this.minimapGhostButton = this.shadowRoot.querySelector('[data-minimap-ghost]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
-  this.toastStackEl = this.shadowRoot.querySelector('[data-toast-stack]');
+    this.toastStackEl = this.shadowRoot.querySelector('[data-toast-stack]');
     this.mapOverlayEl = this.shadowRoot.querySelector('[data-map-overlay]');
     this.mapOverlayCanvas = this.shadowRoot.querySelector('[data-map-canvas]');
     this.mapOverlayCtx = this.mapOverlayCanvas ? this.mapOverlayCanvas.getContext('2d') : null;
@@ -2488,9 +2488,9 @@ class GameApp extends HTMLElement {
     this.players = new Map();
     this.effects = [];
     this.portals = new Map();
-  this.levels = new Map();
-  this.enemies = new Map();
-  this.chats = new Map();
+    this.levels = new Map();
+    this.enemies = new Map();
+    this.chats = new Map();
     this._chargeHighlightSnapshot = new Map();
     this._chargeHighlightCache = [];
     this._chargeHighlightCacheTime = 0;
@@ -2500,39 +2500,42 @@ class GameApp extends HTMLElement {
     this.touchControlsBound = false;
     this.touchEnabled = false;
     this.detectedTouch = false;
+  this.pointerScreen = null;
+    this.pointerSource = 'mouse';
     this.compactMode = false;
     this.compactAutoCollapse = false;
     this.hasStoredUiPreference = false;
-  this.uiCollapsed = false;
-  this.controlHintsVisible = true;
-  this.viewportWidth = 0;
-  this.viewportHeight = 0;
-  this.webglEnabled = Boolean(this.webglRenderer);
-    const coarseQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(pointer: coarse)') : null;
-    this.coarsePointerQuery = coarseQuery;
-    if ((typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) || (coarseQuery && coarseQuery.matches)) {
-      this.detectedTouch = true;
-    }
+    this.uiCollapsed = false;
+    this.controlHintsVisible = true;
+    this.viewportWidth = 0;
+    this.viewportHeight = 0;
+    this.webglEnabled = Boolean(this.webglRenderer);
+  const coarseQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(hover: none) and (pointer: coarse)') : null;
+  this.coarsePointerQuery = coarseQuery;
+  const nav = typeof navigator !== 'undefined' ? navigator : null;
+  const hasTouchPoints = nav ? Number(nav.maxTouchPoints) > 0 : false;
+  const isMobileUa = nav ? /Android|iP(hone|od|ad)|Mobile|Tablet|PlayBook|Silk/i.test(nav.userAgent || '') : false;
+  this.detectedTouch = Boolean(coarseQuery?.matches || (hasTouchPoints && isMobileUa));
     this.oreNodes = new Map();
     this.lootDrops = new Map();
     this.youId = null;
     this.localStats = null;
     this.localBonuses = null;
     this.localHealth = { health: 0, maxHealth: 0 };
-  this.localMomentum = null;
+    this.localMomentum = null;
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
-  this.ownedGear = new Set(Object.values(STARTING_EQUIPMENT));
-  this.equipment = { ...STARTING_EQUIPMENT };
-  this.minimapBase = null;
-  this.minimapScaleX = 1;
-  this.minimapScaleY = 1;
+    this.ownedGear = new Set(Object.values(STARTING_EQUIPMENT));
+    this.equipment = { ...STARTING_EQUIPMENT };
+    this.minimapBase = null;
+    this.minimapScaleX = 1;
+    this.minimapScaleY = 1;
     this.minimapVisible = true;
-  this.minimapFloating = false;
-  this.minimapFloatPosition = null;
-  this.minimapDragPointerId = null;
-  this.minimapDragOffset = { x: 0, y: 0 };
+    this.minimapFloating = false;
+    this.minimapFloatPosition = null;
+    this.minimapDragPointerId = null;
+    this.minimapDragOffset = { x: 0, y: 0 };
     this._chargeHighlightSnapshot.clear();
     this._chargeHighlightCache = [];
     this._chargeHighlightCacheTime = 0;
@@ -2540,22 +2543,23 @@ class GameApp extends HTMLElement {
     this.currentLevelExit = null;
     this.currentLevelInfo = null;
     this.currentLevelColor = null;
-  this.lastKnownPosition = null;
+    this.lastKnownPosition = null;
     this.keys = new Set();
     this.pointerAim = { x: 1, y: 0 };
+    this.isometricControlsEnabled = true;
     this.lastInputSent = 0;
-  this.lastInteractSent = 0;
+    this.lastInteractSent = 0;
     this.tileSize = 36;
     this.activeAction = null;
     this.actionStart = 0;
     this.activeActionAim = null;
     this.pointerButtons = 0;
     this.knownEffects = new Set();
-  this.profileId = null;
-  this.pendingProfileId = undefined;
-  this.accountName = null;
-  this.sessionToken = null;
-  this.authPolicy = {
+    this.profileId = null;
+    this.pendingProfileId = undefined;
+    this.accountName = null;
+    this.sessionToken = null;
+    this.authPolicy = {
     passwordMinLength: PASSWORD_MIN_LENGTH,
     passwordMaxLength: PASSWORD_MAX_LENGTH,
   };
@@ -2684,6 +2688,7 @@ class GameApp extends HTMLElement {
     this._updateCompactStatus();
     this._syncCompactOverlayVisibility();
     this._loadControlHintsPreference();
+    this._minimapWorldRef = null;
   }
 
   connectedCallback() {
@@ -3293,7 +3298,23 @@ class GameApp extends HTMLElement {
       return;
     }
 
+    if (this.world?.tiles && this.world.tiles !== this._minimapWorldRef) {
+      this._prepareMinimap(true);
+    }
+
   const local = this.players.get(this.youId);
+  if (this.pointerSource === 'mouse' && this.pointerScreen) {
+    const pointerX = (this.pointerScreen.relX ?? 0.5) * width;
+    const pointerY = (this.pointerScreen.relY ?? 0.5) * height;
+    const aim = this._calculateAimFromScreen(pointerX, pointerY, width, height, local);
+    if (aim) {
+      this.pointerAim = aim;
+      this.pointerScreen.x = pointerX;
+      this.pointerScreen.y = pointerY;
+      this.pointerScreen.relX = width > 0 ? pointerX / width : this.pointerScreen.relX;
+      this.pointerScreen.relY = height > 0 ? pointerY / height : this.pointerScreen.relY;
+    }
+  }
   const anchor = local ?? this.lastKnownPosition;
   const currentLevelId = local?.levelId ?? this.currentLevelId;
   const nearestPortal = this._computeNearestPortal(anchor, currentLevelId);
@@ -3886,6 +3907,12 @@ class GameApp extends HTMLElement {
     if (this.touchMoveVector) {
       moveX += this.touchMoveVector.x;
       moveY += this.touchMoveVector.y;
+    }
+
+    if (this._isIsometricViewActive()) {
+      const transformed = this._screenVectorToWorld({ x: moveX, y: moveY });
+      moveX = transformed.x;
+      moveY = transformed.y;
     }
 
     const magnitude = Math.hypot(moveX, moveY);
@@ -5037,7 +5064,7 @@ class GameApp extends HTMLElement {
     const rectWidth = this.viewportWidth || (typeof this.getBoundingClientRect === 'function' ? this.getBoundingClientRect().width : 0);
     const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
     const width = rectWidth || fallbackWidth;
-    const coarsePointer = this.detectedTouch || Boolean(this.coarsePointerQuery?.matches) || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+  const coarsePointer = this.touchEnabled || this.detectedTouch || Boolean(this.coarsePointerQuery?.matches);
     const shouldCompact = coarsePointer && width > 0 && width <= COMPACT_BREAKPOINT;
     if (this.compactMode === shouldCompact) {
       if (shouldCompact) {
@@ -5119,7 +5146,7 @@ class GameApp extends HTMLElement {
     const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
     const width = rectWidth || fallbackWidth;
     if (!width) return false;
-    const coarsePointer = this.detectedTouch || Boolean(this.coarsePointerQuery?.matches) || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+  const coarsePointer = this.touchEnabled || this.detectedTouch || Boolean(this.coarsePointerQuery?.matches);
     return coarsePointer && width <= COMPACT_BREAKPOINT;
   }
 
@@ -5407,6 +5434,7 @@ class GameApp extends HTMLElement {
     this.minimapBase = base;
     this.minimapScaleX = scaleX;
     this.minimapScaleY = scaleY;
+    this._minimapWorldRef = this.world?.tiles || null;
   }
 
   _renderMinimap(local, currentLevelId, nearestPortal) {
@@ -6483,10 +6511,16 @@ class GameApp extends HTMLElement {
 
   _updatePointerAim(event) {
     const rect = this.canvas.getBoundingClientRect();
-    const offsetX = event.clientX - rect.left - rect.width / 2;
-    const offsetY = event.clientY - rect.top - rect.height / 2;
-    const aim = this._normalize({ x: offsetX / this.tileSize, y: offsetY / this.tileSize });
-    this.pointerAim = aim;
+    const localX = event.clientX - rect.left;
+    const localY = event.clientY - rect.top;
+    const aim = this._calculateAimFromScreen(localX, localY, rect.width, rect.height, this.players.get(this.youId));
+    if (aim) {
+      this.pointerAim = aim;
+    }
+  const relX = rect.width > 0 ? localX / rect.width : 0.5;
+  const relY = rect.height > 0 ? localY / rect.height : 0.5;
+  this.pointerScreen = { x: localX, y: localY, relX, relY };
+    this.pointerSource = 'mouse';
   }
 
   _prepareForReconnect(nextProfileId = this.profileId) {
@@ -6545,6 +6579,8 @@ class GameApp extends HTMLElement {
     this.spellKeyActive = false;
     this.chargeMeter.actionName = 'Idle';
     this.chargeMeter.value = 0;
+    this.pointerScreen = null;
+    this.pointerSource = 'mouse';
     if (this.heroIdEl) {
   this.heroIdEl.textContent = nextProfileId || '—';
     }
@@ -8293,8 +8329,10 @@ class GameApp extends HTMLElement {
     this._updateJoystickThumb(this.touchMoveVector, radius * 0.55);
     const moveMagnitude = Math.hypot(this.touchMoveVector.x, this.touchMoveVector.y);
     if (moveMagnitude > 0.1) {
-      this.pointerAim = this._normalize({ x: this.touchMoveVector.x, y: this.touchMoveVector.y });
+      this.pointerAim = this._prepareAimVector({ x: this.touchMoveVector.x, y: this.touchMoveVector.y });
     }
+    this.pointerSource = 'touch';
+    this.pointerScreen = null;
   }
 
   _updateJoystickThumb(vector, travel) {
@@ -8427,6 +8465,72 @@ class GameApp extends HTMLElement {
     if (button === 2) return 2;
     if (button === 1) return 4;
     return 0;
+  }
+
+  _isIsometricViewActive() {
+    if (!this.isometricControlsEnabled) return false;
+    return Boolean(this.isoRenderer?.isReady?.());
+  }
+
+  _screenVectorToWorld(vec) {
+    if (!vec) return { x: 0, y: 0 };
+    const azimuth = this.isoRenderer?.cameraAzimuth ?? Math.PI / 4;
+    const cos = Math.cos(azimuth);
+    const sin = Math.sin(azimuth);
+    return {
+      x: vec.x * cos + vec.y * sin,
+      y: -vec.x * sin + vec.y * cos,
+    };
+  }
+
+  _calculateAimFromScreen(localX, localY, width, height, localPlayer = null) {
+    if (!Number.isFinite(localX) || !Number.isFinite(localY) || !Number.isFinite(width) || !Number.isFinite(height)) {
+      return null;
+    }
+    if (width <= 0 || height <= 0) {
+      return null;
+    }
+
+    const player = localPlayer || this.players.get(this.youId);
+    let aim = null;
+    if (this._isIsometricViewActive() && player) {
+      const worldPoint = this.isoRenderer?.screenPointToWorld?.(localX, localY, width, height);
+      if (worldPoint) {
+        const dx = worldPoint.x - player.x;
+        const dy = worldPoint.y - player.y;
+        const length = Math.hypot(dx, dy);
+        if (length > 1e-5) {
+          aim = { x: dx / length, y: dy / length };
+        }
+      }
+    }
+
+    if (!aim) {
+      const offsetX = localX - width / 2;
+      const offsetY = localY - height / 2;
+      const baseVec = { x: offsetX / this.tileSize, y: offsetY / this.tileSize };
+      const length = Math.hypot(baseVec.x, baseVec.y);
+      aim = length > 1e-5 ? { x: baseVec.x / length, y: baseVec.y / length } : null;
+    }
+
+    if (aim && this._isIsometricViewActive()) {
+      const azimuth = this.isoRenderer?.cameraAzimuth ?? Math.PI / 4;
+      const cos = Math.cos(azimuth);
+      const sin = Math.sin(azimuth);
+      const adjustedX = aim.x * cos - aim.y * sin;
+      const adjustedY = aim.x * sin + aim.y * cos;
+      const length = Math.hypot(adjustedX, adjustedY);
+      if (length > 1e-5) {
+        aim = { x: adjustedX / length, y: adjustedY / length };
+      }
+    }
+
+    return aim;
+  }
+
+  _prepareAimVector(screenVec) {
+    const worldVec = this._isIsometricViewActive() ? this._screenVectorToWorld(screenVec) : screenVec;
+    return this._normalize(worldVec);
   }
 
   _normalize(vec) {
