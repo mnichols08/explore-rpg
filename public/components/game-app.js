@@ -231,6 +231,9 @@ template.innerHTML = `
       background: rgba(10, 18, 32, 0.92);
       border-radius: 0.85rem;
       border: 1px solid rgba(148, 163, 184, 0.34);
+      box-shadow: 0 1.1rem 2rem rgba(8, 15, 31, 0.45);
+      max-width: 100%;
+    }
 
     .minimap-compass {
       display: grid;
@@ -300,8 +303,6 @@ template.innerHTML = `
       display: grid;
       gap: 0.2rem;
     }
-      box-shadow: 0 1.1rem 2rem rgba(8, 15, 31, 0.45);
-      max-width: 100%;
     }
 
     .minimap-header {
@@ -420,6 +421,7 @@ template.innerHTML = `
       border-radius: 0.75rem;
       border: 1px solid rgba(148, 163, 184, 0.28);
       box-shadow: inset 0 0 1.1rem rgba(8, 15, 31, 0.42);
+      position: relative;
     }
 
     [data-draggable-panel] {
@@ -2072,7 +2074,7 @@ template.innerHTML = `
               <div class="map-overlay-card">
                 <header>
                   <h3 id="map-overlay-title">World Map</h3>
-                  <p>Press M or Escape to close • Alt+M toggles music • Drag the minimap anytime to reposition</p>
+                  <p>Press M or Escape to close • Alt+M toggles music • Use Expand Map to view larger details</p>
                 </header>
                 <canvas data-map-canvas></canvas>
                 <div class="map-controls">
@@ -3068,7 +3070,6 @@ class GameApp extends HTMLElement {
       this.audioToggle.active = this.audio.musicEnabled;
     }
   this.minimapExpandButton?.addEventListener('click', this._toggleMapOverlay);
-  this.minimapCardEl?.addEventListener('pointerdown', this._handleMinimapCardPointerDown);
   this.minimapDockButton?.addEventListener('click', this._handleMinimapDockRequest);
   this.mapOverlayCloseButton?.addEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.addEventListener('click', this._handleMapOverlayBackdropClick);
@@ -3159,7 +3160,6 @@ class GameApp extends HTMLElement {
     this.canvas.removeEventListener('pointercancel', this._handlePointerCancel);
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
   this.minimapExpandButton?.removeEventListener('click', this._toggleMapOverlay);
-  this.minimapCardEl?.removeEventListener('pointerdown', this._handleMinimapCardPointerDown);
   this.minimapDockButton?.removeEventListener('click', this._handleMinimapDockRequest);
   this.mapOverlayCloseButton?.removeEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.removeEventListener('click', this._handleMapOverlayBackdropClick);
@@ -4773,63 +4773,26 @@ class GameApp extends HTMLElement {
 
   _setMinimapFloating(floating, persist = true) {
     if (!this.minimapCardEl) return;
-    const next = Boolean(floating);
+    const wasFloating = this.minimapFloating;
+    this.minimapFloating = false;
     if (this.minimapDockNoticeEl) {
-      this.minimapDockNoticeEl.hidden = !next;
+      this.minimapDockNoticeEl.hidden = true;
+      this.minimapDockNoticeEl.setAttribute('aria-hidden', 'true');
     }
-    if (this.minimapFloating === next) {
-      if (next) {
-        this._restoreMinimapFloatPosition();
+    this.minimapCardEl.classList.remove('floating', 'dragging');
+    this.minimapCardEl.style.left = '';
+    this.minimapCardEl.style.top = '';
+    this.minimapCardEl.style.right = '';
+    this.minimapCardEl.style.bottom = '';
+    if (this.minimapDockParent) {
+      if (this.minimapDockSibling && this.minimapDockSibling.parentElement === this.minimapDockParent) {
+        this.minimapDockParent.insertBefore(this.minimapCardEl, this.minimapDockSibling);
+      } else {
+        this.minimapDockParent.appendChild(this.minimapCardEl);
       }
-      if (persist) {
-        try {
-          window.localStorage?.setItem(MINIMAP_FLOAT_STORAGE_KEY, next ? '1' : '0');
-        } catch (err) {
-          // ignore storage write failures
-        }
-      }
-      return;
     }
-    if (next) {
-      if (this.minimapCardEl.parentElement) {
-        this.minimapDockParent = this.minimapCardEl.parentElement;
-        this.minimapDockSibling = this.minimapCardEl.nextElementSibling;
-      }
-      let fallbackPosition = null;
-      if (this.hudEl) {
-        const hudRect = this.hudEl.getBoundingClientRect();
-        const cardRect = this.minimapCardEl.getBoundingClientRect();
-        fallbackPosition = {
-          left: cardRect.left - hudRect.left,
-          top: cardRect.top - hudRect.top,
-        };
-      }
-      this.hudEl?.appendChild(this.minimapCardEl);
-      this.minimapCardEl.classList.add('floating');
-      this.minimapFloating = true;
-      const restored = this._restoreMinimapFloatPosition(fallbackPosition);
-      if (!restored && fallbackPosition) {
-        this._applyMinimapFloatPosition(fallbackPosition.left, fallbackPosition.top);
-      }
-      this._avoidMinimapOverlap(true);
-    } else {
-      this.minimapFloating = false;
-      this.minimapCardEl.classList.remove('floating', 'dragging');
-      this.minimapCardEl.style.left = '';
-      this.minimapCardEl.style.top = '';
-      this.minimapCardEl.style.right = '';
-      this.minimapCardEl.style.bottom = '';
-      if (this.minimapDockParent) {
-        if (this.minimapDockSibling && this.minimapDockSibling.parentElement === this.minimapDockParent) {
-          this.minimapDockParent.insertBefore(this.minimapCardEl, this.minimapDockSibling);
-        } else {
-          this.minimapDockParent.appendChild(this.minimapCardEl);
-        }
-      }
-      this.minimapDockSibling = this.minimapCardEl?.nextElementSibling ?? null;
-      if (this.minimapDockNoticeEl) {
-        this.minimapDockNoticeEl.hidden = true;
-      }
+    this.minimapDockSibling = this.minimapCardEl?.nextElementSibling ?? null;
+    if (wasFloating) {
       this.minimapDragPointerId = null;
       window.removeEventListener('pointermove', this._handleMinimapDragMove);
       window.removeEventListener('pointerup', this._handleMinimapDragEnd);
@@ -4837,12 +4800,9 @@ class GameApp extends HTMLElement {
     }
     if (persist) {
       try {
-        window.localStorage?.setItem(MINIMAP_FLOAT_STORAGE_KEY, next ? '1' : '0');
+        window.localStorage?.setItem(MINIMAP_FLOAT_STORAGE_KEY, '0');
       } catch (err) {
         // ignore storage write failures
-      }
-      if (next) {
-        this._persistMinimapFloatPosition();
       }
     }
   }
@@ -5416,35 +5376,13 @@ class GameApp extends HTMLElement {
   }
 
   _handleMinimapDragStart(event) {
-    if (!this.minimapCardEl) return;
-    if (event && typeof event.button === 'number' && event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') {
-      return;
-    }
-    if (event?.target?.closest?.('button')) {
-      return;
-    }
-    if (!this.minimapFloating) {
-      this._setMinimapFloating(true);
-    }
-    if (!this.minimapFloating) {
-      return;
-    }
-    event.preventDefault?.();
-    const cardRect = this.minimapCardEl.getBoundingClientRect();
-    this.minimapDragPointerId = event.pointerId;
-    this.minimapDragOffset = {
-      x: event.clientX - cardRect.left,
-      y: event.clientY - cardRect.top,
-    };
-    this.minimapCardEl.classList.add('dragging');
-    window.addEventListener('pointermove', this._handleMinimapDragMove);
-    window.addEventListener('pointerup', this._handleMinimapDragEnd);
-    window.addEventListener('pointercancel', this._handleMinimapDragCancel);
+    // Minimap no longer supports floating; pointer interactions fall through to the panel.
+    return;
   }
 
   _handleMinimapCardPointerDown(event) {
-    if (!event) return;
-    this._handleMinimapDragStart(event);
+    // Minimap remains docked; nothing to handle here.
+    return;
   }
 
   _handleMinimapDockRequest(event) {
