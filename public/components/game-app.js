@@ -189,6 +189,11 @@ template.innerHTML = `
       background: rgba(10, 17, 31, 0.92);
       position: relative;
       transition: transform 260ms ease, filter 260ms ease;
+      cursor: grab;
+    }
+
+    .map-overlay canvas.dragging {
+      cursor: grabbing;
     }
 
     :host([data-isometric-map]) .map-overlay-card {
@@ -2666,6 +2671,9 @@ const MINIMAP_SAFE_STROKE = 'rgba(125, 211, 252, 0.75)';
 const MINIMAP_VIEWPORT_STROKE = 'rgba(148, 163, 184, 0.55)';
 const MINIMAP_VIEWPORT_FILL = 'rgba(30, 41, 59, 0.22)';
 const MINIMAP_BACKGROUND = 'rgba(12, 20, 32, 0.95)';
+const MAP_OVERLAY_DEFAULT_ZOOM = 1.35;
+const MAP_OVERLAY_MIN_ZOOM = 0.55;
+const MAP_OVERLAY_MAX_ZOOM = 6;
 const TOAST_DEFAULT_DURATION = 4000;
 const MAP_OVERLAY_HINT_CLASSIC = 'Press M or Escape to close • Alt+M toggles music • Use Expand Map to view larger details';
 const MAP_OVERLAY_HINT_ISO = 'Press M or Escape to close • Alt+M toggles music • Isometric 3D view active';
@@ -2754,6 +2762,11 @@ class GameApp extends HTMLElement {
     this.mapOverlayCloseButton = this.shadowRoot.querySelector('[data-map-close]');
     this.mapOverlayTitleEl = this.shadowRoot.querySelector('#map-overlay-title');
     this.mapOverlaySubtitleEl = this.mapOverlayEl ? this.mapOverlayEl.querySelector('header p') : null;
+    this.mapOverlayZoom = MAP_OVERLAY_DEFAULT_ZOOM;
+    this.mapOverlayCenter = null;
+    this.mapOverlayHasCustomView = false;
+    this.mapOverlayViewState = null;
+    this.mapOverlayDragState = null;
     this.minimapDockParent = this.minimapCardEl?.parentElement ?? null;
     this.minimapDockSibling = this.minimapCardEl?.nextElementSibling ?? null;
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
@@ -3022,6 +3035,11 @@ class GameApp extends HTMLElement {
   this._toggleMapOverlay = this._toggleMapOverlay.bind(this);
   this._closeMapOverlay = this._closeMapOverlay.bind(this);
   this._handleMapOverlayBackdropClick = this._handleMapOverlayBackdropClick.bind(this);
+  this._handleMapOverlayWheel = this._handleMapOverlayWheel.bind(this);
+  this._handleMapOverlayPointerDown = this._handleMapOverlayPointerDown.bind(this);
+  this._handleMapOverlayPointerMove = this._handleMapOverlayPointerMove.bind(this);
+  this._handleMapOverlayPointerUp = this._handleMapOverlayPointerUp.bind(this);
+  this._handleMapOverlayPointerCancel = this._handleMapOverlayPointerCancel.bind(this);
   this._handleMinimapDragStart = this._handleMinimapDragStart.bind(this);
   this._handleMinimapCardPointerDown = this._handleMinimapCardPointerDown.bind(this);
   this._handleMinimapDockRequest = this._handleMinimapDockRequest.bind(this);
@@ -3108,6 +3126,12 @@ class GameApp extends HTMLElement {
   this.minimapDockButton?.addEventListener('click', this._handleMinimapDockRequest);
   this.mapOverlayCloseButton?.addEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.addEventListener('click', this._handleMapOverlayBackdropClick);
+  this.mapOverlayCanvas?.addEventListener('wheel', this._handleMapOverlayWheel, { passive: false });
+  this.mapOverlayCanvas?.addEventListener('pointerdown', this._handleMapOverlayPointerDown);
+  this.mapOverlayCanvas?.addEventListener('pointermove', this._handleMapOverlayPointerMove);
+  this.mapOverlayCanvas?.addEventListener('pointerup', this._handleMapOverlayPointerUp);
+  this.mapOverlayCanvas?.addEventListener('pointercancel', this._handleMapOverlayPointerCancel);
+  this.mapOverlayCanvas?.addEventListener('lostpointercapture', this._handleMapOverlayPointerCancel);
     this.accountManageButton?.addEventListener('click', this._handleAccountManage);
     this.signOutButton?.addEventListener('click', this._handleSignOut);
     this.copyHeroButton?.addEventListener('click', this._handleCopyHeroId);
@@ -3198,6 +3222,12 @@ class GameApp extends HTMLElement {
   this.minimapDockButton?.removeEventListener('click', this._handleMinimapDockRequest);
   this.mapOverlayCloseButton?.removeEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.removeEventListener('click', this._handleMapOverlayBackdropClick);
+  this.mapOverlayCanvas?.removeEventListener('wheel', this._handleMapOverlayWheel);
+  this.mapOverlayCanvas?.removeEventListener('pointerdown', this._handleMapOverlayPointerDown);
+  this.mapOverlayCanvas?.removeEventListener('pointermove', this._handleMapOverlayPointerMove);
+  this.mapOverlayCanvas?.removeEventListener('pointerup', this._handleMapOverlayPointerUp);
+  this.mapOverlayCanvas?.removeEventListener('pointercancel', this._handleMapOverlayPointerCancel);
+  this.mapOverlayCanvas?.removeEventListener('lostpointercapture', this._handleMapOverlayPointerCancel);
   this.accountManageButton?.removeEventListener('click', this._handleAccountManage);
   this.signOutButton?.removeEventListener('click', this._handleSignOut);
   this.copyHeroButton?.removeEventListener('click', this._handleCopyHeroId);
@@ -5586,10 +5616,15 @@ class GameApp extends HTMLElement {
     this.mapOverlayEl.hidden = !next;
     this.mapOverlayEl.setAttribute('aria-hidden', next ? 'false' : 'true');
     if (next) {
+      if (!this.mapOverlayHasCustomView && !this.mapOverlayCenter) {
+        this._resetMapOverlayView();
+      }
       this.setAttribute('data-map-open', 'true');
       this._syncMapOverlaySize(true);
     } else {
       this.removeAttribute('data-map-open');
+      this._clearMapOverlayDragState();
+      this.mapOverlayViewState = null;
     }
     if (this.minimapExpandButton) {
       this.minimapExpandButton.textContent = next ? 'Collapse Map' : 'Expand Map';
@@ -5613,6 +5648,209 @@ class GameApp extends HTMLElement {
         }, 0);
       }
       this.mapOverlayLastFocus = null;
+    }
+  }
+  _clampOverlayZoom(zoom) {
+    if (!Number.isFinite(zoom)) {
+      return MAP_OVERLAY_DEFAULT_ZOOM;
+    }
+    return Math.min(MAP_OVERLAY_MAX_ZOOM, Math.max(MAP_OVERLAY_MIN_ZOOM, zoom));
+  }
+
+  _getOverlayBaseDimensions() {
+    if (!this.minimapBase) {
+      this._prepareMinimap();
+    }
+    const width = this.minimapBase?.width || MINIMAP_SIZE;
+    const height = this.minimapBase?.height || MINIMAP_SIZE;
+    return { width, height };
+  }
+
+  _computeOverlaySpan(zoom = this.mapOverlayZoom) {
+    const dims = this._getOverlayBaseDimensions();
+    const baseWidth = Math.max(1, Math.floor(dims.width || MINIMAP_SIZE));
+    const baseHeight = Math.max(1, Math.floor(dims.height || MINIMAP_SIZE));
+    const safeZoom = this._clampOverlayZoom(zoom || MAP_OVERLAY_DEFAULT_ZOOM);
+    const minSpan = Math.max(32, Math.min(baseWidth, baseHeight) * 0.25);
+    const spanWidth = Math.min(baseWidth, Math.max(minSpan, Math.round(baseWidth / safeZoom)));
+    const spanHeight = Math.min(baseHeight, Math.max(minSpan, Math.round(baseHeight / safeZoom)));
+    return { width: spanWidth, height: spanHeight, baseWidth, baseHeight };
+  }
+
+  _setMapOverlayCenter(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      const dims = this._getOverlayBaseDimensions();
+      this.mapOverlayCenter = { x: dims.width / 2, y: dims.height / 2 };
+      return;
+    }
+    const { width: spanWidth, height: spanHeight, baseWidth, baseHeight } = this._computeOverlaySpan();
+    let clampedX = x;
+    let clampedY = y;
+    if (spanWidth >= baseWidth) {
+      clampedX = baseWidth / 2;
+    } else {
+      const halfW = spanWidth / 2;
+      clampedX = Math.min(Math.max(clampedX, halfW), baseWidth - halfW);
+    }
+    if (spanHeight >= baseHeight) {
+      clampedY = baseHeight / 2;
+    } else {
+      const halfH = spanHeight / 2;
+      clampedY = Math.min(Math.max(clampedY, halfH), baseHeight - halfH);
+    }
+    this.mapOverlayCenter = { x: clampedX, y: clampedY };
+  }
+
+  _resetMapOverlayView() {
+    this.mapOverlayZoom = MAP_OVERLAY_DEFAULT_ZOOM;
+    this.mapOverlayHasCustomView = false;
+    const dims = this._getOverlayBaseDimensions();
+    let centerX = dims.width / 2;
+    let centerY = dims.height / 2;
+    if (
+      this.lastKnownPosition &&
+      Number.isFinite(this.lastKnownPosition.x) &&
+      Number.isFinite(this.lastKnownPosition.y) &&
+      Number.isFinite(this.minimapScaleX) &&
+      Number.isFinite(this.minimapScaleY)
+    ) {
+      centerX = this.lastKnownPosition.x * this.minimapScaleX;
+      centerY = this.lastKnownPosition.y * this.minimapScaleY;
+    }
+    this._setMapOverlayCenter(centerX, centerY);
+  }
+
+  _clearMapOverlayDragState() {
+    if (this.mapOverlayDragState) {
+      const pointerId = this.mapOverlayDragState.pointerId;
+      if (pointerId != null && this.mapOverlayCanvas?.hasPointerCapture?.(pointerId)) {
+        try {
+          this.mapOverlayCanvas.releasePointerCapture(pointerId);
+        } catch (err) {
+          // ignore
+        }
+      }
+    }
+    if (this.mapOverlayCanvas) {
+      this.mapOverlayCanvas.classList.remove('dragging');
+    }
+    this.mapOverlayDragState = null;
+  }
+
+  _handleMapOverlayWheel(event) {
+    if (!this.mapOverlayVisible || !this.mapOverlayCanvas) return;
+    if (!event) return;
+    event.preventDefault();
+    const delta = Number(event.deltaY) || 0;
+    if (delta === 0) return;
+    const magnitude = Math.min(1, Math.abs(delta) / 320);
+    const step = 1 + magnitude * 0.35;
+    let nextZoom = delta < 0 ? this.mapOverlayZoom * step : this.mapOverlayZoom / step;
+    nextZoom = this._clampOverlayZoom(nextZoom);
+    if (Math.abs(nextZoom - this.mapOverlayZoom) < 0.0001) {
+      return;
+    }
+
+    const rect = this.mapOverlayCanvas.getBoundingClientRect();
+    const offsetX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const offsetY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+
+    const dims = this._getOverlayBaseDimensions();
+    const view = this.mapOverlayViewState;
+    let baseX;
+    let baseY;
+    if (view) {
+      const basePerPixelX = view.sourceWidth / rect.width;
+      const basePerPixelY = view.sourceHeight / rect.height;
+      baseX = view.sourceX + offsetX * basePerPixelX;
+      baseY = view.sourceY + offsetY * basePerPixelY;
+    } else {
+      const span = this._computeOverlaySpan();
+      const center = this.mapOverlayCenter || { x: dims.width / 2, y: dims.height / 2 };
+      const sourceX = center.x - span.width / 2;
+      const sourceY = center.y - span.height / 2;
+      const basePerPixelX = span.width / rect.width;
+      const basePerPixelY = span.height / rect.height;
+      baseX = sourceX + offsetX * basePerPixelX;
+      baseY = sourceY + offsetY * basePerPixelY;
+    }
+
+    const newSpan = this._computeOverlaySpan(nextZoom);
+    const basePerPixelXNew = newSpan.width / rect.width;
+    const basePerPixelYNew = newSpan.height / rect.height;
+    let newSourceX = baseX - offsetX * basePerPixelXNew;
+    let newSourceY = baseY - offsetY * basePerPixelYNew;
+    const maxSourceX = Math.max(0, newSpan.baseWidth - newSpan.width);
+    const maxSourceY = Math.max(0, newSpan.baseHeight - newSpan.height);
+    newSourceX = Math.min(Math.max(0, newSourceX), maxSourceX);
+    newSourceY = Math.min(Math.max(0, newSourceY), maxSourceY);
+    const newCenterX = newSourceX + newSpan.width / 2;
+    const newCenterY = newSourceY + newSpan.height / 2;
+
+    this.mapOverlayHasCustomView = true;
+    this.mapOverlayZoom = nextZoom;
+    this._setMapOverlayCenter(newCenterX, newCenterY);
+  }
+
+  _handleMapOverlayPointerDown(event) {
+    if (!this.mapOverlayVisible || !this.mapOverlayCanvas || !event) return;
+    const button = Number(event.button);
+    if (event.pointerType !== 'touch' && button !== 0) {
+      return;
+    }
+    const view = this.mapOverlayViewState;
+    if (!view) return;
+    const rect = this.mapOverlayCanvas.getBoundingClientRect();
+    const basePerPixelX = view.sourceWidth / rect.width;
+    const basePerPixelY = view.sourceHeight / rect.height;
+    const startCenter = this.mapOverlayCenter || { x: view.centerBaseX, y: view.centerBaseY };
+    this.mapOverlayDragState = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      basePerPixelX,
+      basePerPixelY,
+      startCenter,
+    };
+    try {
+      this.mapOverlayCanvas.setPointerCapture(event.pointerId);
+    } catch (err) {
+      // ignore capture failures
+    }
+    this.mapOverlayCanvas.classList.add('dragging');
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  _handleMapOverlayPointerMove(event) {
+    if (!this.mapOverlayVisible || !event) return;
+    const state = this.mapOverlayDragState;
+    if (!state || event.pointerId !== state.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const dx = event.clientX - state.startClientX;
+    const dy = event.clientY - state.startClientY;
+    const baseDx = dx * state.basePerPixelX;
+    const baseDy = dy * state.basePerPixelY;
+    const newCenterX = state.startCenter.x - baseDx;
+    const newCenterY = state.startCenter.y - baseDy;
+    this.mapOverlayHasCustomView = true;
+    this._setMapOverlayCenter(newCenterX, newCenterY);
+  }
+
+  _handleMapOverlayPointerUp(event) {
+    if (!event) return;
+    if (this.mapOverlayDragState && event.pointerId === this.mapOverlayDragState.pointerId) {
+      this._clearMapOverlayDragState();
+    }
+  }
+
+  _handleMapOverlayPointerCancel(event) {
+    if (!event) return;
+    if (this.mapOverlayDragState && event.pointerId === this.mapOverlayDragState.pointerId) {
+      this._clearMapOverlayDragState();
     }
   }
 
@@ -6183,11 +6421,27 @@ class GameApp extends HTMLElement {
     const width = this.mapOverlayRenderSize || (this.mapOverlayCanvas.width / dpr);
     const height = width;
     if (!width || !height) return;
-    this._renderMapSurface(this.mapOverlayCtx, width, height, local, currentLevelId, nearestPortal, {
+    const anchor = local || this.lastKnownPosition || null;
+    if (!this.mapOverlayHasCustomView && anchor && Number.isFinite(this.minimapScaleX) && Number.isFinite(this.minimapScaleY)) {
+      const anchorBaseX = anchor.x * this.minimapScaleX;
+      const anchorBaseY = anchor.y * this.minimapScaleY;
+      this._setMapOverlayCenter(anchorBaseX, anchorBaseY);
+    }
+    const zoom = this._clampOverlayZoom(this.mapOverlayZoom);
+    this.mapOverlayZoom = zoom;
+    const view = this._renderMapSurface(this.mapOverlayCtx, width, height, local, currentLevelId, nearestPortal, {
       includeViewport: true,
-      centerOnAnchor: true,
-      overlayZoom: 1.35,
+      centerOnAnchor: !this.mapOverlayHasCustomView,
+      overlayZoom: zoom,
+      overlayCenter: this.mapOverlayCenter,
+      trackOverlay: true,
     });
+    if (view) {
+      this.mapOverlayViewState = view;
+      this.mapOverlayCenter = { x: view.centerBaseX, y: view.centerBaseY };
+    } else {
+      this.mapOverlayViewState = null;
+    }
   }
 
   _renderMapSurface(ctx, width, height, local, currentLevelId, nearestPortal, options = {}) {
@@ -6210,31 +6464,40 @@ class GameApp extends HTMLElement {
     const baseScaleX = this.minimapScaleX || 1;
     const baseScaleY = this.minimapScaleY || 1;
     const zoom = Number.isFinite(options.overlayZoom) && options.overlayZoom > 0 ? options.overlayZoom : 1;
-    const centerOnAnchor = !!options.centerOnAnchor && anchorX != null && anchorY != null;
+
+    const overlayCenter = options.overlayCenter;
+    const hasCenterOverride = overlayCenter && Number.isFinite(overlayCenter.x) && Number.isFinite(overlayCenter.y);
+    const centerOnAnchor = !hasCenterOverride && !!options.centerOnAnchor && anchorX != null && anchorY != null;
 
     let sourceWidth = baseWidth;
     let sourceHeight = baseHeight;
-    let sourceX = 0;
-    let sourceY = 0;
-
-    if (zoom !== 1 || centerOnAnchor) {
-      const minSourceSpan = Math.max(32, Math.min(baseWidth, baseHeight) * 0.25);
+    const minSourceSpan = Math.max(32, Math.min(baseWidth, baseHeight) * 0.25);
+    if (zoom !== 1 || hasCenterOverride || centerOnAnchor) {
       sourceWidth = Math.min(baseWidth, Math.max(minSourceSpan, Math.round(baseWidth / zoom)));
       sourceHeight = Math.min(baseHeight, Math.max(minSourceSpan, Math.round(baseHeight / zoom)));
-      if (centerOnAnchor) {
-        const anchorBaseX = anchorX * baseScaleX;
-        const anchorBaseY = anchorY * baseScaleY;
-        sourceX = Math.round(anchorBaseX - sourceWidth / 2);
-        sourceY = Math.round(anchorBaseY - sourceHeight / 2);
-      } else {
-        sourceX = Math.round((baseWidth - sourceWidth) / 2);
-        sourceY = Math.round((baseHeight - sourceHeight) / 2);
-      }
-      const maxX = Math.max(0, baseWidth - sourceWidth);
-      const maxY = Math.max(0, baseHeight - sourceHeight);
-      sourceX = Math.min(Math.max(0, sourceX), maxX);
-      sourceY = Math.min(Math.max(0, sourceY), maxY);
     }
+
+    let sourceX = 0;
+    let sourceY = 0;
+    if (hasCenterOverride) {
+      sourceX = Math.round(overlayCenter.x - sourceWidth / 2);
+      sourceY = Math.round(overlayCenter.y - sourceHeight / 2);
+    } else if (centerOnAnchor) {
+      const anchorBaseX = anchorX * baseScaleX;
+      const anchorBaseY = anchorY * baseScaleY;
+      sourceX = Math.round(anchorBaseX - sourceWidth / 2);
+      sourceY = Math.round(anchorBaseY - sourceHeight / 2);
+    } else if (zoom !== 1) {
+      sourceX = Math.round((baseWidth - sourceWidth) / 2);
+      sourceY = Math.round((baseHeight - sourceHeight) / 2);
+    }
+
+    const maxX = Math.max(0, baseWidth - sourceWidth);
+    const maxY = Math.max(0, baseHeight - sourceHeight);
+    sourceX = Math.min(Math.max(0, sourceX), maxX);
+    sourceY = Math.min(Math.max(0, sourceY), maxY);
+    const centerBaseX = sourceX + sourceWidth / 2;
+    const centerBaseY = sourceY + sourceHeight / 2;
 
     ctx.clearRect(0, 0, width, height);
     ctx.drawImage(this.minimapBase, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
@@ -6405,7 +6668,25 @@ class GameApp extends HTMLElement {
       }
     }
 
+    const overlayView = options.trackOverlay
+      ? {
+          width,
+          height,
+          baseWidth,
+          baseHeight,
+          sourceWidth,
+          sourceHeight,
+          sourceX,
+          sourceY,
+          scaleMultiplierX,
+          scaleMultiplierY,
+          centerBaseX,
+          centerBaseY,
+        }
+      : null;
+
     ctx.restore();
+    return overlayView;
   }
 
   _updateMinimapLabel(info) {
