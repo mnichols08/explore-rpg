@@ -2139,7 +2139,7 @@ template.innerHTML = `
             <div class="desktop-help">
               <h4>Core controls</h4>
               <ul class="help-list">
-                <li><span>Move</span><span>WASD — Hold any attack to charge</span></li>
+                <li><span>Move</span><span>WASD / Arrow keys — Hold any attack to charge</span></li>
                 <li><span>Melee</span><span>Left click — builds Strength</span></li>
                 <li><span>Ranged</span><span>Right click — builds Dexterity</span></li>
                 <li><span>Spell</span><span>Space or both buttons</span></li>
@@ -2641,6 +2641,7 @@ const MINIMAP_STORAGE_KEY = 'explore-rpg-minimap';
 const MINIMAP_FLOAT_STORAGE_KEY = 'explore-rpg-minimap-floating-v3';
 const LEGACY_MINIMAP_FLOAT_KEYS = ['explore-rpg-minimap-floating', 'explore-rpg-minimap-floating-v2'];
 const MINIMAP_FLOAT_POSITION_KEY = 'explore-rpg-minimap-pos';
+const MOVEMENT_KEY_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 const VISUAL_STORAGE_KEY = 'explore-rpg-visuals';
 const ISO_MODE_STORAGE_KEY = 'explore-rpg-isometric';
 const PANEL_POSITION_STORAGE_PREFIX = 'explore-rpg-panel-';
@@ -2988,7 +2989,7 @@ class GameApp extends HTMLElement {
     this.tutorialSteps = [
       {
         title: 'Movement & Camera',
-  body: 'Use <strong>WASD</strong> (or the left stick on touch) to explore. Aim with your mouse or right pad — the reticle shows where abilities will land.',
+  body: 'Use <strong>WASD</strong> or the <strong>arrow keys</strong> (or the left stick on touch) to explore. Aim with your mouse or right pad — the reticle shows where abilities will land.',
         hint: 'Hold <strong>Shift</strong> to stroll carefully around the safe zone bank.',
       },
       {
@@ -4331,8 +4332,13 @@ class GameApp extends HTMLElement {
     if (!this.world) return;
     if (timestamp - this.lastInputSent < 50) return;
 
-    let moveX = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0);
-    let moveY = (this.keys.has('KeyS') ? 1 : 0) - (this.keys.has('KeyW') ? 1 : 0);
+  const rightActive = this.keys.has('KeyD') || this.keys.has('ArrowRight');
+  const leftActive = this.keys.has('KeyA') || this.keys.has('ArrowLeft');
+  const downActive = this.keys.has('KeyS') || this.keys.has('ArrowDown');
+  const upActive = this.keys.has('KeyW') || this.keys.has('ArrowUp');
+
+  let moveX = (rightActive ? 1 : 0) - (leftActive ? 1 : 0);
+  let moveY = (downActive ? 1 : 0) - (upActive ? 1 : 0);
 
     if (this.touchMoveVector) {
       moveX += this.touchMoveVector.x;
@@ -4560,6 +4566,9 @@ class GameApp extends HTMLElement {
       this._requestGatherLoot();
       return;
     }
+    if (MOVEMENT_KEY_CODES.has(event.code)) {
+      event.preventDefault();
+    }
     this.keys.add(event.code);
   }
 
@@ -4576,6 +4585,9 @@ class GameApp extends HTMLElement {
         this._releaseAction();
       }
       return;
+    }
+    if (MOVEMENT_KEY_CODES.has(event.code)) {
+      event.preventDefault();
     }
     this.keys.delete(event.code);
   }
