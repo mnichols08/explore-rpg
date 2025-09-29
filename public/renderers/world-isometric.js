@@ -122,6 +122,8 @@ const WEAPON_STYLES = {
     accent: '#f97316',
     length: 0.6,
     thickness: 0.24,
+    mount: 'hand',
+    idle: { sway: 0.08, spin: 0.18, speed: 2.6, bob: 0.02 },
   },
   'melee-stick': {
     type: 'staff',
@@ -129,6 +131,8 @@ const WEAPON_STYLES = {
     accent: '#fde68a',
     length: 1.18,
     thickness: 0.12,
+    mount: 'hand',
+    idle: { sway: 0.1, speed: 1.8, bob: 0.03 },
   },
   'melee-sword': {
     type: 'blade',
@@ -138,6 +142,69 @@ const WEAPON_STYLES = {
     length: 1.12,
     bladeWidth: 0.16,
     bladeThickness: 0.06,
+    mount: 'hand',
+    idle: { sway: 0.06, speed: 2.2, tilt: 0.18 },
+  },
+  'ranged-rock': {
+    type: 'sling',
+    primary: '#cbd5f5',
+    accent: '#f97316',
+    thickness: 0.22,
+    mount: 'hip',
+    idle: { sway: 0.05, speed: 1.6, bob: 0.02 },
+  },
+  'ranged-sling': {
+    type: 'sling',
+    primary: '#fde68a',
+    accent: '#facc15',
+    thickness: 0.2,
+    mount: 'hip',
+    idle: { sway: 0.06, speed: 1.7, bob: 0.025, spin: 0.12 },
+  },
+  'ranged-bow': {
+    type: 'bow',
+    primary: '#78350f',
+    accent: '#fbbf24',
+    mount: 'back',
+    length: 1.42,
+    thickness: 0.08,
+    idle: { sway: 0.08, speed: 1.4, tilt: 0.12 },
+  },
+  'spell-air': {
+    type: 'orb',
+    primary: '#38bdf8',
+    accent: '#bae6fd',
+    thickness: 0.24,
+    length: 0.82,
+    mount: 'float',
+    idle: { orbit: 0.16, bob: 0.06, speed: 1.9, spin: 0.6 },
+  },
+  'spell-fire': {
+    type: 'orb',
+    primary: '#fb923c',
+    accent: '#facc15',
+    thickness: 0.26,
+    length: 0.78,
+    mount: 'float',
+    idle: { orbit: 0.14, bob: 0.05, speed: 2.1, spin: 0.7 },
+  },
+  'spell-ice': {
+    type: 'tome',
+    primary: '#1e3a8a',
+    accent: '#93c5fd',
+    thickness: 0.18,
+    length: 0.9,
+    mount: 'float',
+    idle: { sway: 0.05, bob: 0.04, speed: 1.5, tilt: 0.2 },
+  },
+  'spell-lightning': {
+    type: 'scepter',
+    primary: '#6366f1',
+    accent: '#c4b5fd',
+    mount: 'float',
+    length: 1.05,
+    thickness: 0.12,
+    idle: { spin: 0.8, bob: 0.05, speed: 2.4 },
   },
   default: {
     type: 'staff',
@@ -145,6 +212,8 @@ const WEAPON_STYLES = {
     accent: '#38bdf8',
     length: 1.05,
     thickness: 0.1,
+    mount: 'hand',
+    idle: { sway: 0.08, speed: 1.6, bob: 0.02 },
   },
 };
 const MELEE_VARIANT_COLORS = {
@@ -916,6 +985,8 @@ export class WorldIsometricRenderer {
       thickness: base.thickness ?? 0.1,
       bladeWidth: base.bladeWidth ?? 0.14,
       bladeThickness: base.bladeThickness ?? 0.05,
+      mount: base.mount || 'hand',
+      idle: base.idle ? { ...base.idle } : null,
     };
   }
 
@@ -1958,6 +2029,7 @@ export class WorldIsometricRenderer {
     const yaw = Math.atan2(aim.x || 0, aim.y || 1);
     group.rotation.y = yaw;
 
+    const charge = Math.max(0, Math.min(1, player.chargeRatio ?? 0));
     const bob = Math.sin(time * 3.4 + seed * Math.PI * 2) * 0.08;
     body.position.y = 0.35 + bob * 0.4;
     head.position.y = 0.68 + bob * 0.55;
@@ -1968,7 +2040,6 @@ export class WorldIsometricRenderer {
       cloak.material.opacity = Math.min(1, 0.82 + Math.min(0.15, Math.abs(cloakSway) * 0.2) + charge * 0.12);
     }
 
-    const charge = Math.max(0, Math.min(1, player.chargeRatio ?? 0));
     const charging = Boolean(player.charging) || charge > 0.05;
     ring.material.opacity = charging ? 0.45 + charge * 0.4 : 0.3;
     ring.scale.setScalar(1 + charge * 0.3);
