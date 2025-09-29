@@ -238,15 +238,95 @@ const PLAYER_STYLES = {
 };
 
 const ENEMY_STYLES = {
-  slime: { base: '#0ea5e9', emissive: '#155e75', geometry: 'sphere', scale: 0.68 },
-  wolf: { base: '#facc15', emissive: '#c2410c', geometry: 'cone', scale: 0.82 },
-  wisp: { base: '#c084fc', emissive: '#7c3aed', geometry: 'icosa', scale: 0.7 },
-  emberling: { base: '#fb923c', emissive: '#b91c1c', geometry: 'icosa', scale: 0.74 },
-  warden: { base: '#f97316', emissive: '#9a3412', geometry: 'cone', scale: 0.9 },
-  phantom: { base: '#38bdf8', emissive: '#1e3a8a', geometry: 'sphere', scale: 0.72 },
-  seer: { base: '#c4b5fd', emissive: '#4338ca', geometry: 'icosa', scale: 0.74 },
-  default: { base: '#f87171', emissive: '#b91c1c', geometry: 'sphere', scale: 0.74 },
+  slime: {
+    base: '#0ea5e9',
+    emissive: '#155e75',
+    glow: '#38bdf8',
+    geometry: 'sphere',
+    scale: 0.68,
+    glowScale: 2.6,
+    ringRadius: 0.82,
+  },
+  wolf: {
+    base: '#facc15',
+    emissive: '#c2410c',
+    glow: '#fbbf24',
+    geometry: 'cone',
+    scale: 0.82,
+    glowScale: 2.4,
+    ringRadius: 0.78,
+  },
+  wisp: {
+    base: '#c084fc',
+    emissive: '#7c3aed',
+    glow: '#e9d5ff',
+    geometry: 'icosa',
+    scale: 0.7,
+    glowScale: 2.9,
+    glowHeight: 1.08,
+    ringRadius: 0.86,
+    glowOpacityMin: 0.46,
+    glowOpacityMax: 0.88,
+  },
+  emberling: {
+    base: '#fb923c',
+    emissive: '#b91c1c',
+    glow: '#f97316',
+    geometry: 'icosa',
+    scale: 0.74,
+    glowScale: 2.45,
+    ringRadius: 0.8,
+  },
+  warden: {
+    base: '#f97316',
+    emissive: '#9a3412',
+    glow: '#fb923c',
+    geometry: 'cone',
+    scale: 0.9,
+    glowScale: 2.5,
+    ringRadius: 0.82,
+  },
+  phantom: {
+    base: '#38bdf8',
+    emissive: '#1e3a8a',
+    glow: '#60a5fa',
+    geometry: 'sphere',
+    scale: 0.72,
+    glowScale: 2.55,
+    ringRadius: 0.8,
+  },
+  seer: {
+    base: '#c4b5fd',
+    emissive: '#4338ca',
+    glow: '#cbd5ff',
+    geometry: 'icosa',
+    scale: 0.74,
+    glowScale: 2.6,
+    ringRadius: 0.8,
+  },
+  default: {
+    base: '#f87171',
+    emissive: '#b91c1c',
+    glow: '#fecaca',
+    geometry: 'sphere',
+    scale: 0.74,
+    glowScale: 2.4,
+  },
 };
+
+const ENEMY_VISIBILITY_DEFAULTS = {
+  glowScale: 2.4,
+  glowHeight: 0.92,
+  glowOpacityMin: 0.42,
+  glowOpacityMax: 0.82,
+  ringRadius: 0.74,
+  ringOpacityMin: 0.34,
+  ringOpacityMax: 0.64,
+};
+
+const ENEMY_EMISSIVE_MULTIPLIER = 1.32;
+const ENEMY_EMISSIVE_FLOOR = 0.92;
+const ENEMY_EMISSIVE_CEILING = 2.4;
 
 const ORE_STYLES = {
   copper: { base: '#b87333', emissive: '#8c5523', crystal: '#f59e0b' },
@@ -2272,30 +2352,90 @@ export class WorldIsometricRenderer {
       ConeGeometry,
       CapsuleGeometry,
       IcosahedronGeometry,
+      Sprite,
+      SpriteMaterial,
+      AdditiveBlending,
     } = this.THREE;
     const meta = ENEMY_STYLES[type] || ENEMY_STYLES.default;
     const group = new Group();
     const meshes = [];
+    const emissiveMultiplier = meta.emissiveMultiplier ?? ENEMY_EMISSIVE_MULTIPLIER;
+    const emissiveFloor = meta.emissiveFloor ?? ENEMY_EMISSIVE_FLOOR;
+    const emissiveCeiling = meta.emissiveCeiling ?? ENEMY_EMISSIVE_CEILING;
+    const boostMaterial = (material) => {
+      if (!material) return;
+      if (Array.isArray(material)) {
+        material.forEach((mat) => boostMaterial(mat));
+        return;
+      }
+      if (typeof material.emissiveIntensity === 'number') {
+        const next = Math.min(
+          Math.max(material.emissiveIntensity * emissiveMultiplier, emissiveFloor),
+          emissiveCeiling
+        );
+        material.emissiveIntensity = next;
+      }
+    };
     const addMesh = (mesh) => {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       group.add(mesh);
       meshes.push(mesh);
+      boostMaterial(mesh.material);
       return mesh;
     };
 
-    const baseColor = this._getColor(meta.base).clone();
+  const baseColor = this._getColor(meta.base).clone();
+  baseColor.lerp(this._getColor('#f8fafc'), 0.1);
     const emissiveColor = this._getColor(meta.emissive).clone();
+    emissiveColor.lerp(this._getColor('#ffffff'), 0.18);
+    const glowColor = this._getColor(meta.glow || meta.emissive || meta.base).clone();
+    glowColor.lerp(this._getColor('#ffffff'), 0.24);
+
+    const glowScale = meta.glowScale ?? ENEMY_VISIBILITY_DEFAULTS.glowScale;
+    const glowHeight = meta.glowHeight ?? ENEMY_VISIBILITY_DEFAULTS.glowHeight;
+    const glowOpacityMin = meta.glowOpacityMin ?? ENEMY_VISIBILITY_DEFAULTS.glowOpacityMin;
+    const glowOpacityMax = Math.max(glowOpacityMin, meta.glowOpacityMax ?? ENEMY_VISIBILITY_DEFAULTS.glowOpacityMax);
+    const ringRadius = meta.ringRadius ?? ENEMY_VISIBILITY_DEFAULTS.ringRadius;
+    const ringOpacityMin = meta.ringOpacityMin ?? ENEMY_VISIBILITY_DEFAULTS.ringOpacityMin;
+    const ringOpacityMax = Math.max(ringOpacityMin, meta.ringOpacityMax ?? ENEMY_VISIBILITY_DEFAULTS.ringOpacityMax);
 
     const ring = addMesh(
       new Mesh(
-        new CircleGeometry(0.58, 32),
-        new MeshBasicMaterial({ color: emissiveColor, transparent: true, opacity: 0.26, depthWrite: false })
+        new CircleGeometry(ringRadius, 48),
+        new MeshBasicMaterial({
+          color: glowColor.clone(),
+          transparent: true,
+          opacity: (ringOpacityMin + ringOpacityMax) / 2,
+          depthWrite: false,
+          blending: AdditiveBlending,
+        })
       )
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.02;
     ring.userData.variant = 'ring';
+    ring.renderOrder = 1;
+
+    const glow = addMesh(
+      new Sprite(
+        new SpriteMaterial({
+          color: glowColor,
+          transparent: true,
+          opacity: (glowOpacityMin + glowOpacityMax) / 2,
+          depthWrite: false,
+          depthTest: true,
+          blending: AdditiveBlending,
+        })
+      )
+    );
+    glow.scale.set(glowScale, glowScale, 1);
+    glow.position.y = glowHeight;
+    glow.userData.variant = 'glow';
+    glow.renderOrder = 2;
+  glow.castShadow = false;
+  glow.receiveShadow = false;
+  parts.glow = glow;
 
     const seed = hashString(source?.id ?? `${type}-template`);
     let core = null;
@@ -2570,6 +2710,10 @@ export class WorldIsometricRenderer {
       floatBase,
       floatAmplitude,
       floatSpeed,
+      glow,
+      glowScale,
+      glowOpacityRange: [glowOpacityMin, glowOpacityMax],
+      ringOpacityRange: [ringOpacityMin, ringOpacityMax],
       dispose,
     };
   }
@@ -2589,8 +2733,27 @@ export class WorldIsometricRenderer {
     } else if (typeof enemy.rotation === 'number') {
       entry.group.rotation.y = enemy.rotation;
     }
+    if (entry.parts?.glow) {
+      const glowSprite = entry.parts.glow;
+      const [glowMin, glowMax] = entry.glowOpacityRange || [
+        ENEMY_VISIBILITY_DEFAULTS.glowOpacityMin,
+        ENEMY_VISIBILITY_DEFAULTS.glowOpacityMax,
+      ];
+      const glowPulse = 0.5 + 0.5 * Math.sin(time * 3.8 + entry.seed * 6.3);
+      const glowScaleBase = entry.glowScale ?? ENEMY_VISIBILITY_DEFAULTS.glowScale;
+      const glowScalePulse = 1 + Math.sin(time * 3.1 + entry.seed * 5.7) * 0.18;
+      glowSprite.scale.set(glowScaleBase * glowScalePulse, glowScaleBase * glowScalePulse, 1);
+      if (glowSprite.material) {
+        glowSprite.material.opacity = glowMin + (glowMax - glowMin) * glowPulse;
+      }
+    }
     if (entry.ring?.material) {
-      entry.ring.material.opacity = 0.22 + Math.sin(time * 4 + entry.seed * 5) * 0.1;
+      const [ringMin, ringMax] = entry.ringOpacityRange || [
+        ENEMY_VISIBILITY_DEFAULTS.ringOpacityMin,
+        ENEMY_VISIBILITY_DEFAULTS.ringOpacityMax,
+      ];
+      const ringPulse = 0.5 + 0.5 * Math.sin(time * 4 + entry.seed * 5);
+      entry.ring.material.opacity = ringMin + (ringMax - ringMin) * ringPulse;
       entry.ring.rotation.z = time * 1.5;
     }
     if (entry.animate) {
