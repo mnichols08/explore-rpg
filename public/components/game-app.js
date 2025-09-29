@@ -223,9 +223,67 @@ template.innerHTML = `
       pointer-events: none;
     }
 
+    .minimap-card {
+      --minimap-accent: #38bdf8;
+      display: grid;
+      gap: 0.75rem;
+      padding: 0.75rem 0.85rem;
+      background: rgba(10, 18, 32, 0.92);
+      border-radius: 0.85rem;
+      border: 1px solid rgba(148, 163, 184, 0.34);
+      box-shadow: 0 1.1rem 2rem rgba(8, 15, 31, 0.45);
+      max-width: 100%;
+    }
+
+    .minimap-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      position: relative;
+    }
+
+    .minimap-header::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -0.35rem;
+      width: 2.75rem;
+      height: 0.22rem;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--minimap-accent, #38bdf8), rgba(56, 189, 248, 0.08));
+      opacity: 0.9;
+      pointer-events: none;
+    }
+
+    .minimap-title {
+      display: grid;
+      gap: 0.2rem;
+    }
+
+    .minimap-title .label {
+      font-size: 0.64rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.78);
+    }
+
+    .minimap-title .value {
+      font-size: 0.92rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+  color: var(--minimap-accent, rgba(226, 232, 240, 0.95));
+  text-shadow: 0 0 0.55rem var(--minimap-accent, rgba(56, 189, 248, 0.45));
+    }
+
     .minimap-body {
       display: grid;
-      gap: 0.55rem;
+      gap: 0.6rem;
+      padding: 0.7rem;
+      border-radius: 0.75rem;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.25);
     }
 
     .minimap-card.floating {
@@ -374,8 +432,12 @@ template.innerHTML = `
       font-size: 0.68rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: rgba(148, 163, 184, 0.7);
+      color: rgba(148, 163, 184, 0.72);
       line-height: 1.4;
+      padding: 0.45rem 0.6rem;
+      border-radius: 0.6rem;
+      background: rgba(8, 14, 28, 0.68);
+      border: 1px solid rgba(148, 163, 184, 0.2);
     }
 
     .hud .top-left {
@@ -397,6 +459,17 @@ template.innerHTML = `
     .hud .top-right > [data-panel-content] {
       display: grid;
       gap: 0.6rem;
+    }
+
+    .hud .top-map {
+      gap: 0.45rem;
+      flex: 1 1 clamp(260px, 32vw, 360px);
+      max-width: clamp(300px, 38vw, 440px);
+    }
+
+    .hud .top-map > [data-panel-content] {
+      display: grid;
+      gap: 0.7rem;
     }
 
     .hud .bottom-left {
@@ -437,7 +510,8 @@ template.innerHTML = `
         max-width: clamp(260px, 48vw, 420px);
       }
 
-      .hud .top-right {
+      .hud .top-right,
+      .hud .top-map {
         max-width: clamp(280px, 52vw, 440px);
       }
 
@@ -466,6 +540,7 @@ template.innerHTML = `
       }
 
       .hud .top-right,
+      .hud .top-map,
       .hud .bottom-right,
       .hud .bottom-left {
         max-width: min(520px, 92vw);
@@ -1807,9 +1882,9 @@ template.innerHTML = `
             <stat-panel></stat-panel>
           </div>
         </div>
-        <div class="top-right" data-draggable-panel="utility" data-panel-title="Utility &amp; Map">
+        <div class="top-right" data-draggable-panel="utility" data-panel-title="Utilities">
           <div class="panel-header" data-panel-header>
-            <span class="panel-title">Utility &amp; Map</span>
+            <span class="panel-title">Utilities</span>
             <button
               type="button"
               class="panel-toggle"
@@ -1825,13 +1900,29 @@ template.innerHTML = `
               <charge-meter></charge-meter>
               <audio-toggle></audio-toggle>
             </div>
+          </div>
+        </div>
+        <div class="top-map" data-draggable-panel="map" data-panel-title="World Map">
+          <div class="panel-header" data-panel-header>
+            <span class="panel-title">World Map</span>
+            <button
+              type="button"
+              class="panel-toggle"
+              data-panel-toggle="map"
+              aria-expanded="true"
+              aria-controls="panel-content-map"
+            >
+              −
+            </button>
+          </div>
+          <div class="panel-content" data-panel-content="map" id="panel-content-map">
             <div class="minimap-card" data-minimap-card>
               <div class="minimap-header" data-minimap-header>
-                <span>Minimap</span>
-                <div class="minimap-header-actions">
-                  <span data-minimap-label>Overworld</span>
-                  <button type="button" data-minimap-expand aria-haspopup="dialog" aria-pressed="false">Expand</button>
+                <div class="minimap-title">
+                  <span class="label">Current Zone</span>
+                  <span class="value" data-minimap-label>Overworld</span>
                 </div>
+                <button type="button" data-minimap-expand aria-haspopup="dialog" aria-pressed="false">Expand Map</button>
               </div>
               <div class="minimap-body" data-minimap-body>
                 <canvas data-minimap></canvas>
@@ -1843,6 +1934,26 @@ template.innerHTML = `
                   <li data-type="safe">Safe Zone</li>
                 </ul>
                 <div class="minimap-footer" data-minimap-portal-hint>Follow the gold arrow to reach a gateway.</div>
+              </div>
+            </div>
+            <div
+              class="map-overlay"
+              hidden
+              data-map-overlay
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="map-overlay-title"
+              aria-hidden="true"
+            >
+              <div class="map-overlay-card">
+                <header>
+                  <h3 id="map-overlay-title">World Map</h3>
+                  <p>Press M or Escape to close • Alt+M toggles music • Drag the minimap anytime to reposition</p>
+                </header>
+                <canvas data-map-canvas></canvas>
+                <div class="map-controls">
+                  <button type="button" data-map-close>Close Map</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2155,26 +2266,7 @@ template.innerHTML = `
     </div>
   </div>
   <div class="toast-stack" data-toast-stack></div>
-  <div
-    <div class="map-overlay"
-      hidden
-      data-map-overlay
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="map-overlay-title"
-      aria-hidden="true"
-    >
-      <div class="map-overlay-card">
-        <header>
-          <h3 id="map-overlay-title">World Map</h3>
-          <p>Press M or Escape to close • Alt+M toggles music • Drag the minimap anytime to reposition</p>
-        </header>
-        <canvas data-map-canvas></canvas>
-        <div class="map-controls">
-          <button type="button" data-map-close>Close Map</button>
-        </div>
-      </div>
-  </div>
+</div>
 `;
 
 const TILE_STYLE = {
@@ -2384,7 +2476,7 @@ const LEVEL_VIGNETTE = {
 };
 const PORTAL_INTERACT_RADIUS = 1.6;
 const MINIMAP_STORAGE_KEY = 'explore-rpg-minimap';
-const MINIMAP_FLOAT_STORAGE_KEY = 'explore-rpg-minimap-floating';
+const MINIMAP_FLOAT_STORAGE_KEY = 'explore-rpg-minimap-floating-v2';
 const MINIMAP_FLOAT_POSITION_KEY = 'explore-rpg-minimap-pos';
 const VISUAL_STORAGE_KEY = 'explore-rpg-visuals';
 const ISO_MODE_STORAGE_KEY = 'explore-rpg-isometric';
@@ -2489,9 +2581,9 @@ class GameApp extends HTMLElement {
     if (this.minimapCtx) {
       this.minimapCtx.imageSmoothingEnabled = false;
     }
-  this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
-  this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
-  this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
+    this.minimapHeaderEl = this.shadowRoot.querySelector('[data-minimap-header]');
+    this.minimapLabelEl = this.shadowRoot.querySelector('[data-minimap-label]');
+    this.minimapExpandButton = this.shadowRoot.querySelector('[data-minimap-expand]');
     this.minimapPortalHintEl = this.shadowRoot.querySelector('[data-minimap-portal-hint]');
     this.toastStackEl = this.shadowRoot.querySelector('[data-toast-stack]');
     this.mapOverlayEl = this.shadowRoot.querySelector('[data-map-overlay]');
@@ -2501,7 +2593,8 @@ class GameApp extends HTMLElement {
       this.mapOverlayCtx.imageSmoothingEnabled = false;
     }
     this.mapOverlayCloseButton = this.shadowRoot.querySelector('[data-map-close]');
-  this.minimapDockParent = this.minimapCardEl?.parentElement ?? null;
+    this.minimapDockParent = this.minimapCardEl?.parentElement ?? null;
+    this.minimapDockSibling = this.minimapCardEl?.nextElementSibling ?? null;
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
   this.heroNameEl = this.shadowRoot.querySelector('[data-hero-name]');
   this.heroAccountEl = this.shadowRoot.querySelector('[data-hero-account]');
@@ -4570,10 +4663,11 @@ class GameApp extends HTMLElement {
       }
       return;
     }
-    if (!this.minimapDockParent && this.minimapCardEl.parentElement) {
-      this.minimapDockParent = this.minimapCardEl.parentElement;
-    }
     if (next) {
+      if (this.minimapCardEl.parentElement) {
+        this.minimapDockParent = this.minimapCardEl.parentElement;
+        this.minimapDockSibling = this.minimapCardEl.nextElementSibling;
+      }
       let fallbackPosition = null;
       if (this.hudEl) {
         const hudRect = this.hudEl.getBoundingClientRect();
@@ -4590,7 +4684,7 @@ class GameApp extends HTMLElement {
       if (!restored && fallbackPosition) {
         this._applyMinimapFloatPosition(fallbackPosition.left, fallbackPosition.top);
       }
-  this._avoidMinimapOverlap(true);
+      this._avoidMinimapOverlap(true);
     } else {
       this.minimapFloating = false;
       this.minimapCardEl.classList.remove('floating', 'dragging');
@@ -4599,13 +4693,13 @@ class GameApp extends HTMLElement {
       this.minimapCardEl.style.right = '';
       this.minimapCardEl.style.bottom = '';
       if (this.minimapDockParent) {
-        const anchor = this.minimapDockParent.querySelector('.utility-bar');
-        if (anchor) {
-          anchor.insertAdjacentElement('afterend', this.minimapCardEl);
+        if (this.minimapDockSibling && this.minimapDockSibling.parentElement === this.minimapDockParent) {
+          this.minimapDockParent.insertBefore(this.minimapCardEl, this.minimapDockSibling);
         } else {
           this.minimapDockParent.appendChild(this.minimapCardEl);
         }
       }
+      this.minimapDockSibling = this.minimapCardEl?.nextElementSibling ?? null;
       this.minimapDragPointerId = null;
       window.removeEventListener('pointermove', this._handleMinimapDragMove);
       window.removeEventListener('pointerup', this._handleMinimapDragEnd);
@@ -4674,7 +4768,7 @@ class GameApp extends HTMLElement {
     }
     const clamped = this._clampMinimapFloatPosition(position.left, position.top);
     this._applyMinimapFloatPosition(clamped.left, clamped.top);
-  this._avoidMinimapOverlap(true);
+    this._avoidMinimapOverlap(true);
     return Boolean(stored);
   }
 
@@ -5386,7 +5480,7 @@ class GameApp extends HTMLElement {
       this.removeAttribute('data-map-open');
     }
     if (this.minimapExpandButton) {
-      this.minimapExpandButton.textContent = next ? 'Collapse' : 'Expand';
+      this.minimapExpandButton.textContent = next ? 'Collapse Map' : 'Expand Map';
       this.minimapExpandButton.setAttribute('aria-pressed', next ? 'true' : 'false');
       this.minimapExpandButton.setAttribute(
         'aria-label',
