@@ -54,70 +54,6 @@ template.innerHTML = `
       pointer-events: none;
       padding: var(--hud-gap);
       z-index: 4;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .hud-layout {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: var(--hud-gap);
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-
-    .hud-row {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: var(--hud-gap);
-      pointer-events: none;
-    }
-
-    .hud-row > * {
-      pointer-events: auto;
-      min-width: min(260px, 100%);
-      flex: 1 1 clamp(220px, 28vw, var(--hud-panel-max-width));
-      max-width: var(--hud-panel-max-width);
-    }
-
-    .hud-row.top-row {
-      align-items: flex-start;
-    }
-
-    .hud-row.bottom-row {
-      align-items: flex-end;
-      margin-top: auto;
-    }
-
-    .hud .top-left {
-      display: grid;
-      gap: 0.6rem;
-    }
-
-    .utility-bar charge-meter {
-      flex: 1 1 150px;
-      min-width: 0;
-    }
-
-    .minimap-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-    }
-
-    .minimap-header-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .minimap-header-actions span {
-      font-size: 0.72rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
       color: rgba(148, 163, 184, 0.78);
@@ -1727,7 +1663,6 @@ template.innerHTML = `
           <div class="utility-bar">
             <charge-meter></charge-meter>
             <audio-toggle></audio-toggle>
-            <button type="button" class="visual-toggle" data-visual-toggle aria-pressed="true">Glow On</button>
           </div>
           <button
             type="button"
@@ -2010,6 +1945,13 @@ template.innerHTML = `
         <button type="button" class="primary" data-settings-pvp-toggle>Toggle PvP</button>
       </div>
       <div class="settings-section">
+        <h4>Display</h4>
+        <p data-settings-iso-status>Loading view preference…</p>
+        <button type="button" data-settings-iso-toggle>Toggle Isometric View</button>
+        <p data-settings-glow-status>Loading glow preference…</p>
+        <button type="button" data-settings-glow-toggle>Toggle Glow Effects</button>
+      </div>
+      <div class="settings-section">
         <h4>Tutorial</h4>
         <p>Replay the tutorial to revisit the basics.</p>
         <button type="button" data-settings-reset-tutorial>Reset Tutorial</button>
@@ -2251,6 +2193,7 @@ const MINIMAP_STORAGE_KEY = 'explore-rpg-minimap';
 const MINIMAP_FLOAT_STORAGE_KEY = 'explore-rpg-minimap-floating';
 const MINIMAP_FLOAT_POSITION_KEY = 'explore-rpg-minimap-pos';
 const VISUAL_STORAGE_KEY = 'explore-rpg-visuals';
+const ISO_MODE_STORAGE_KEY = 'explore-rpg-isometric';
 const UI_COLLAPSE_STORAGE_KEY = 'explore-rpg-ui-collapsed';
 const CONTROL_HINTS_STORAGE_KEY = 'explore-rpg-control-hints';
 const MINIMAP_SIZE = 176;
@@ -2367,7 +2310,6 @@ class GameApp extends HTMLElement {
     this.mapOverlayCloseButton = this.shadowRoot.querySelector('[data-map-close]');
   this.minimapDockParent = this.minimapCardEl?.parentElement ?? null;
   this.audioToggle = this.shadowRoot.querySelector('audio-toggle');
-    this.visualToggleButton = this.shadowRoot.querySelector('[data-visual-toggle]');
   this.heroNameEl = this.shadowRoot.querySelector('[data-hero-name]');
   this.heroAccountEl = this.shadowRoot.querySelector('[data-hero-account]');
   this.heroIdEl = this.shadowRoot.querySelector('[data-hero-id]');
@@ -2419,6 +2361,10 @@ class GameApp extends HTMLElement {
   this.settingsOverlay = this.shadowRoot.querySelector('[data-settings-overlay]');
   this.settingsPvpStatusEl = this.shadowRoot.querySelector('[data-settings-pvp-status]');
   this.settingsPvpToggleButton = this.shadowRoot.querySelector('[data-settings-pvp-toggle]');
+  this.settingsIsoStatusEl = this.shadowRoot.querySelector('[data-settings-iso-status]');
+  this.settingsIsoToggleButton = this.shadowRoot.querySelector('[data-settings-iso-toggle]');
+  this.settingsGlowStatusEl = this.shadowRoot.querySelector('[data-settings-glow-status]');
+  this.settingsGlowToggleButton = this.shadowRoot.querySelector('[data-settings-glow-toggle]');
   this.settingsResetTutorialButton = this.shadowRoot.querySelector('[data-settings-reset-tutorial]');
   this.settingsCloseButton = this.shadowRoot.querySelector('[data-settings-close]');
   this.settingsFeedbackEl = this.shadowRoot.querySelector('[data-settings-feedback]');
@@ -2479,7 +2425,6 @@ class GameApp extends HTMLElement {
   this._handlePointerSchemeChange = this._handlePointerSchemeChange.bind(this);
   this._handleTouchChatToggle = this._handleTouchChatToggle.bind(this);
   this._handleTouchChatPointerEnd = this._handleTouchChatPointerEnd.bind(this);
-  this._handleVisualToggle = this._handleVisualToggle.bind(this);
   this._handleTouchUiToggle = this._handleTouchUiToggle.bind(this);
   this._handleTouchUiPointerEnd = this._handleTouchUiPointerEnd.bind(this);
   this._handleGearPanelClick = this._handleGearPanelClick.bind(this);
@@ -2662,6 +2607,8 @@ class GameApp extends HTMLElement {
   this._handleSettingsToggle = this._handleSettingsToggle.bind(this);
   this._handleSettingsClose = this._handleSettingsClose.bind(this);
   this._handleSettingsPvpToggle = this._handleSettingsPvpToggle.bind(this);
+  this._handleSettingsIsoToggle = this._handleSettingsIsoToggle.bind(this);
+  this._handleSettingsGlowToggle = this._handleSettingsGlowToggle.bind(this);
   this._handleSettingsResetTutorial = this._handleSettingsResetTutorial.bind(this);
   this._handleControlHintsToggle = this._handleControlHintsToggle.bind(this);
     this._resizeCanvas = this._resizeCanvas.bind(this);
@@ -2684,6 +2631,7 @@ class GameApp extends HTMLElement {
   this._loadMinimapFloatPreference();
     this._loadUiCollapsePreference();
     this._loadVisualPreference();
+  this._loadIsometricPreference();
     this._evaluateCompactLayout();
     this._updateCompactStatus();
     this._syncCompactOverlayVisibility();
@@ -2707,7 +2655,6 @@ class GameApp extends HTMLElement {
     if (this.audioToggle) {
       this.audioToggle.active = this.audio.musicEnabled;
     }
-    this.visualToggleButton?.addEventListener('click', this._handleVisualToggle);
     this.minimapToggleButton?.addEventListener('click', this._toggleMinimapVisibility);
     this.minimapGhostButton?.addEventListener('click', this._toggleMinimapVisibility);
   this.minimapExpandButton?.addEventListener('click', this._toggleMapOverlay);
@@ -2746,6 +2693,8 @@ class GameApp extends HTMLElement {
   this.adminContentEl?.addEventListener('click', this._handleAdminContentClick);
   this.settingsPanelButton?.addEventListener('click', this._handleSettingsToggle);
   this.settingsPvpToggleButton?.addEventListener('click', this._handleSettingsPvpToggle);
+  this.settingsIsoToggleButton?.addEventListener('click', this._handleSettingsIsoToggle);
+  this.settingsGlowToggleButton?.addEventListener('click', this._handleSettingsGlowToggle);
   this.settingsResetTutorialButton?.addEventListener('click', this._handleSettingsResetTutorial);
   this.settingsCloseButton?.addEventListener('click', this._handleSettingsClose);
   this.controlHintsToggleButton?.addEventListener('click', this._handleControlHintsToggle);
@@ -2790,7 +2739,6 @@ class GameApp extends HTMLElement {
     this.canvas.removeEventListener('pointerleave', this._handlePointerLeave);
     this.canvas.removeEventListener('pointercancel', this._handlePointerCancel);
     this.audioToggle?.removeEventListener('music-toggle', this._handleMusicToggle);
-  this.visualToggleButton?.removeEventListener('click', this._handleVisualToggle);
   this.minimapToggleButton?.removeEventListener('click', this._toggleMinimapVisibility);
   this.minimapGhostButton?.removeEventListener('click', this._toggleMinimapVisibility);
   this.minimapExpandButton?.removeEventListener('click', this._toggleMapOverlay);
@@ -2829,6 +2777,8 @@ class GameApp extends HTMLElement {
   this.adminContentEl?.removeEventListener('click', this._handleAdminContentClick);
   this.settingsPanelButton?.removeEventListener('click', this._handleSettingsToggle);
   this.settingsPvpToggleButton?.removeEventListener('click', this._handleSettingsPvpToggle);
+  this.settingsIsoToggleButton?.removeEventListener('click', this._handleSettingsIsoToggle);
+  this.settingsGlowToggleButton?.removeEventListener('click', this._handleSettingsGlowToggle);
   this.settingsResetTutorialButton?.removeEventListener('click', this._handleSettingsResetTutorial);
   this.settingsCloseButton?.removeEventListener('click', this._handleSettingsClose);
   this.controlHintsToggleButton?.removeEventListener('click', this._handleControlHintsToggle);
@@ -3279,7 +3229,9 @@ class GameApp extends HTMLElement {
 
     ctx.clearRect(0, 0, width, height);
 
-    const isoReady = Boolean(this.isoRenderer?.isReady?.());
+    const isoAvailable = Boolean(this.isoRenderer);
+    const isoAllowed = isoAvailable && this.isometricControlsEnabled;
+    const isoReady = isoAllowed && Boolean(this.isoRenderer?.isReady?.());
 
     if (!this.world) {
       if (this.isoRenderer) {
@@ -3378,30 +3330,34 @@ class GameApp extends HTMLElement {
       ? this._collectChargeHighlights(local, cameraX, cameraY, width, height, currentLevelId)
       : [];
 
-    const usingIso = Boolean(this.isoRenderer && isoReady);
+    const usingIso = Boolean(isoReady);
     if (this.isoRenderer) {
-      this.isoRenderer.setWorld(this.world);
-      if (usingIso) {
-        this.isoRenderer.renderFrame({
-          width,
-          height,
-          dpr,
-          time: timeSeconds,
-          world: this.world,
-          cameraX,
-          cameraY,
-          levelId: currentLevelId,
-          levelTheme,
-          players: this.players,
-          enemies: this.enemies,
-          localId: this.youId,
-          portals: this.portals,
-          bank: this.bankInfo,
-          oreNodes: this.oreNodes,
-          lootDrops: this.lootDrops,
-          dungeonExit: this.currentLevelExit,
-          exitColor: this.currentLevelColor,
-        });
+      if (isoAllowed) {
+        this.isoRenderer.setWorld(this.world);
+        if (usingIso) {
+          this.isoRenderer.renderFrame({
+            width,
+            height,
+            dpr,
+            time: timeSeconds,
+            world: this.world,
+            cameraX,
+            cameraY,
+            levelId: currentLevelId,
+            levelTheme,
+            players: this.players,
+            enemies: this.enemies,
+            localId: this.youId,
+            portals: this.portals,
+            bank: this.bankInfo,
+            oreNodes: this.oreNodes,
+            lootDrops: this.lootDrops,
+            dungeonExit: this.currentLevelExit,
+            exitColor: this.currentLevelColor,
+          });
+        }
+      } else {
+        this.isoRenderer.setWorld(null);
       }
     }
 
@@ -4926,17 +4882,6 @@ class GameApp extends HTMLElement {
     }
   }
 
-  _handleVisualToggle(event) {
-    if (event) {
-      event.preventDefault?.();
-      event.stopPropagation?.();
-    }
-    if (!this.webglRenderer) {
-      return;
-    }
-    this._setVisualEffectsEnabled(!this.webglEnabled);
-  }
-
   _setVisualEffectsEnabled(enabled, persist = true) {
     const available = Boolean(this.webglRenderer);
     const next = available && Boolean(enabled);
@@ -4945,40 +4890,37 @@ class GameApp extends HTMLElement {
       this.webglCanvas.style.visibility = next ? 'visible' : 'hidden';
       this.webglCanvas.style.opacity = next ? '1' : '0';
     }
-    this._syncVisualToggle();
     if (persist) {
       try {
-        window.localStorage?.setItem(VISUAL_STORAGE_KEY, enabled ? '1' : '0');
+        window.localStorage?.setItem(VISUAL_STORAGE_KEY, next ? '1' : '0');
       } catch (err) {
         // ignore storage issues
       }
     }
+    this._updateSettingsState();
   }
 
-  _syncVisualToggle() {
-    if (!this.visualToggleButton) return;
-    if (!this.webglRenderer) {
-      this.visualToggleButton.textContent = 'Glow N/A';
-      this.visualToggleButton.disabled = true;
-      this.visualToggleButton.setAttribute('aria-pressed', 'false');
-      this.visualToggleButton.setAttribute('aria-label', 'Glow visuals not supported');
-      return;
+  _setIsometricModeEnabled(enabled, persist = true) {
+    const available = Boolean(this.isoRenderer);
+    const next = available && Boolean(enabled);
+    this.isometricControlsEnabled = next;
+    if (this.isoCanvas) {
+      this.isoCanvas.style.visibility = next ? 'visible' : 'hidden';
+      this.isoCanvas.style.opacity = next ? '1' : '0';
     }
-    const label = this.webglEnabled ? 'Glow On' : 'Glow Off';
-    this.visualToggleButton.disabled = false;
-    this.visualToggleButton.textContent = label;
-    this.visualToggleButton.setAttribute('aria-pressed', this.webglEnabled ? 'true' : 'false');
-    this.visualToggleButton.setAttribute('aria-label', `Glow visuals ${this.webglEnabled ? 'enabled' : 'disabled'}`);
+    if (persist) {
+      try {
+        window.localStorage?.setItem(ISO_MODE_STORAGE_KEY, next ? '1' : '0');
+      } catch (err) {
+        // ignore storage issues
+      }
+    }
+    this._updateSettingsState();
   }
 
   _loadVisualPreference() {
     if (!this.webglRenderer) {
-      this.webglEnabled = false;
-      if (this.webglCanvas) {
-        this.webglCanvas.style.visibility = 'hidden';
-        this.webglCanvas.style.opacity = '0';
-      }
-      this._syncVisualToggle();
+      this._setVisualEffectsEnabled(false, false);
       return;
     }
     let stored = null;
@@ -4991,6 +4933,24 @@ class GameApp extends HTMLElement {
       this._setVisualEffectsEnabled(false, false);
     } else {
       this._setVisualEffectsEnabled(true, false);
+    }
+  }
+
+  _loadIsometricPreference() {
+    if (!this.isoRenderer) {
+      this._setIsometricModeEnabled(false, false);
+      return;
+    }
+    let stored = null;
+    try {
+      stored = window.localStorage?.getItem(ISO_MODE_STORAGE_KEY);
+    } catch (err) {
+      stored = null;
+    }
+    if (stored === '0') {
+      this._setIsometricModeEnabled(false, false);
+    } else {
+      this._setIsometricModeEnabled(true, false);
     }
   }
 
@@ -8018,6 +7978,42 @@ class GameApp extends HTMLElement {
       this._updateSettingsState();
     }
 
+    _handleSettingsIsoToggle() {
+      if (!this.isoRenderer) {
+        if (this.settingsFeedbackEl) {
+          this.settingsFeedbackEl.textContent = "Isometric view isn't supported on this device.";
+          this.settingsFeedbackEl.style.color = '#fca5a5';
+        }
+        this._updateSettingsState();
+        return;
+      }
+      const nextEnabled = !this.isometricControlsEnabled;
+      this._setIsometricModeEnabled(nextEnabled);
+      if (this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = nextEnabled
+          ? 'Isometric view enabled.'
+          : 'Classic top-down view restored.';
+        this.settingsFeedbackEl.style.color = '#bae6fd';
+      }
+    }
+
+    _handleSettingsGlowToggle() {
+      if (!this.webglRenderer) {
+        if (this.settingsFeedbackEl) {
+          this.settingsFeedbackEl.textContent = 'Glow effects are unavailable on this device.';
+          this.settingsFeedbackEl.style.color = '#fca5a5';
+        }
+        this._updateSettingsState();
+        return;
+      }
+      const nextEnabled = !this.webglEnabled;
+      this._setVisualEffectsEnabled(nextEnabled);
+      if (this.settingsFeedbackEl) {
+        this.settingsFeedbackEl.textContent = nextEnabled ? 'Glow effects enabled.' : 'Glow effects disabled.';
+        this.settingsFeedbackEl.style.color = '#bae6fd';
+      }
+    }
+
     _handleSettingsResetTutorial() {
       if (!this._sendProfileAction('reset-tutorial')) {
         if (this.settingsFeedbackEl) {
@@ -8066,6 +8062,59 @@ class GameApp extends HTMLElement {
           this.settingsResetTutorialButton.setAttribute('disabled', 'disabled');
         } else {
           this.settingsResetTutorialButton.removeAttribute('disabled');
+        }
+      }
+
+      const isoAvailable = Boolean(this.isoRenderer);
+      const isoEnabled = Boolean(this.isometricControlsEnabled && isoAvailable);
+      const isoReady = isoAvailable && Boolean(this.isoRenderer?.isReady?.());
+      if (this.settingsIsoStatusEl) {
+        let isoText = "Isometric view isn't supported on this device.";
+        if (isoAvailable) {
+          if (isoEnabled && !isoReady) {
+            isoText = 'Isometric view is initializing. Hang tight while the renderer loads.';
+          } else if (isoEnabled) {
+            isoText = 'Isometric view is ENABLED. Camera and aim adapt to the 3D perspective.';
+          } else {
+            isoText = 'Isometric view is DISABLED. Classic top-down mode is active.';
+          }
+        }
+        this.settingsIsoStatusEl.textContent = isoText;
+      }
+
+      if (this.settingsIsoToggleButton) {
+        if (!isoAvailable) {
+          this.settingsIsoToggleButton.textContent = 'Isometric Unavailable';
+          this.settingsIsoToggleButton.setAttribute('disabled', 'disabled');
+          this.settingsIsoToggleButton.setAttribute('aria-pressed', 'false');
+        } else {
+          this.settingsIsoToggleButton.textContent = isoEnabled ? 'Disable Isometric View' : 'Enable Isometric View';
+          this.settingsIsoToggleButton.removeAttribute('disabled');
+          this.settingsIsoToggleButton.setAttribute('aria-pressed', isoEnabled ? 'true' : 'false');
+        }
+      }
+
+      const glowAvailable = Boolean(this.webglRenderer);
+      const glowEnabled = Boolean(this.webglEnabled && glowAvailable);
+      if (this.settingsGlowStatusEl) {
+        let glowText = 'Glow effects are unavailable on this device.';
+        if (glowAvailable) {
+          glowText = glowEnabled
+            ? 'Glow effects are ENABLED. Combat cues render with high-contrast highlights.'
+            : 'Glow effects are DISABLED. Visuals fall back to the classic 2D renderer.';
+        }
+        this.settingsGlowStatusEl.textContent = glowText;
+      }
+
+      if (this.settingsGlowToggleButton) {
+        if (!glowAvailable) {
+          this.settingsGlowToggleButton.textContent = 'Glow Unavailable';
+          this.settingsGlowToggleButton.setAttribute('disabled', 'disabled');
+          this.settingsGlowToggleButton.setAttribute('aria-pressed', 'false');
+        } else {
+          this.settingsGlowToggleButton.textContent = glowEnabled ? 'Disable Glow Effects' : 'Enable Glow Effects';
+          this.settingsGlowToggleButton.removeAttribute('disabled');
+          this.settingsGlowToggleButton.setAttribute('aria-pressed', glowEnabled ? 'true' : 'false');
         }
       }
     }
