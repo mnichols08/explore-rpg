@@ -3181,6 +3181,9 @@ class GameApp extends HTMLElement {
     const dangerClusters = this.webglRenderer && this.webglEnabled
       ? this._collectDangerClusters(cameraX, cameraY, width, height, currentLevelId)
       : [];
+    const chargeHighlights = this.webglRenderer && this.webglEnabled
+      ? this._collectChargeHighlights(local, cameraX, cameraY, width, height, currentLevelId)
+      : [];
 
     if (this.webglRenderer && this.webglEnabled) {
       this.webglRenderer.render({
@@ -3198,6 +3201,7 @@ class GameApp extends HTMLElement {
         accentColor: accentColorVec,
         dungeonFactor,
         dangerClusters,
+        chargeHighlights,
         charge: chargeState,
       });
     } else {
@@ -5705,6 +5709,47 @@ class GameApp extends HTMLElement {
 
     results.sort((a, b) => b.intensity - a.intensity);
     return results.slice(0, 8);
+  }
+
+  _collectChargeHighlights(localPlayer, cameraX, cameraY, width, height, currentLevelId) {
+    const maxHighlights = this.webglRenderer?.maxChargeHighlights || 0;
+    if (!maxHighlights || !this.players || this.players.size <= 1) return [];
+    const results = [];
+    const denomW = Math.max(1, width);
+    const denomH = Math.max(1, height);
+    for (const player of this.players.values()) {
+      if (!player) continue;
+      if (player.id === this.youId) continue;
+      if ((player.levelId || null) !== (currentLevelId || null)) continue;
+      if (!player.charging && !(player.chargeRatio > 0.01)) continue;
+      const ratio = Math.max(0, Math.min(1, Number(player.chargeRatio) || 0));
+      if (ratio <= 0.01) continue;
+      const screen = this._worldToScreen(player.x, player.y, cameraX, cameraY, width, height);
+      const normX = screen.x / denomW;
+      const normY = screen.y / denomH;
+      if (!Number.isFinite(normX) || !Number.isFinite(normY)) continue;
+      if (normX < -0.35 || normX > 1.35 || normY < -0.35 || normY > 1.35) continue;
+      const kind = player.actionKind || 'default';
+      const glow = CHARGE_GLOW_STYLE[kind] || CHARGE_GLOW_STYLE.default;
+      const dirSource = player.actionAim || player.aim || { x: 1, y: 0 };
+      const direction = this._normalize({ x: Number(dirSource?.x) || 1, y: Number(dirSource?.y) || 0 });
+      const reachBase = kind === 'spell' ? 0.4 : kind === 'ranged' ? 0.32 : 0.26;
+      const reach = Math.max(0.08, Math.min(0.6, 0.14 + ratio * reachBase));
+      results.push({
+        x: Math.max(0, Math.min(1, normX)),
+        y: Math.max(0, Math.min(1, normY)),
+        ratio,
+        reach,
+        dirX: direction.x,
+        dirY: direction.y,
+        color: this._cssColorToVec3(glow.stroke, [0.72, 0.8, 1.0]),
+      });
+    }
+    if (results.length <= maxHighlights) {
+      return results;
+    }
+    results.sort((a, b) => b.ratio - a.ratio);
+    return results.slice(0, maxHighlights);
   }
 
   _renderPortals(ctx, cameraX, cameraY, width, height, time, local, currentLevelId) {

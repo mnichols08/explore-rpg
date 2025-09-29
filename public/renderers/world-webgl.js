@@ -1,5 +1,6 @@
 const FULLSCREEN_TRIANGLE = new Float32Array([-1, -1, 3, -1, -1, 3]);
 const MAX_DANGER_POINTS = 8;
+const MAX_CHARGE_HIGHLIGHTS = 8;
 
 const VERTEX_SHADER_SOURCE = `
   attribute vec2 a_position;
@@ -27,6 +28,10 @@ const FRAGMENT_SHADER_SOURCE = `
   uniform float u_chargeRatio;
   uniform vec2 u_chargeDirection;
   uniform vec3 u_chargeColor;
+  uniform float u_chargeHighlightCount;
+  uniform vec4 u_chargeHighlightData[${MAX_CHARGE_HIGHLIGHTS}];
+  uniform vec2 u_chargeHighlightDir[${MAX_CHARGE_HIGHLIGHTS}];
+  uniform vec3 u_chargeHighlightColor[${MAX_CHARGE_HIGHLIGHTS}];
 
   const int MAX_DANGER_POINTS = ${MAX_DANGER_POINTS};
 
@@ -113,6 +118,39 @@ const FRAGMENT_SHADER_SOURCE = `
       base += halo * (beamColor * 0.8 + vec3(0.12, 0.15, 0.2));
     }
 
+    for (int i = 0; i < ${MAX_CHARGE_HIGHLIGHTS}; i++) {
+      if (float(i) >= u_chargeHighlightCount) {
+        break;
+      }
+      vec4 highlight = u_chargeHighlightData[i];
+      vec2 origin = vec2(highlight.x, 1.0 - highlight.y);
+      float ratio = clamp(highlight.z, 0.0, 1.0);
+      float reach = max(0.02, highlight.w);
+      vec2 dirRaw = u_chargeHighlightDir[i];
+      vec2 dir = vec2(dirRaw.x * aspect, -dirRaw.y);
+      float dirLen = max(0.0001, length(dir));
+      dir /= dirLen;
+      vec2 ortho = vec2(-dir.y, dir.x);
+
+      vec2 scaled = vec2((uv.x - origin.x) * aspect, uv.y - origin.y);
+      float along = dot(scaled, dir);
+      float lateral = dot(scaled, ortho);
+      float entry = smoothstep(0.01, 0.06 + 0.04 * ratio, along);
+      float exit = 1.0 - smoothstep(reach * 0.65, reach, along);
+      float beamMask = max(0.0, entry * exit);
+      float thickness = 0.025 + ratio * 0.08;
+      float lateralMask = exp(-pow(abs(lateral) / max(0.0001, thickness), 1.45));
+      float flicker = 0.35 + 0.65 * sin(u_time * (2.2 + 3.8 * ratio) + along * 14.0 + float(i) * 1.7);
+      float beam = beamMask * lateralMask * flicker;
+      vec3 highlightColor = u_chargeHighlightColor[i];
+      base += beam * highlightColor * (0.18 + 0.42 * ratio);
+
+      float dist = length(scaled);
+      float halo = smoothstep(reach * 0.3, reach * 0.05, dist);
+      float pulse = 0.4 + 0.6 * sin(u_time * 4.0 + float(i) * 0.6);
+      base += halo * pulse * highlightColor * (0.08 + 0.18 * ratio);
+    }
+
     vec2 safeCenter = vec2(u_safeCenter.x, 1.0 - u_safeCenter.y);
     if (u_safeRadius > 0.0 && u_safeCenter.x >= 0.0) {
       float safeDist = length((uv - safeCenter) * vec2(aspect, 1.0));
@@ -170,8 +208,12 @@ export class WorldWebGLRenderer {
     this.resolution = [canvas.width || 1, canvas.height || 1];
     this._dpr = window.devicePixelRatio || 1;
     this.maxDangerPoints = MAX_DANGER_POINTS;
+  this.maxChargeHighlights = MAX_CHARGE_HIGHLIGHTS;
     this._dangerCentersData = new Float32Array(this.maxDangerPoints * 3);
     this._dangerRadiusData = new Float32Array(this.maxDangerPoints);
+  this._chargeHighlightData = new Float32Array(this.maxChargeHighlights * 4);
+  this._chargeHighlightDir = new Float32Array(this.maxChargeHighlights * 2);
+  this._chargeHighlightColor = new Float32Array(this.maxChargeHighlights * 3);
 
     if (!this.supported) {
       return;
@@ -261,6 +303,37 @@ export class WorldWebGLRenderer {
     if (this._dangerCentersData.length !== maxDanger * 3) {
       this._dangerCentersData = new Float32Array(maxDanger * 3);
     }
+    const highlights = Array.isArray(state.chargeHighlights) ? state.chargeHighlights : [];
+    const maxHighlights = this.maxChargeHighlights || MAX_CHARGE_HIGHLIGHTS;
+    const highlightCount = Math.min(maxHighlights, highlights.length);
+    if (this._chargeHighlightData.length !== maxHighlights * 4) {
+      this._chargeHighlightData = new Float32Array(maxHighlights * 4);
+    }
+    if (this._chargeHighlightDir.length !== maxHighlights * 2) {
+      this._chargeHighlightDir = new Float32Array(maxHighlights * 2);
+    }
+    if (this._chargeHighlightColor.length !== maxHighlights * 3) {
+      this._chargeHighlightColor = new Float32Array(maxHighlights * 3);
+    }
+    this._chargeHighlightData.fill(0);
+    this._chargeHighlightDir.fill(0);
+    this._chargeHighlightColor.fill(0);
+    for (let i = 0; i < highlightCount; i += 1) {
+      const highlight = highlights[i] || {};
+      const baseIndex = i * 4;
+      this._chargeHighlightData[baseIndex] = Number.isFinite(highlight.x) ? highlight.x : 0.5;
+      this._chargeHighlightData[baseIndex + 1] = Number.isFinite(highlight.y) ? highlight.y : 0.5;
+      this._chargeHighlightData[baseIndex + 2] = Number.isFinite(highlight.ratio) ? highlight.ratio : 0;
+      this._chargeHighlightData[baseIndex + 3] = Number.isFinite(highlight.reach) ? highlight.reach : 0.18;
+      const dirIndex = i * 2;
+      this._chargeHighlightDir[dirIndex] = Number.isFinite(highlight.dirX) ? highlight.dirX : 1;
+      this._chargeHighlightDir[dirIndex + 1] = Number.isFinite(highlight.dirY) ? highlight.dirY : 0;
+      const colorIndex = i * 3;
+      const color = Array.isArray(highlight.color) && highlight.color.length === 3 ? highlight.color : [0.7, 0.8, 1.0];
+      this._chargeHighlightColor[colorIndex] = Number.isFinite(color[0]) ? color[0] : 0.7;
+      this._chargeHighlightColor[colorIndex + 1] = Number.isFinite(color[1]) ? color[1] : 0.8;
+      this._chargeHighlightColor[colorIndex + 2] = Number.isFinite(color[2]) ? color[2] : 1.0;
+    }
     if (this._dangerRadiusData.length !== maxDanger) {
       this._dangerRadiusData = new Float32Array(maxDanger);
     }
@@ -332,6 +405,29 @@ export class WorldWebGLRenderer {
     if (this.locations.uniforms.dangerRadius) {
       gl.uniform1fv(this.locations.uniforms.dangerRadius, this._dangerRadiusData);
     }
+    if (this.locations.uniforms.chargeHighlightCount) {
+      gl.uniform1f(this.locations.uniforms.chargeHighlightCount, highlightCount);
+    }
+    if (this.locations.uniforms.chargeHighlightData && highlightCount > 0) {
+      gl.uniform4fv(this.locations.uniforms.chargeHighlightData, this._chargeHighlightData);
+    }
+    if (this.locations.uniforms.chargeHighlightDir && highlightCount > 0) {
+      gl.uniform2fv(this.locations.uniforms.chargeHighlightDir, this._chargeHighlightDir);
+    }
+    if (this.locations.uniforms.chargeHighlightColor && highlightCount > 0) {
+      gl.uniform3fv(this.locations.uniforms.chargeHighlightColor, this._chargeHighlightColor);
+    }
+    if (highlightCount === 0) {
+      if (this.locations.uniforms.chargeHighlightData) {
+        gl.uniform4fv(this.locations.uniforms.chargeHighlightData, this._chargeHighlightData);
+      }
+      if (this.locations.uniforms.chargeHighlightDir) {
+        gl.uniform2fv(this.locations.uniforms.chargeHighlightDir, this._chargeHighlightDir);
+      }
+      if (this.locations.uniforms.chargeHighlightColor) {
+        gl.uniform3fv(this.locations.uniforms.chargeHighlightColor, this._chargeHighlightColor);
+      }
+    }
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -362,6 +458,9 @@ export class WorldWebGLRenderer {
     this.supported = false;
     this._dangerCentersData = new Float32Array(0);
     this._dangerRadiusData = new Float32Array(0);
+    this._chargeHighlightData = new Float32Array(0);
+    this._chargeHighlightDir = new Float32Array(0);
+    this._chargeHighlightColor = new Float32Array(0);
   }
 
   _initContext() {
@@ -404,6 +503,10 @@ export class WorldWebGLRenderer {
         chargeRatio: gl.getUniformLocation(this.program, 'u_chargeRatio'),
         chargeDirection: gl.getUniformLocation(this.program, 'u_chargeDirection'),
         chargeColor: gl.getUniformLocation(this.program, 'u_chargeColor'),
+        chargeHighlightCount: gl.getUniformLocation(this.program, 'u_chargeHighlightCount'),
+        chargeHighlightData: gl.getUniformLocation(this.program, 'u_chargeHighlightData'),
+        chargeHighlightDir: gl.getUniformLocation(this.program, 'u_chargeHighlightDir'),
+        chargeHighlightColor: gl.getUniformLocation(this.program, 'u_chargeHighlightColor'),
       },
     };
 
