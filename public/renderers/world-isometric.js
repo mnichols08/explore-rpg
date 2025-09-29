@@ -1,4 +1,4 @@
-const THREE_MODULE_URL = 'https://cdn.skypack.dev/three@0.164.0';
+const THREE_MODULE_URL = 'https://unpkg.com/three@0.164.0/build/three.module.js?module';
 
 const TILE_COLORS = {
   water: '#0f172a',
