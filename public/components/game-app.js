@@ -2804,6 +2804,13 @@ class GameApp extends HTMLElement {
         this._hideAuthOverlay();
         this._hideLegacyOverlay();
 
+        if (this.messageEl) {
+          if (this.messageEl.textContent === 'Sign in to continue your adventure.') {
+            this.messageEl.textContent = '';
+          }
+          this.messageEl.hidden = true;
+        }
+
         const authInfo = data?.auth || {};
         const sessionToken =
           typeof data.sessionToken === 'string' && data.sessionToken.length ? data.sessionToken : null;
