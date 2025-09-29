@@ -23,6 +23,10 @@ const FRAGMENT_SHADER_SOURCE = `
   uniform vec3 u_accentColor;
   uniform float u_momentum;
   uniform float u_dungeonFactor;
+  uniform float u_chargeActive;
+  uniform float u_chargeRatio;
+  uniform vec2 u_chargeDirection;
+  uniform vec3 u_chargeColor;
 
   const int MAX_DANGER_POINTS = ${MAX_DANGER_POINTS};
 
@@ -74,6 +78,40 @@ const FRAGMENT_SHADER_SOURCE = `
 
     vec3 heroColor = mix(u_accentColor, vec3(1.0, 0.85, 0.4), 0.4 + 0.4 * clamp(u_momentum, 0.0, 1.0));
     base += heroGlow * heroColor;
+
+    if (u_chargeActive > 0.5 && u_chargeRatio > 0.01) {
+      vec2 hero = focus;
+      vec2 scaledOffset = vec2((uv.x - hero.x) * aspect, uv.y - hero.y);
+      vec2 dirRaw = vec2(u_chargeDirection.x * aspect, -u_chargeDirection.y);
+      float dirLen = max(0.0001, length(dirRaw));
+      vec2 dir = dirRaw / dirLen;
+      vec2 ortho = vec2(-dir.y, dir.x);
+
+      float along = dot(scaledOffset, dir);
+      float lateral = dot(scaledOffset, ortho);
+
+      float reach = mix(0.18, 0.78, clamp(u_chargeRatio, 0.0, 1.0));
+      float entry = smoothstep(0.015, 0.08 + 0.05 * u_chargeRatio, along);
+      float exit = 1.0 - smoothstep(reach * 0.6, reach, along);
+      float beamMask = max(0.0, entry * exit);
+
+      float thickness = mix(0.03, 0.12, clamp(u_chargeRatio, 0.0, 1.0));
+      float lateralMask = exp(-pow(abs(lateral) / max(0.001, thickness), 1.24));
+      float oscillation = 0.6 + 0.4 * sin(u_time * (6.0 + 4.0 * u_chargeRatio) + along * 18.0);
+      float spark = 0.35 + 0.65 * sin(u_time * 14.0 + lateral * 22.0);
+
+      float chargeBeam = beamMask * lateralMask * oscillation;
+      vec3 beamColor = mix(u_chargeColor, vec3(1.0, 0.92, 0.72), clamp(spark * 0.5, 0.0, 1.0));
+      base += chargeBeam * beamColor * (0.45 + 0.55 * clamp(u_chargeRatio, 0.0, 1.0));
+
+      float ringRadius = mix(0.1, 0.28, clamp(u_chargeRatio, 0.0, 1.0));
+      float radius = length(scaledOffset);
+      float ringBand = smoothstep(ringRadius - 0.018, ringRadius + 0.002, radius) -
+                       smoothstep(ringRadius + 0.002, ringRadius + 0.08, radius);
+      float directionalFocus = pow(max(0.0, dot(normalize(scaledOffset + vec2(0.0001, 0.0001)), dir)), mix(2.0, 6.0, clamp(u_chargeRatio, 0.0, 1.0)));
+      float halo = ringBand * (0.4 + 0.6 * directionalFocus) * (0.45 + 0.55 * u_chargeRatio);
+      base += halo * (beamColor * 0.8 + vec3(0.12, 0.15, 0.2));
+    }
 
     vec2 safeCenter = vec2(u_safeCenter.x, 1.0 - u_safeCenter.y);
     if (u_safeRadius > 0.0 && u_safeCenter.x >= 0.0) {
@@ -264,6 +302,27 @@ export class WorldWebGLRenderer {
     gl.uniform3fv(this.locations.uniforms.accentColor, accentColor);
     gl.uniform1f(this.locations.uniforms.momentum, state.momentum ?? 0);
     gl.uniform1f(this.locations.uniforms.dungeonFactor, state.dungeonFactor ?? 0);
+    const chargeState = state.charge && state.charge.active ? state.charge : null;
+    const chargeRatio = chargeState ? Math.max(0, Math.min(1, chargeState.ratio ?? 0)) : 0;
+    const chargeDir = chargeState?.direction ?? { x: 1, y: 0 };
+    const chargeColor = Array.isArray(chargeState?.color) && chargeState.color.length === 3 ? chargeState.color : accentColor;
+    const chargeActive = chargeState ? 1 : 0;
+    if (this.locations.uniforms.chargeActive) {
+      gl.uniform1f(this.locations.uniforms.chargeActive, chargeActive);
+    }
+    if (this.locations.uniforms.chargeRatio) {
+      gl.uniform1f(this.locations.uniforms.chargeRatio, chargeRatio);
+    }
+    if (this.locations.uniforms.chargeDirection) {
+      gl.uniform2f(
+        this.locations.uniforms.chargeDirection,
+        Number.isFinite(chargeDir?.x) ? chargeDir.x : 1,
+        Number.isFinite(chargeDir?.y) ? chargeDir.y : 0
+      );
+    }
+    if (this.locations.uniforms.chargeColor) {
+      gl.uniform3fv(this.locations.uniforms.chargeColor, chargeColor);
+    }
     if (this.locations.uniforms.dangerCount) {
       gl.uniform1f(this.locations.uniforms.dangerCount, dangerCount);
     }
@@ -341,6 +400,10 @@ export class WorldWebGLRenderer {
         dangerClusters: gl.getUniformLocation(this.program, 'u_dangerClusters'),
         dangerRadius: gl.getUniformLocation(this.program, 'u_dangerRadius'),
         dangerCount: gl.getUniformLocation(this.program, 'u_dangerCount'),
+        chargeActive: gl.getUniformLocation(this.program, 'u_chargeActive'),
+        chargeRatio: gl.getUniformLocation(this.program, 'u_chargeRatio'),
+        chargeDirection: gl.getUniformLocation(this.program, 'u_chargeDirection'),
+        chargeColor: gl.getUniformLocation(this.program, 'u_chargeColor'),
       },
     };
 

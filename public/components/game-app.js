@@ -2395,6 +2395,7 @@ class GameApp extends HTMLElement {
     this.tileSize = 36;
     this.activeAction = null;
     this.actionStart = 0;
+    this.activeActionAim = null;
     this.pointerButtons = 0;
     this.knownEffects = new Set();
   this.profileId = null;
@@ -2894,10 +2895,12 @@ class GameApp extends HTMLElement {
         }
         const map = new Map();
         let me = null;
-        for (const p of data.players) {
-          map.set(p.id, p);
-          if (p.id === this.youId) {
-            me = p;
+        for (const rawPlayer of data.players) {
+          const player = this._normalizePlayerState(rawPlayer);
+          if (!player) continue;
+          map.set(player.id, player);
+          if (player.id === this.youId) {
+            me = player;
           }
         }
         this.players = map;
@@ -3173,6 +3176,7 @@ class GameApp extends HTMLElement {
     );
     const baseColorVec = this._cssColorToVec3(levelTheme?.background || '#0f172a', [0.05, 0.07, 0.12]);
     const dungeonFactor = currentLevelId ? 1 : 0;
+    const chargeState = this._computeChargeState(local);
 
     const dangerClusters = this.webglRenderer && this.webglEnabled
       ? this._collectDangerClusters(cameraX, cameraY, width, height, currentLevelId)
@@ -3194,6 +3198,7 @@ class GameApp extends HTMLElement {
         accentColor: accentColorVec,
         dungeonFactor,
         dangerClusters,
+        charge: chargeState,
       });
     } else {
       ctx.fillStyle = levelTheme?.background || '#0f172a';
@@ -3488,12 +3493,16 @@ class GameApp extends HTMLElement {
       const offsetX = (player.x - cameraX) * this.tileSize;
       const offsetY = (player.y - cameraY) * this.tileSize;
       const radius = this.tileSize * 0.35;
-      if (player.charging) {
-        const chargeRatio = Math.max(0, Math.min(1, player.chargeRatio ?? 0));
-        const kind = player.actionKind || 'default';
-  const glow = CHARGE_GLOW_STYLE[kind] || CHARGE_GLOW_STYLE.default;
-  const pulse = Math.sin((time / 160) % (Math.PI * 2)) * 0.08 + 0.08;
-        const rangeBoost = kind === 'spell' ? 2.4 : kind === 'ranged' ? 1.8 : 1.4;
+      const isSelf = player.id === this.youId;
+      const selfCharge = isSelf ? chargeState : null;
+      const serverChargeRatio = Math.max(0, Math.min(1, player.chargeRatio ?? 0));
+      const chargeRatio = selfCharge ? selfCharge.ratio : serverChargeRatio;
+      const chargeKind = selfCharge?.kind || player.actionKind || 'default';
+      const isCharging = (player.charging && serverChargeRatio > 0.001) || (selfCharge && chargeRatio > 0.001);
+      if (isCharging) {
+        const glow = CHARGE_GLOW_STYLE[chargeKind] || CHARGE_GLOW_STYLE.default;
+        const pulse = Math.sin((time / 160) % (Math.PI * 2)) * 0.08 + 0.08;
+        const rangeBoost = chargeKind === 'spell' ? 2.4 : chargeKind === 'ranged' ? 1.8 : 1.4;
         const outerRadius = radius + this.tileSize * (0.45 + chargeRatio * rangeBoost + pulse);
         ctx.save();
         ctx.globalAlpha = 0.25 + chargeRatio * 0.45;
@@ -3507,11 +3516,38 @@ class GameApp extends HTMLElement {
         ctx.beginPath();
         ctx.arc(offsetX, offsetY, outerRadius, 0, Math.PI * 2);
         ctx.stroke();
+        const wedgeDirection = isSelf ? selfCharge?.direction : player.actionAim || player.aim;
+        if (wedgeDirection) {
+          ctx.save();
+          const wedgeAlpha = isSelf ? 0.85 : 0.58;
+          ctx.globalAlpha = wedgeAlpha;
+          ctx.translate(offsetX, offsetY);
+          ctx.rotate(Math.atan2(wedgeDirection.y ?? 0, wedgeDirection.x ?? 1));
+          const wedgeLength = this.tileSize * (isSelf ? 1.4 + chargeRatio * 4.2 : 1.1 + chargeRatio * 3.2);
+          const wedgeWidth = this.tileSize * (isSelf ? 0.75 + chargeRatio * 1.6 : 0.55 + chargeRatio * 1.2);
+          const gradient = ctx.createLinearGradient(0, 0, wedgeLength, 0);
+          gradient.addColorStop(0, this._withAlpha(glow.stroke, 0));
+          gradient.addColorStop(0.25, this._withAlpha(glow.stroke, isSelf ? 0.35 : 0.24));
+          gradient.addColorStop(0.9, this._withAlpha(glow.stroke, isSelf ? 0.95 : 0.7));
+          ctx.fillStyle = gradient;
+          const startPadding = Math.min(this.tileSize * 0.25, wedgeLength * 0.28);
+          ctx.beginPath();
+          ctx.moveTo(startPadding, -wedgeWidth / 2);
+          ctx.lineTo(wedgeLength, 0);
+          ctx.lineTo(startPadding, wedgeWidth / 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.lineWidth = (isSelf ? 1.8 : 1.1) + chargeRatio * (isSelf ? 1.4 : 0.9);
+          ctx.strokeStyle = this._withAlpha(glow.stroke, isSelf ? 0.8 : 0.55);
+          ctx.stroke();
+          ctx.restore();
+        }
         ctx.restore();
       }
       ctx.beginPath();
       const gradient = ctx.createRadialGradient(offsetX, offsetY, radius * 0.2, offsetX, offsetY, radius);
-      if (player.id === this.youId) {
+      if (isSelf) {
         gradient.addColorStop(0, '#38bdf8');
         gradient.addColorStop(1, '#0ea5e9');
       } else {
@@ -3522,7 +3558,6 @@ class GameApp extends HTMLElement {
       ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
       ctx.fill();
 
-      const isSelf = player.id === this.youId;
       if (!isSelf) {
         const rawName = typeof player.name === 'string' ? player.name.trim() : '';
         const displayName = rawName || player.id;
@@ -4014,6 +4049,37 @@ class GameApp extends HTMLElement {
       ttl: Math.max(0, Number(chat.ttl) || CHAT_LIFETIME_MS),
       receivedAt: now,
     });
+  }
+
+  _normalizePlayerState(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = typeof raw.id === 'string' ? raw.id : raw.id != null ? String(raw.id) : null;
+    if (!id) return null;
+    const aimX = Number.isFinite(raw.aimX) ? Number(raw.aimX) : Number.isFinite(raw.aim?.x) ? Number(raw.aim.x) : 1;
+    const aimY = Number.isFinite(raw.aimY) ? Number(raw.aimY) : Number.isFinite(raw.aim?.y) ? Number(raw.aim.y) : 0;
+    const aim = this._normalize({ x: aimX, y: aimY });
+    const actionAimX = Number.isFinite(raw.actionAimX)
+      ? Number(raw.actionAimX)
+      : Number.isFinite(raw.actionAim?.x)
+      ? Number(raw.actionAim.x)
+      : null;
+    const actionAimY = Number.isFinite(raw.actionAimY)
+      ? Number(raw.actionAimY)
+      : Number.isFinite(raw.actionAim?.y)
+      ? Number(raw.actionAim.y)
+      : null;
+    const hasActionAim = Number.isFinite(actionAimX) && Number.isFinite(actionAimY);
+    const actionAim = hasActionAim ? this._normalize({ x: actionAimX, y: actionAimY }) : null;
+    return {
+      ...raw,
+      id,
+      aimX,
+      aimY,
+      aim,
+      actionAimX: hasActionAim ? actionAimX : null,
+      actionAimY: hasActionAim ? actionAimY : null,
+      actionAim,
+    };
   }
 
   _normalizeOreNode(node) {
@@ -6025,6 +6091,7 @@ class GameApp extends HTMLElement {
     this.audio.onActionStart(kind);
     this.activeAction = kind;
     this.actionStart = Date.now();
+    this.activeActionAim = this._normalize(this.pointerAim || { x: 1, y: 0 });
   this.chargeMeter.actionName = this._resolveActionLabel(kind);
     this.socket.send(
       JSON.stringify({
@@ -6060,6 +6127,7 @@ class GameApp extends HTMLElement {
       })
     );
     this.activeAction = null;
+    this.activeActionAim = null;
     this.chargeMeter.actionName = 'Idle';
     this.chargeMeter.value = 0;
   }
@@ -6082,6 +6150,7 @@ class GameApp extends HTMLElement {
       })
     );
     this.activeAction = null;
+    this.activeActionAim = null;
     this.chargeMeter.actionName = 'Idle';
     this.chargeMeter.value = 0;
   }
@@ -6142,6 +6211,7 @@ class GameApp extends HTMLElement {
     }
     this.activeAction = null;
     this.actionStart = 0;
+  this.activeActionAim = null;
     this.pointerButtons = 0;
     this.spellKeyActive = false;
     this.chargeMeter.actionName = 'Idle';
@@ -8040,6 +8110,60 @@ class GameApp extends HTMLElement {
     return {
       x: (worldX - cameraX) * this.tileSize + width / 2,
       y: (worldY - cameraY) * this.tileSize + height / 2,
+    };
+  }
+
+  _computeChargeState(localPlayer) {
+    const serverCharging = Boolean(localPlayer?.charging);
+    const localCharging = Boolean(this.activeAction);
+    if (!serverCharging && !localCharging) {
+      return null;
+    }
+
+    let ratio = serverCharging ? Math.max(0, Math.min(1, localPlayer?.chargeRatio ?? 0)) : 0;
+    if (localCharging) {
+      const baseCharge = this.localBonuses?.maxCharge ?? 0.5;
+      const clampedBase = Math.max(0.5, Math.min(5, baseCharge));
+      const maxDuration = Math.max(0.1, (clampedBase + CHARGE_TIME_BONUS) * 1000);
+      const start = Number.isFinite(this.actionStart) ? this.actionStart : 0;
+      const elapsed = start > 0 ? Date.now() - start : 0;
+      const localRatio = Math.max(0, Math.min(1, maxDuration > 0 ? elapsed / maxDuration : 0));
+      if (localRatio > ratio) {
+        ratio = localRatio;
+      }
+    }
+
+    if (ratio <= 0.0005) {
+      return null;
+    }
+
+    let kind = localPlayer?.actionKind || this.activeAction || 'default';
+    if (typeof kind !== 'string' || !kind) {
+      kind = 'default';
+    }
+
+    let direction = null;
+    if (localCharging && this.activeActionAim) {
+      direction = this.activeActionAim;
+    } else if (serverCharging && localPlayer?.actionAim) {
+      direction = localPlayer.actionAim;
+    } else if (serverCharging && localPlayer?.aim) {
+      direction = localPlayer.aim;
+    } else if (serverCharging && Number.isFinite(localPlayer?.aimX) && Number.isFinite(localPlayer?.aimY)) {
+      direction = this._normalize({ x: localPlayer.aimX, y: localPlayer.aimY });
+    }
+    if (!direction) {
+      direction = this._normalize(this.pointerAim || { x: 1, y: 0 });
+    }
+    const glow = CHARGE_GLOW_STYLE[kind] || CHARGE_GLOW_STYLE.default;
+    const colorVec = this._cssColorToVec3(glow.stroke, [0.64, 0.76, 0.98]);
+
+    return {
+      active: true,
+      ratio,
+      kind,
+      direction,
+      color: colorVec,
     };
   }
 

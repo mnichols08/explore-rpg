@@ -2704,6 +2704,10 @@ function gameTick(now, dt) {
       chargeRatio: player.action
         ? clamp((now - player.action.startedAt) / ((player.bonuses.maxCharge + CHARGE_TIME_BONUS) * 1000), 0, 1)
         : 0,
+      aimX: Number.isFinite(player.aim?.x) ? player.aim.x : 1,
+      aimY: Number.isFinite(player.aim?.y) ? player.aim.y : 0,
+      actionAimX: Number.isFinite(player.action?.aim?.x) ? player.action.aim.x : null,
+      actionAimY: Number.isFinite(player.action?.aim?.y) ? player.action.aim.y : null,
       levelId: player.levelId || null,
       momentum: serializeMomentum(player, now),
       pvpOptIn: Boolean(player.profileMeta?.pvpOptIn),
