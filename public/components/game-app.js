@@ -3589,8 +3589,9 @@ class GameApp extends HTMLElement {
       }
     }
 
-    // Effects
-    for (const effect of this.effects) {
+  // Effects
+  const effectOriginYOffset = usingIso ? -25 : 0;
+  for (const effect of this.effects) {
       if ((effect.levelId || null) !== (currentLevelId || null)) continue;
       const offsetX = (effect.x - cameraX) * this.tileSize;
       const offsetY = (effect.y - cameraY) * this.tileSize;
@@ -3603,8 +3604,8 @@ class GameApp extends HTMLElement {
       const aim = effect.aim ?? { x: 1, y: 0 };
       const aimAngle = Math.atan2(aim.y || 0, aim.x || 1);
   const shape = effect.shape || (effect.type === 'spell' || effect.type === 'ranged' ? 'projectile' : effect.type === 'melee' ? 'cone' : 'burst');
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
+  ctx.save();
+  ctx.translate(offsetX, offsetY + effectOriginYOffset);
       ctx.globalAlpha = alpha;
 
       if (shape === 'cone') {
@@ -3749,24 +3750,6 @@ class GameApp extends HTMLElement {
         ctx.fillStyle = gradient;
         ctx.arc(offsetX, offsetY, radius, 0, Math.PI * 2);
         ctx.fill();
-      } else {
-        ctx.save();
-        ctx.globalAlpha = isSelf ? 0.6 : 0.4;
-        ctx.strokeStyle = isSelf ? '#38bdf8' : '#f97316';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(offsetX, offsetY, radius * 0.9, 0, Math.PI * 2);
-        ctx.stroke();
-        if (chargeRatio > 0.02) {
-          const glow = CHARGE_GLOW_STYLE[chargeKind] || CHARGE_GLOW_STYLE.default;
-          ctx.globalAlpha = 0.45 + chargeRatio * 0.35;
-          ctx.strokeStyle = glow.stroke;
-          ctx.lineWidth = 2.6;
-          ctx.beginPath();
-          ctx.arc(offsetX, offsetY, radius * (1 + chargeRatio * 0.35), 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        ctx.restore();
       }
 
       if (!isSelf) {
