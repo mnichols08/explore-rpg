@@ -47,18 +47,46 @@ template.innerHTML = `
       pointer-events: none;
       padding: var(--hud-gap);
       z-index: 3;
+      display: flex;
+      flex-direction: column;
     }
 
-    .hud > * {
-      position: absolute;
+    .hud-layout {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: var(--hud-gap);
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .hud-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--hud-gap);
+      pointer-events: none;
+    }
+
+    .hud-row > * {
       pointer-events: auto;
-      max-width: min(var(--hud-panel-max-width), calc(100% - (var(--hud-gap) * 2)));
+      min-width: min(260px, 100%);
+      flex: 1 1 clamp(220px, 28vw, var(--hud-panel-max-width));
+      max-width: var(--hud-panel-max-width);
+    }
+
+    .hud-row.top-row {
+      align-items: flex-start;
+    }
+
+    .hud-row.bottom-row {
+      align-items: flex-end;
+      margin-top: auto;
     }
 
     .hud .top-left {
-      top: var(--hud-gap);
-      left: var(--hud-gap);
-      width: min(var(--hud-panel-max-width), calc(48vw - var(--hud-gap)));
       display: grid;
       gap: 0.6rem;
     }
@@ -309,11 +337,14 @@ template.innerHTML = `
       line-height: 1.4;
     }
 
+    .hud .top-right {
+      display: grid;
+      gap: 0.6rem;
+      flex: 1 1 clamp(260px, 32vw, 360px);
+      max-width: clamp(280px, 36vw, 420px);
+    }
+
     .hud .bottom-left {
-      bottom: var(--hud-gap);
-      left: var(--hud-gap);
-      width: clamp(210px, 24vw, 280px);
-      max-width: min(var(--hud-panel-max-width), calc(48vw - var(--hud-gap)));
       max-height: calc(48vh - var(--hud-gap));
       overflow-y: auto;
       color: rgba(226, 232, 240, 0.86);
@@ -326,15 +357,56 @@ template.innerHTML = `
       backdrop-filter: blur(6px);
       display: grid;
       gap: 0.55rem;
+      flex: 1 1 clamp(240px, 32vw, 340px);
+      max-width: clamp(260px, 34vw, 360px);
     }
 
     .hud .bottom-right {
-      bottom: var(--hud-gap);
-      right: var(--hud-gap);
-      width: clamp(210px, 24vw, 280px);
-      max-width: min(var(--hud-panel-max-width), calc(48vw - var(--hud-gap)));
       display: grid;
       gap: 0.5rem;
+      flex: 1 1 clamp(260px, 30vw, 360px);
+      max-width: clamp(280px, 34vw, 380px);
+    }
+
+    @media (max-width: 1200px) {
+      .hud-row > * {
+        flex: 1 1 clamp(240px, 45vw, 420px);
+        max-width: clamp(260px, 48vw, 420px);
+      }
+
+      .hud .top-right {
+        max-width: clamp(280px, 52vw, 440px);
+      }
+
+      .hud .bottom-right {
+        max-width: clamp(280px, 52vw, 440px);
+      }
+    }
+
+    @media (max-width: 840px) {
+      .hud-layout {
+        gap: calc(var(--hud-gap) * 0.75);
+      }
+
+      .hud-row {
+        justify-content: center;
+      }
+
+      .hud-row.top-row,
+      .hud-row.bottom-row {
+        align-items: stretch;
+      }
+
+      .hud-row > * {
+        flex: 1 1 clamp(260px, 88vw, 520px);
+        max-width: min(520px, 92vw);
+      }
+
+      .hud .top-right,
+      .hud .bottom-right,
+      .hud .bottom-left {
+        max-width: min(520px, 92vw);
+      }
     }
 
     .identity-tools {
@@ -429,10 +501,26 @@ template.innerHTML = `
     }
 
     .identity-legend {
+      display: block;
       font-size: 0.72rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
       color: rgba(148, 163, 184, 0.8);
+    }
+
+    .identity-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.45rem 0.6rem;
+    }
+
+    .identity-item {
+      padding: 0.45rem 0.55rem;
+      border-radius: 0.55rem;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      display: grid;
+      gap: 0.3rem;
     }
 
     .identity-overlay {
@@ -827,13 +915,17 @@ template.innerHTML = `
       display: block;
     }
 
+    :host([data-touch]) .hud {
+      padding-bottom: var(--hud-gap);
+    }
+
     :host([data-touch]) .hud .bottom-left {
-      bottom: calc(var(--hud-gap) + clamp(110px, 18vh, 190px));
+      transform: translateY(calc(-1 * clamp(110px, 18vh, 190px)));
       max-height: calc(48vh - var(--hud-gap));
     }
 
     :host([data-touch]) .hud .bottom-right {
-      bottom: calc(var(--hud-gap) + clamp(96px, 16vh, 176px));
+      transform: translateY(calc(-1 * clamp(96px, 16vh, 176px)));
     }
 
     .touch-controls {
@@ -1082,6 +1174,10 @@ template.innerHTML = `
 
     :host([data-compact]) .gear-slot {
       padding: 0.55rem;
+    }
+
+    :host([data-compact]) .identity-item {
+      padding: 0.35rem 0.45rem;
     }
 
     :host([data-compact]) .gear-slot header .slot-equipped {
@@ -1583,146 +1679,154 @@ template.innerHTML = `
   <canvas data-webgl-canvas></canvas>
   <canvas data-main-canvas></canvas>
   <div class="hud">
-    <div class="top-left"><stat-panel></stat-panel></div>
-    <div class="top-right">
-      <div class="utility-bar">
-        <charge-meter></charge-meter>
-        <audio-toggle></audio-toggle>
-        <button type="button" class="visual-toggle" data-visual-toggle aria-pressed="true">Glow On</button>
-      </div>
-      <button
-        type="button"
-        class="minimap-ghost"
-        data-minimap-ghost
-        hidden
-        aria-hidden="true"
-        aria-label="Show minimap"
-      >
-        Show Minimap
-      </button>
-      <div class="minimap-card" data-minimap-card>
-        <div class="minimap-header" data-minimap-header>
-          <span>Minimap</span>
-          <div class="minimap-header-actions">
-            <span data-minimap-label>Overworld</span>
-            <button type="button" data-minimap-expand aria-haspopup="dialog" aria-pressed="false">Expand</button>
-            <button type="button" data-minimap-float aria-pressed="false">Float</button>
-            <button type="button" data-minimap-toggle aria-pressed="false">Hide</button>
+    <div class="hud-layout">
+      <div class="hud-row top-row">
+        <div class="top-left"><stat-panel></stat-panel></div>
+        <div class="top-right">
+          <div class="utility-bar">
+            <charge-meter></charge-meter>
+            <audio-toggle></audio-toggle>
+            <button type="button" class="visual-toggle" data-visual-toggle aria-pressed="true">Glow On</button>
+          </div>
+          <button
+            type="button"
+            class="minimap-ghost"
+            data-minimap-ghost
+            hidden
+            aria-hidden="true"
+            aria-label="Show minimap"
+          >
+            Show Minimap
+          </button>
+          <div class="minimap-card" data-minimap-card>
+            <div class="minimap-header" data-minimap-header>
+              <span>Minimap</span>
+              <div class="minimap-header-actions">
+                <span data-minimap-label>Overworld</span>
+                <button type="button" data-minimap-expand aria-haspopup="dialog" aria-pressed="false">Expand</button>
+                <button type="button" data-minimap-float aria-pressed="false">Float</button>
+                <button type="button" data-minimap-toggle aria-pressed="false">Hide</button>
+              </div>
+            </div>
+            <div class="minimap-body" data-minimap-body>
+              <canvas data-minimap></canvas>
+              <ul class="minimap-legend">
+                <li data-type="you">You</li>
+                <li data-type="hero">Allies</li>
+                <li data-type="pvp">PvP Flagged</li>
+                <li data-type="portal">Portals</li>
+                <li data-type="safe">Safe Zone</li>
+              </ul>
+              <div class="minimap-footer" data-minimap-portal-hint>Follow the gold arrow to reach a gateway.</div>
+            </div>
           </div>
         </div>
-        <div class="minimap-body" data-minimap-body>
-          <canvas data-minimap></canvas>
-          <ul class="minimap-legend">
-            <li data-type="you">You</li>
-            <li data-type="hero">Allies</li>
-            <li data-type="pvp">PvP Flagged</li>
-            <li data-type="portal">Portals</li>
-            <li data-type="safe">Safe Zone</li>
-          </ul>
-          <div class="minimap-footer" data-minimap-portal-hint>Follow the gold arrow to reach a gateway.</div>
-        </div>
       </div>
-    </div>
-    <div class="bottom-left">
-      <div class="desktop-help">
-        <h4>Core controls</h4>
-        <ul class="help-list">
-          <li><span>Move</span><span>WASD — Hold any attack to charge</span></li>
-          <li><span>Melee</span><span>Left click — builds Strength</span></li>
-          <li><span>Ranged</span><span>Right click — builds Dexterity</span></li>
-          <li><span>Spell</span><span>Space or both buttons</span></li>
-          <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
-        </ul>
-        <div class="help-footnote">Enter chats nearby • M opens map • Alt+M toggles music • Shift+M toggles controls • Shift+N starts a fresh hero.</div>
-      </div>
-      <div class="mobile-help">
-        Use the left pad to move, Slash/Volley/Spell to act, Interact for loot and portals, Chat to speak, and tap HUD anytime to reveal the panels.
-      </div>
-      <div>
-        <span class="identity-legend">Hero</span>
-        <div class="hero-name" data-hero-name>New Adventurer</div>
-      </div>
-      <div>
-        <span class="identity-legend">Account</span>
-        <div class="hero-account" data-hero-account>Not linked</div>
-      </div>
-      <div>
-        <span class="identity-legend">Hero ID</span>
-        <div class="hero-id" data-hero-id>—</div>
-      </div>
-      <div class="identity-tools">
-        <button type="button" data-account-manage>Account</button>
-        <button type="button" data-sign-out hidden>Sign Out</button>
-        <button type="button" data-new-hero>Start New Hero</button>
-        <button type="button" data-copy-id>Copy ID</button>
-        <button type="button" data-control-hints-toggle>Show Controls</button>
-        <button type="button" data-settings-panel>Settings</button>
-        <button type="button" data-admin-panel hidden>Admin Panel</button>
-      </div>
-    </div>
-    <div class="bottom-right">
-      <div class="resource-panel" data-inventory-panel>
-        <div>
-          <h4>Inventory</h4>
-          <div class="totals"><span>Currency</span><span data-inventory-currency>0</span></div>
-          <ul data-inventory-items></ul>
-        </div>
-        <div>
-          <h4>Bank</h4>
-          <div class="totals"><span>Vault</span><span data-bank-currency>0</span></div>
-          <ul data-bank-items></ul>
-        </div>
-        <div class="status" data-safe-zone-status>
-          <span>Safe Zone</span>
-          <span data-safe-zone-indicator>Unknown</span>
-        </div>
-        <div class="status zone" data-zone-status>
-          <span>Zone</span>
-          <span data-zone-indicator>Overworld</span>
-        </div>
-        <div class="bank-actions" data-bank-actions>
-          <button type="button" data-bank-deposit disabled>Deposit All</button>
-          <button type="button" data-bank-withdraw disabled>Withdraw All</button>
-          <button type="button" data-bank-sell disabled>Sell Ores</button>
-        </div>
-        <div class="bank-feedback" data-bank-feedback></div>
-      </div>
-      <div class="resource-panel gear-panel" data-gear-panel>
-        <div class="gear-head">
-          <h4>Equipment</h4>
-          <p>Swap between weapons, spellbooks, and armor you have found.</p>
-        </div>
-        <div class="gear-slots">
-          <div class="gear-slot" data-gear-slot="melee">
-            <header>
-              <span class="slot-label">Melee Weapon</span>
-              <span class="slot-equipped" data-equipped-label="melee">Bare Fists</span>
-            </header>
-            <ul class="gear-options" data-gear-options="melee"></ul>
+      <div class="hud-row bottom-row">
+        <div class="bottom-left">
+          <div class="desktop-help">
+            <h4>Core controls</h4>
+            <ul class="help-list">
+              <li><span>Move</span><span>WASD — Hold any attack to charge</span></li>
+              <li><span>Melee</span><span>Left click — builds Strength</span></li>
+              <li><span>Ranged</span><span>Right click — builds Dexterity</span></li>
+              <li><span>Spell</span><span>Space or both buttons</span></li>
+              <li><span>Interact</span><span>E to gather, loot, or portal</span></li>
+            </ul>
+            <div class="help-footnote">Enter chats nearby • M opens map • Alt+M toggles music • Shift+M toggles controls • Shift+N starts a fresh hero.</div>
           </div>
-          <div class="gear-slot" data-gear-slot="ranged">
-            <header>
-              <span class="slot-label">Ranged Weapon</span>
-              <span class="slot-equipped" data-equipped-label="ranged">Throwing Rocks</span>
-            </header>
-            <ul class="gear-options" data-gear-options="ranged"></ul>
+          <div class="mobile-help">
+            Use the left pad to move, Slash/Volley/Spell to act, Interact for loot and portals, Chat to speak, and tap HUD anytime to reveal the panels.
           </div>
-          <div class="gear-slot" data-gear-slot="spell">
-            <header>
-              <span class="slot-label">Spellbook</span>
-              <span class="slot-equipped" data-equipped-label="spell">Zephyr Primer</span>
-            </header>
-            <ul class="gear-options" data-gear-options="spell"></ul>
+          <div class="identity-details">
+            <div class="identity-item">
+              <span class="identity-legend">Hero</span>
+              <div class="hero-name" data-hero-name>New Adventurer</div>
+            </div>
+            <div class="identity-item">
+              <span class="identity-legend">Account</span>
+              <div class="hero-account" data-hero-account>Not linked</div>
+            </div>
+            <div class="identity-item">
+              <span class="identity-legend">Hero ID</span>
+              <div class="hero-id" data-hero-id>—</div>
+            </div>
           </div>
-          <div class="gear-slot" data-gear-slot="armor">
-            <header>
-              <span class="slot-label">Armor</span>
-              <span class="slot-equipped" data-equipped-label="armor">Traveler Cloth</span>
-            </header>
-            <ul class="gear-options" data-gear-options="armor"></ul>
+          <div class="identity-tools">
+            <button type="button" data-account-manage>Account</button>
+            <button type="button" data-sign-out hidden>Sign Out</button>
+            <button type="button" data-new-hero>Start New Hero</button>
+            <button type="button" data-copy-id>Copy ID</button>
+            <button type="button" data-control-hints-toggle>Show Controls</button>
+            <button type="button" data-settings-panel>Settings</button>
+            <button type="button" data-admin-panel hidden>Admin Panel</button>
           </div>
         </div>
-        <div class="gear-feedback" data-gear-feedback></div>
+        <div class="bottom-right">
+          <div class="resource-panel" data-inventory-panel>
+            <div>
+              <h4>Inventory</h4>
+              <div class="totals"><span>Currency</span><span data-inventory-currency>0</span></div>
+              <ul data-inventory-items></ul>
+            </div>
+            <div>
+              <h4>Bank</h4>
+              <div class="totals"><span>Vault</span><span data-bank-currency>0</span></div>
+              <ul data-bank-items></ul>
+            </div>
+            <div class="status" data-safe-zone-status>
+              <span>Safe Zone</span>
+              <span data-safe-zone-indicator>Unknown</span>
+            </div>
+            <div class="status zone" data-zone-status>
+              <span>Zone</span>
+              <span data-zone-indicator>Overworld</span>
+            </div>
+            <div class="bank-actions" data-bank-actions>
+              <button type="button" data-bank-deposit disabled>Deposit All</button>
+              <button type="button" data-bank-withdraw disabled>Withdraw All</button>
+              <button type="button" data-bank-sell disabled>Sell Ores</button>
+            </div>
+            <div class="bank-feedback" data-bank-feedback></div>
+          </div>
+          <div class="resource-panel gear-panel" data-gear-panel>
+            <div class="gear-head">
+              <h4>Equipment</h4>
+              <p>Swap between weapons, spellbooks, and armor you have found.</p>
+            </div>
+            <div class="gear-slots">
+              <div class="gear-slot" data-gear-slot="melee">
+                <header>
+                  <span class="slot-label">Melee Weapon</span>
+                  <span class="slot-equipped" data-equipped-label="melee">Bare Fists</span>
+                </header>
+                <ul class="gear-options" data-gear-options="melee"></ul>
+              </div>
+              <div class="gear-slot" data-gear-slot="ranged">
+                <header>
+                  <span class="slot-label">Ranged Weapon</span>
+                  <span class="slot-equipped" data-equipped-label="ranged">Throwing Rocks</span>
+                </header>
+                <ul class="gear-options" data-gear-options="ranged"></ul>
+              </div>
+              <div class="gear-slot" data-gear-slot="spell">
+                <header>
+                  <span class="slot-label">Spellbook</span>
+                  <span class="slot-equipped" data-equipped-label="spell">Zephyr Primer</span>
+                </header>
+                <ul class="gear-options" data-gear-options="spell"></ul>
+              </div>
+              <div class="gear-slot" data-gear-slot="armor">
+                <header>
+                  <span class="slot-label">Armor</span>
+                  <span class="slot-equipped" data-equipped-label="armor">Traveler Cloth</span>
+                </header>
+                <ul class="gear-options" data-gear-options="armor"></ul>
+              </div>
+            </div>
+            <div class="gear-feedback" data-gear-feedback></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="portal-prompt" hidden data-portal-prompt></div>
@@ -2475,7 +2579,8 @@ class GameApp extends HTMLElement {
   this._closeMapOverlay = this._closeMapOverlay.bind(this);
   this._handleMapOverlayBackdropClick = this._handleMapOverlayBackdropClick.bind(this);
     this._handleMinimapFloatToggle = this._handleMinimapFloatToggle.bind(this);
-    this._handleMinimapDragStart = this._handleMinimapDragStart.bind(this);
+  this._handleMinimapDragStart = this._handleMinimapDragStart.bind(this);
+  this._handleMinimapCardPointerDown = this._handleMinimapCardPointerDown.bind(this);
     this._handleMinimapDragMove = this._handleMinimapDragMove.bind(this);
     this._handleMinimapDragEnd = this._handleMinimapDragEnd.bind(this);
     this._handleMinimapDragCancel = this._handleMinimapDragCancel.bind(this);
@@ -2556,7 +2661,7 @@ class GameApp extends HTMLElement {
     this.minimapGhostButton?.addEventListener('click', this._toggleMinimapVisibility);
   this.minimapExpandButton?.addEventListener('click', this._toggleMapOverlay);
     this.minimapFloatButton?.addEventListener('click', this._handleMinimapFloatToggle);
-    this.minimapHeaderEl?.addEventListener('pointerdown', this._handleMinimapDragStart);
+  this.minimapCardEl?.addEventListener('pointerdown', this._handleMinimapCardPointerDown);
   this.mapOverlayCloseButton?.addEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.addEventListener('click', this._handleMapOverlayBackdropClick);
     this.accountManageButton?.addEventListener('click', this._handleAccountManage);
@@ -2639,7 +2744,7 @@ class GameApp extends HTMLElement {
   this.minimapGhostButton?.removeEventListener('click', this._toggleMinimapVisibility);
   this.minimapExpandButton?.removeEventListener('click', this._toggleMapOverlay);
   this.minimapFloatButton?.removeEventListener('click', this._handleMinimapFloatToggle);
-  this.minimapHeaderEl?.removeEventListener('pointerdown', this._handleMinimapDragStart);
+  this.minimapCardEl?.removeEventListener('pointerdown', this._handleMinimapCardPointerDown);
   this.mapOverlayCloseButton?.removeEventListener('click', this._closeMapOverlay);
   this.mapOverlayEl?.removeEventListener('click', this._handleMapOverlayBackdropClick);
   this.accountManageButton?.removeEventListener('click', this._handleAccountManage);
@@ -4408,6 +4513,11 @@ class GameApp extends HTMLElement {
     window.addEventListener('pointermove', this._handleMinimapDragMove);
     window.addEventListener('pointerup', this._handleMinimapDragEnd);
     window.addEventListener('pointercancel', this._handleMinimapDragCancel);
+  }
+
+  _handleMinimapCardPointerDown(event) {
+    if (!event) return;
+    this._handleMinimapDragStart(event);
   }
 
   _handleMinimapDragMove(event) {
