@@ -187,6 +187,7 @@ template.innerHTML = `
       border: 1px solid rgba(148, 163, 184, 0.38);
       box-shadow: 0 1.8rem 3.4rem rgba(8, 15, 31, 0.55);
       background: rgba(10, 17, 31, 0.92);
+      position: relative;
     }
 
     .map-overlay button {
