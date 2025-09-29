@@ -496,7 +496,9 @@ export class WorldIsometricRenderer {
     glyph.rotation.x = -Math.PI / 2;
     glyph.position.y = 0.01;
 
-    const ring = addMesh(
+  const parts = {};
+
+  const ring = addMesh(
       new Mesh(
         new TorusGeometry(0.75, 0.09, 26, 80),
         new MeshStandardMaterial({
@@ -2395,10 +2397,11 @@ export class WorldIsometricRenderer {
     const glowScale = meta.glowScale ?? ENEMY_VISIBILITY_DEFAULTS.glowScale;
     const glowHeight = meta.glowHeight ?? ENEMY_VISIBILITY_DEFAULTS.glowHeight;
     const glowOpacityMin = meta.glowOpacityMin ?? ENEMY_VISIBILITY_DEFAULTS.glowOpacityMin;
-    const glowOpacityMax = Math.max(glowOpacityMin, meta.glowOpacityMax ?? ENEMY_VISIBILITY_DEFAULTS.glowOpacityMax);
-    const ringRadius = meta.ringRadius ?? ENEMY_VISIBILITY_DEFAULTS.ringRadius;
-    const ringOpacityMin = meta.ringOpacityMin ?? ENEMY_VISIBILITY_DEFAULTS.ringOpacityMin;
-    const ringOpacityMax = Math.max(ringOpacityMin, meta.ringOpacityMax ?? ENEMY_VISIBILITY_DEFAULTS.ringOpacityMax);
+  const glowOpacityMax = Math.max(glowOpacityMin, meta.glowOpacityMax ?? ENEMY_VISIBILITY_DEFAULTS.glowOpacityMax);
+  const ringRadius = meta.ringRadius ?? ENEMY_VISIBILITY_DEFAULTS.ringRadius;
+  const ringOpacityMin = meta.ringOpacityMin ?? ENEMY_VISIBILITY_DEFAULTS.ringOpacityMin;
+  const ringOpacityMax = Math.max(ringOpacityMin, meta.ringOpacityMax ?? ENEMY_VISIBILITY_DEFAULTS.ringOpacityMax);
+  const parts = {};
 
     const ring = addMesh(
       new Mesh(
@@ -2433,14 +2436,13 @@ export class WorldIsometricRenderer {
     glow.position.y = glowHeight;
     glow.userData.variant = 'glow';
     glow.renderOrder = 2;
-  glow.castShadow = false;
-  glow.receiveShadow = false;
+    glow.castShadow = false;
+    glow.receiveShadow = false;
   parts.glow = glow;
 
     const seed = hashString(source?.id ?? `${type}-template`);
     let core = null;
-    const parts = {};
-    let animate = null;
+  let animate = null;
     let floatBase = 0.1;
     let floatAmplitude = 0.08;
     let floatSpeed = 2.4;
