@@ -2199,6 +2199,152 @@ template.innerHTML = `
       color: rgba(226, 232, 240, 0.92);
     }
 
+    [data-trading-listings] li {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.4rem;
+    }
+
+    [data-trading-listings] li[data-owned="true"] {
+      border-color: rgba(129, 140, 248, 0.45);
+      background: rgba(79, 70, 229, 0.18);
+    }
+
+    .trading-listing-header,
+    .trading-listing-meta,
+    .trading-listing-detail {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .trading-listing-header span {
+      font-weight: 600;
+      font-size: 0.74rem;
+      color: rgba(226, 232, 240, 0.95);
+    }
+
+    .trading-listing-price {
+      font-size: 0.74rem;
+      color: #facc15;
+    }
+
+    .trading-listing-meta {
+      font-size: 0.64rem;
+      color: rgba(148, 163, 184, 0.88);
+    }
+
+    .trading-listing-detail {
+      font-size: 0.64rem;
+      color: rgba(203, 213, 225, 0.92);
+    }
+
+    .trading-listing-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.45rem;
+    }
+
+    .trading-form {
+      display: grid;
+      gap: 0.6rem;
+    }
+
+    .trading-field {
+      display: grid;
+      gap: 0.25rem;
+    }
+
+    .trading-field label {
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(203, 213, 225, 0.82);
+    }
+
+    .trading-field select,
+    .trading-field input {
+      appearance: none;
+      padding: 0.4rem 0.5rem;
+      border-radius: 0.55rem;
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      background: rgba(15, 23, 42, 0.72);
+      color: rgba(226, 232, 240, 0.95);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+    }
+
+    .trading-field select:disabled,
+    .trading-field input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .trading-inline-fields {
+      display: flex;
+      gap: 0.45rem;
+      align-items: center;
+    }
+
+    .trading-inline-fields .trading-field {
+      flex: 1;
+    }
+
+    .trading-summary {
+      font-size: 0.64rem;
+      color: rgba(148, 163, 184, 0.88);
+      display: grid;
+      gap: 0.2rem;
+    }
+
+    .trading-summary strong {
+      color: rgba(226, 232, 240, 0.95);
+      font-weight: 600;
+    }
+
+    .trading-create button[type="submit"] {
+      all: unset;
+      cursor: pointer;
+      padding: 0.45rem 0.75rem;
+      border-radius: 0.55rem;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      background: rgba(56, 189, 248, 0.18);
+      color: #e0f2fe;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-align: center;
+      transition: background 120ms ease, border 120ms ease, color 120ms ease;
+    }
+
+    .trading-create button[type="submit"]:hover:not([disabled]) {
+      background: rgba(56, 189, 248, 0.28);
+      border-color: rgba(125, 211, 252, 0.55);
+    }
+
+    .trading-create button[type="submit"][disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.18);
+    }
+
+    .trading-feedback {
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      color: #bae6fd;
+      min-height: 1rem;
+    }
+
+    .trading-feedback.error {
+      color: #fca5a5;
+    }
+
+    .trading-empty-note {
+      font-size: 0.68rem;
+      color: rgba(148, 163, 184, 0.85);
+    }
+
     .facility-empty h4 {
       margin: 0;
       font-size: 0.82rem;
@@ -2671,10 +2817,37 @@ template.innerHTML = `
             <div class="facility-feedback" data-shop-feedback></div>
           </section>
           <section class="facility-section" data-facility-section="trading" hidden>
-            <div class="facility-empty">
-              <h4>Trading Post</h4>
-              <p>Browse listings, create offers, and negotiate player trades. This interface is preparing to open soon.</p>
-              <p class="facility-note">The trading ledger is not active yet, but you can scout the hall for when it opens.</p>
+            <div class="facility-columns trading-columns">
+              <div class="facility-column trading-market">
+                <h4>Marketplace Listings</h4>
+                <ul data-trading-listings></ul>
+              </div>
+              <div class="facility-column trading-create">
+                <h4>Create Listing</h4>
+                <form data-trading-form autocomplete="off">
+                  <div class="trading-field">
+                    <label for="trading-item">Resource</label>
+                    <select id="trading-item" data-trading-item></select>
+                  </div>
+                  <div class="trading-inline-fields">
+                    <div class="trading-field">
+                      <label for="trading-amount">Amount</label>
+                      <input id="trading-amount" data-trading-amount type="number" inputmode="numeric" min="1" step="1" placeholder="0" />
+                    </div>
+                    <div class="trading-field">
+                      <label for="trading-price">Total Price (coins)</label>
+                      <input id="trading-price" data-trading-price type="number" inputmode="numeric" min="1" step="1" placeholder="0" />
+                    </div>
+                  </div>
+                  <div class="trading-summary">
+                    <span data-trading-limit></span>
+                    <span data-trading-summary></span>
+                  </div>
+                  <button type="submit" data-trading-submit>Post Listing</button>
+                </form>
+                <div class="trading-feedback" data-trading-feedback></div>
+                <p class="trading-empty-note" data-trading-note>Listings charge a 5% fee and expire after 24 hours.</p>
+              </div>
             </div>
           </section>
           <section class="facility-section" data-facility-section="shrine" hidden>
@@ -2913,7 +3086,7 @@ const FACILITY_LABELS = {
     title: 'Trading Post',
     prompt: 'Press E to enter the trading hall.',
     chip: 'Trading',
-    subtitle: 'Player listings and barter coming online soon.',
+    subtitle: 'Post resource listings and browse the marketplace.',
   },
   shrine: {
     title: 'Shrine',
@@ -2922,6 +3095,13 @@ const FACILITY_LABELS = {
     subtitle: 'Sanctuary for the fallen and a place of respite.',
   },
 };
+
+const TRADING_POST_MAX_PER_PLAYER = 8;
+const TRADING_POST_MAX_STACK = 250;
+const TRADING_POST_MAX_PRICE = 250000;
+const TRADING_POST_FEE = 0.05;
+const TRADING_POST_EXPIRY_HOURS = 24;
+const TRADING_REFRESH_COOLDOWN_MS = 1500;
 
 const EQUIPMENT_SLOT_META = {
   melee: { label: 'Melee Weapon', actionFallback: 'Slash' },
@@ -3348,6 +3528,15 @@ class GameApp extends HTMLElement {
     this.shopSellbackList = this.shadowRoot.querySelector('[data-shop-sellback]');
     this.shopOreList = this.shadowRoot.querySelector('[data-shop-ore]');
     this.shopFeedbackEl = this.shadowRoot.querySelector('[data-shop-feedback]');
+  this.tradingListEl = this.shadowRoot.querySelector('[data-trading-listings]');
+  this.tradingForm = this.shadowRoot.querySelector('[data-trading-form]');
+  this.tradingItemSelect = this.shadowRoot.querySelector('[data-trading-item]');
+  this.tradingAmountInput = this.shadowRoot.querySelector('[data-trading-amount]');
+  this.tradingPriceInput = this.shadowRoot.querySelector('[data-trading-price]');
+  this.tradingLimitEl = this.shadowRoot.querySelector('[data-trading-limit]');
+  this.tradingSummaryEl = this.shadowRoot.querySelector('[data-trading-summary]');
+  this.tradingFeedbackEl = this.shadowRoot.querySelector('[data-trading-feedback]');
+  this.tradingNoteEl = this.shadowRoot.querySelector('[data-trading-note]');
   this.bankActionsEl = this.shadowRoot.querySelector('[data-bank-actions]');
   this.bankDepositButton = this.shadowRoot.querySelector('[data-bank-deposit]');
   this.bankWithdrawButton = this.shadowRoot.querySelector('[data-bank-withdraw]');
@@ -3369,6 +3558,9 @@ class GameApp extends HTMLElement {
     this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
     this._submitChatMessage = this._submitChatMessage.bind(this);
     this._exitChatMode = this._exitChatMode.bind(this);
+  this._handleTradingListClick = this._handleTradingListClick.bind(this);
+  this._handleTradingFormSubmit = this._handleTradingFormSubmit.bind(this);
+  this._handleTradingFormChange = this._handleTradingFormChange.bind(this);
   this._handleJoystickStart = this._handleJoystickStart.bind(this);
   this._handleJoystickMove = this._handleJoystickMove.bind(this);
   this._handleJoystickEnd = this._handleJoystickEnd.bind(this);
@@ -3384,6 +3576,11 @@ class GameApp extends HTMLElement {
   this._handleTouchUiToggle = this._handleTouchUiToggle.bind(this);
   this._handleTouchUiPointerEnd = this._handleTouchUiPointerEnd.bind(this);
   this._handleGearPanelClick = this._handleGearPanelClick.bind(this);
+
+    if (this.tradingNoteEl) {
+      const feePercent = Math.round(TRADING_POST_FEE * 100);
+      this.tradingNoteEl.textContent = `Listings charge a ${feePercent}% fee and expire after ${TRADING_POST_EXPIRY_HOURS} hours.`;
+    }
 
     this.world = null;
     this.players = new Map();
@@ -3435,6 +3632,16 @@ class GameApp extends HTMLElement {
   this.shopCatalog = null;
   this.shopCatalogRequestedAt = 0;
   this.shopRequestPending = false;
+  this.tradingListings = new Map();
+  this.tradingLastFetchedAt = 0;
+  this.tradingRequestPending = false;
+  this.tradingFormPending = false;
+  this.tradingPendingActions = new Set();
+  this.tradingFeeRate = TRADING_POST_FEE;
+  this.tradingMaxStack = TRADING_POST_MAX_STACK;
+  this.tradingMaxPrice = TRADING_POST_MAX_PRICE;
+  this.tradingMaxPerPlayer = TRADING_POST_MAX_PER_PLAYER;
+  this.tradingFeedbackTimer = null;
   this.safeZones = new Map();
   this.activeZoneId = 'frontier';
   this.activeZoneLabel = 'Frontier';
@@ -3693,6 +3900,11 @@ class GameApp extends HTMLElement {
   this.shopGearList?.addEventListener('click', this._handleShopListClick);
   this.shopSellbackList?.addEventListener('click', this._handleShopListClick);
   this.shopOreList?.addEventListener('click', this._handleShopListClick);
+  this.tradingListEl?.addEventListener('click', this._handleTradingListClick);
+  this.tradingForm?.addEventListener('submit', this._handleTradingFormSubmit);
+  this.tradingItemSelect?.addEventListener('change', this._handleTradingFormChange);
+  this.tradingAmountInput?.addEventListener('input', this._handleTradingFormChange);
+  this.tradingPriceInput?.addEventListener('input', this._handleTradingFormChange);
     this.gearPanel?.addEventListener('click', this._handleGearPanelClick);
     window.addEventListener('pointerdown', this._handleGlobalPointerDown, { passive: true });
     if (this.coarsePointerQuery) {
@@ -3797,6 +4009,11 @@ class GameApp extends HTMLElement {
   this.shopGearList?.removeEventListener('click', this._handleShopListClick);
   this.shopSellbackList?.removeEventListener('click', this._handleShopListClick);
   this.shopOreList?.removeEventListener('click', this._handleShopListClick);
+  this.tradingListEl?.removeEventListener('click', this._handleTradingListClick);
+  this.tradingForm?.removeEventListener('submit', this._handleTradingFormSubmit);
+  this.tradingItemSelect?.removeEventListener('change', this._handleTradingFormChange);
+  this.tradingAmountInput?.removeEventListener('input', this._handleTradingFormChange);
+  this.tradingPriceInput?.removeEventListener('input', this._handleTradingFormChange);
   this.gearPanel?.removeEventListener('click', this._handleGearPanelClick);
   if (this.settingsOverlay) {
     this.settingsOverlay.hidden = true;
@@ -4140,6 +4357,9 @@ class GameApp extends HTMLElement {
         if (data.gear || data.equipment) {
           this._flashEquipmentPanel();
         }
+        this._updateTradingFormOptions();
+        this._renderTradingListings();
+        this._updateTradingSummary();
       } else if (data.type === 'ore-update') {
         if (data.node) {
           this._applyOreNodeUpdate(data.node);
@@ -4182,6 +4402,8 @@ class GameApp extends HTMLElement {
         } else {
           this._handleShopResult(data);
         }
+      } else if (data.type === 'trading') {
+        this._handleTradingMessage(data);
       } else if (data.type === 'equip-result') {
         const ok = data.ok !== false;
         if (data.equipment) {
@@ -4280,6 +4502,13 @@ class GameApp extends HTMLElement {
       this.legacyPending = false;
       this._setAuthFormDisabled(false);
       this._setLegacyFormDisabled(false);
+  this.tradingListings.clear();
+  this.tradingPendingActions.clear();
+  this.tradingRequestPending = false;
+  this.tradingFormPending = false;
+  this._renderTradingListings();
+  this._updateTradingFormOptions();
+  this._updateTradingSummary();
       if (nextProfile !== undefined) {
         this.profileId = nextProfile;
         this.pendingProfileId = undefined;
@@ -5081,6 +5310,8 @@ class GameApp extends HTMLElement {
     this._openFacilityOverlay(current);
     if (current === 'shop') {
       this._requestShopCatalog(false);
+    } else if (current === 'trading') {
+      this._requestTradingListings(false);
     }
     return true;
   }
@@ -5120,6 +5351,9 @@ class GameApp extends HTMLElement {
     }
     if (type === 'shop') {
       this._renderShopCatalog();
+    } else if (type === 'trading') {
+      this._renderTradingPanel();
+      this._requestTradingListings(false);
     }
     return true;
   }
@@ -5439,6 +5673,597 @@ class GameApp extends HTMLElement {
         ...payload,
       })
     );
+  }
+
+  _requestTradingListings(force = false) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    const now = Date.now();
+    if (!force) {
+      if (this.tradingRequestPending) return;
+      if (now - this.tradingLastFetchedAt < TRADING_REFRESH_COOLDOWN_MS) return;
+    }
+    this.tradingRequestPending = true;
+    this.tradingLastFetchedAt = now;
+    this._showTradingFeedback('Fetching trading ledger...', true);
+    this._sendTradingRequest('listings');
+  }
+
+  _applyTradingListingSnapshot(listings, meta = {}) {
+    this.tradingListings = new Map();
+    this.tradingPendingActions.clear();
+    if (Array.isArray(listings)) {
+      for (const entry of listings) {
+        const normalized = this._normalizeTradingListing(entry);
+        if (normalized) {
+          this.tradingListings.set(normalized.id, normalized);
+        }
+      }
+    }
+    if (meta && typeof meta === 'object') {
+      if (meta.fee != null) {
+        const fee = Number(meta.fee);
+        if (!Number.isNaN(fee) && fee >= 0 && fee <= 1) {
+          this.tradingFeeRate = fee;
+        }
+      }
+      if (meta.maxPerPlayer != null) {
+        const maxPer = Math.max(0, Math.floor(Number(meta.maxPerPlayer) || 0));
+        if (maxPer) {
+          this.tradingMaxPerPlayer = maxPer;
+        }
+      }
+      if (meta.maxStack != null) {
+        const maxStack = Math.max(1, Math.floor(Number(meta.maxStack) || 0));
+        if (maxStack) {
+          this.tradingMaxStack = maxStack;
+        }
+      }
+      if (meta.maxPrice != null) {
+        const maxPrice = Math.max(1, Math.floor(Number(meta.maxPrice) || 0));
+        if (maxPrice) {
+          this.tradingMaxPrice = maxPrice;
+        }
+      }
+    }
+    this.tradingRequestPending = false;
+    this._renderTradingPanel();
+  }
+
+  _handleTradingMessage(data) {
+    const action = typeof data?.action === 'string' ? data.action.toLowerCase() : '';
+    const event = typeof data?.event === 'string' ? data.event.toLowerCase() : '';
+
+    if (action === 'listings') {
+      this.tradingFormPending = false;
+      this.tradingRequestPending = false;
+      this.tradingLastFetchedAt = Date.now();
+      this._applyTradingListingSnapshot(Array.isArray(data.listings) ? data.listings : [], data);
+      const message = typeof data.message === 'string' ? data.message : '';
+      if (message) {
+        this._showTradingFeedback(message, true);
+      } else if (!this.tradingListings.size) {
+        this._showTradingFeedback('No active listings yet.', true);
+      } else {
+        this._showTradingFeedback('', true);
+      }
+      return;
+    }
+
+    if (action === 'create') {
+      this.tradingFormPending = false;
+      const ok = data?.ok !== false;
+      if (ok && data.listing) {
+        this._insertTradingListing(data.listing);
+        this._showTradingFeedback(
+          typeof data.message === 'string' ? data.message : 'Listing posted to the market.',
+          true
+        );
+        this._updateTradingFormOptions();
+      } else {
+        this._showTradingFeedback(
+          typeof data.message === 'string' ? data.message : 'Unable to post listing.',
+          false
+        );
+        this._requestTradingListings(true);
+      }
+      this._updateTradingSummary();
+      this._updateTradingFormState();
+      return;
+    }
+
+    if (action === 'cancel') {
+      const listingId = typeof data.listingId === 'string' ? data.listingId : null;
+      if (listingId) {
+        this.tradingPendingActions.delete(listingId);
+      }
+      const ok = data?.ok !== false;
+      if (ok) {
+        if (listingId) {
+          this._removeTradingListing(listingId);
+        }
+        this._showTradingFeedback(
+          typeof data.message === 'string' ? data.message : 'Listing cancelled.',
+          true
+        );
+      } else {
+        this._showTradingFeedback(
+          typeof data.message === 'string' ? data.message : 'Unable to cancel listing.',
+          false
+        );
+        this._requestTradingListings(true);
+      }
+      return;
+    }
+
+    if (action === 'buy') {
+      const listingId = typeof data.listingId === 'string' ? data.listingId : null;
+      if (listingId) {
+        this.tradingPendingActions.delete(listingId);
+      }
+      const ok = data?.ok !== false;
+      if (ok) {
+        if (listingId) {
+          this._removeTradingListing(listingId);
+        }
+        this._showTradingFeedback(
+          typeof data.message === 'string' ? data.message : 'Purchase complete.',
+          true
+        );
+        this._updateTradingFormOptions();
+      } else {
+        this._showTradingFeedback(
+          typeof data.message === 'string' ? data.message : 'Unable to complete purchase.',
+          false
+        );
+        this._requestTradingListings(true);
+      }
+      return;
+    }
+
+    if (event === 'listing-created') {
+      if (data.listing) {
+        this._insertTradingListing(data.listing);
+      }
+      return;
+    }
+
+    if (event === 'listing-removed') {
+      const listingId = typeof data.listingId === 'string' ? data.listingId : null;
+      if (listingId) {
+        this._removeTradingListing(listingId);
+      }
+      return;
+    }
+
+    if (event === 'listing-sold') {
+      const listingId = typeof data.listingId === 'string' ? data.listingId : null;
+      if (listingId) {
+        this._removeTradingListing(listingId);
+      }
+      const message = typeof data.message === 'string' ? data.message : 'A trading post listing sold.';
+      if (this.activeFacilityOverlay === 'trading') {
+        this._showTradingFeedback(message, true);
+      } else {
+        this._showTransientMessage(message, 4200);
+      }
+      this._updateTradingFormOptions();
+      return;
+    }
+
+    if (event === 'listing-refunded') {
+      const listingId = typeof data.listingId === 'string' ? data.listingId : null;
+      if (listingId) {
+        this._removeTradingListing(listingId);
+      }
+      const message =
+        typeof data.message === 'string'
+          ? data.message
+          : 'A trading post listing has returned to your inventory.';
+      if (this.activeFacilityOverlay === 'trading') {
+        this._showTradingFeedback(message, false);
+      } else {
+        this._showTransientMessage(message, 4200);
+      }
+      this._updateTradingFormOptions();
+    }
+  }
+
+  _normalizeTradingListing(listing) {
+    if (!listing || !listing.id) return null;
+    const id = String(listing.id);
+    const itemId = typeof listing.itemId === 'string' ? listing.itemId : '';
+    const quantity = Math.max(0, Math.floor(Number(listing.quantity) || 0));
+    const price = Math.max(0, Math.floor(Number(listing.price) || 0));
+    const sellerProfileId = typeof listing.sellerProfileId === 'string' ? listing.sellerProfileId : null;
+    const normalized = {
+      id,
+      itemId,
+      itemLabel: typeof listing.itemLabel === 'string' && listing.itemLabel
+        ? listing.itemLabel
+        : this._formatOreLabel(itemId),
+      quantity,
+      price,
+      sellerProfileId,
+      sellerName: typeof listing.sellerName === 'string' && listing.sellerName
+        ? listing.sellerName
+        : 'Trader',
+      createdAt: Number(listing.createdAt) || 0,
+      expiresAt: Number(listing.expiresAt) || 0,
+    };
+    normalized.owned = sellerProfileId && this.profileId ? sellerProfileId === this.profileId : Boolean(listing.owned);
+    normalized.pricePerUnit = quantity > 0 ? price / quantity : price;
+    return normalized;
+  }
+
+  _insertTradingListing(listing) {
+    const normalized = this._normalizeTradingListing(listing);
+    if (!normalized) return;
+    this.tradingListings.set(normalized.id, normalized);
+    this.tradingPendingActions.delete(normalized.id);
+    this._renderTradingListings();
+    this._updateTradingSummary();
+    this._updateTradingFormState();
+  }
+
+  _removeTradingListing(listingId) {
+    if (!listingId) return;
+    const existed = this.tradingListings.delete(listingId);
+    this.tradingPendingActions.delete(listingId);
+    if (existed) {
+      this._renderTradingListings();
+      this._updateTradingSummary();
+      this._updateTradingFormState();
+    }
+  }
+
+  _renderTradingPanel() {
+    this._renderTradingListings();
+    this._updateTradingFormOptions();
+    this._updateTradingSummary();
+    this._updateTradingFormState();
+  }
+
+  _renderTradingListings() {
+    if (!this.tradingListEl) return;
+    const entries = Array.from(this.tradingListings.values()).sort((a, b) => {
+      if (a.price === b.price) return a.createdAt - b.createdAt;
+      return a.price - b.price;
+    });
+    this.tradingListEl.innerHTML = '';
+    if (!entries.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No listings yet. Post one to open the market!';
+      this.tradingListEl.append(li);
+      return;
+    }
+    const availableCurrency = Math.max(0, Math.floor(Number(this.inventory?.currency) || 0));
+    for (const listing of entries) {
+      const li = document.createElement('li');
+      li.dataset.tradingListingId = listing.id;
+      li.dataset.tradingListing = listing.id;
+      if (listing.owned) {
+        li.dataset.owned = 'true';
+      }
+
+      const header = document.createElement('div');
+      header.className = 'trading-listing-header';
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = `${Math.max(0, listing.quantity).toLocaleString()} × ${listing.itemLabel}`;
+      const priceSpan = document.createElement('span');
+      priceSpan.className = 'trading-listing-price';
+      priceSpan.textContent = `${Math.max(0, listing.price).toLocaleString()}c`;
+      header.append(labelSpan, priceSpan);
+      li.append(header);
+
+      const meta = document.createElement('div');
+      meta.className = 'trading-listing-meta';
+      const sellerSpan = document.createElement('span');
+      sellerSpan.textContent = listing.owned ? 'Seller: You' : `Seller: ${listing.sellerName}`;
+      const expiresSpan = document.createElement('span');
+      expiresSpan.textContent = listing.expiresAt
+        ? `Expires in ${this._formatTradingRemaining(listing.expiresAt)}`
+        : 'Active';
+      meta.append(sellerSpan, expiresSpan);
+      li.append(meta);
+
+      const detail = document.createElement('div');
+      detail.className = 'trading-listing-detail';
+      const perUnit = listing.quantity > 0 ? Math.ceil(listing.price / listing.quantity) : listing.price;
+      const feeEstimate = Math.floor(listing.price * this.tradingFeeRate);
+      const payout = Math.max(0, listing.price - feeEstimate);
+      const unitSpan = document.createElement('span');
+      unitSpan.textContent = `Unit: ${Math.max(0, perUnit).toLocaleString()}c`;
+      const feeSpan = document.createElement('span');
+      feeSpan.textContent = listing.owned
+        ? `Net: ${payout.toLocaleString()}c`
+        : `Fee ~${feeEstimate.toLocaleString()}c`;
+      detail.append(unitSpan, feeSpan);
+      li.append(detail);
+
+      const actions = document.createElement('div');
+      actions.className = 'trading-listing-actions';
+      const button = document.createElement('button');
+      button.type = 'button';
+      const action = listing.owned ? 'cancel' : 'buy';
+      button.dataset.tradingAction = action;
+      button.textContent = listing.owned ? 'Cancel' : 'Buy';
+      const pending = this.tradingPendingActions.has(listing.id);
+      const affordable = listing.owned || availableCurrency >= listing.price;
+      button.disabled = pending || !affordable || listing.price <= 0;
+      actions.append(button);
+      li.append(actions);
+
+      this.tradingListEl.append(li);
+    }
+  }
+
+  _updateTradingFormOptions() {
+    if (!this.tradingItemSelect) return;
+    const previous = this.tradingItemSelect.value;
+    const items = this.inventory?.items || {};
+    const entries = Object.entries(items)
+      .map(([id, value]) => ({ id, amount: Math.max(0, Math.floor(Number(value) || 0)) }))
+      .filter((entry) => entry.amount > 0 || entry.id === previous);
+    entries.sort((a, b) => a.id.localeCompare(b.id));
+    this.tradingItemSelect.innerHTML = '';
+    if (!entries.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'No resources available';
+      option.disabled = true;
+      option.selected = true;
+      this.tradingItemSelect.append(option);
+      this.tradingItemSelect.disabled = true;
+    } else {
+      this.tradingItemSelect.disabled = false;
+      for (const entry of entries) {
+        const option = document.createElement('option');
+        option.value = entry.id;
+        option.textContent = `${this._formatOreLabel(entry.id)} — ${entry.amount.toLocaleString()} on hand`;
+        if (entry.id === previous) {
+          option.selected = true;
+        }
+        this.tradingItemSelect.append(option);
+      }
+      if (!entries.some((entry) => entry.id === this.tradingItemSelect.value)) {
+        this.tradingItemSelect.value = entries[0].id;
+      }
+    }
+    this._handleTradingFormChange();
+  }
+
+  _updateTradingSummary() {
+    if (this.tradingLimitEl) {
+      const owned = this._countMyTradingListings();
+      this.tradingLimitEl.textContent = `Listings used: ${owned}/${this.tradingMaxPerPlayer}`;
+    }
+    if (!this.tradingSummaryEl) return;
+    const itemId = this.tradingItemSelect?.value || '';
+    const amount = Math.max(0, Math.floor(Number(this.tradingAmountInput?.value) || 0));
+    const price = Math.max(0, Math.floor(Number(this.tradingPriceInput?.value) || 0));
+    const available = this._getTradingAvailable(itemId);
+    const parts = [];
+    if (!itemId) {
+      parts.push('Select a resource to begin.');
+    } else {
+      const availableLabel = Math.max(0, available).toLocaleString();
+      if (amount > 0) {
+        parts.push(`${amount.toLocaleString()} listed (available: ${availableLabel})`);
+      } else {
+        parts.push(`You have ${availableLabel} available.`);
+      }
+      if (price > 0) {
+        const fee = Math.floor(price * this.tradingFeeRate);
+        const payout = Math.max(0, price - fee);
+        const perUnit = amount > 0 ? Math.ceil(price / amount) : price;
+        parts.push(`Unit ${Math.max(0, perUnit).toLocaleString()}c • Fee ~${fee.toLocaleString()}c • Net ${payout.toLocaleString()}c`);
+      }
+    }
+    this.tradingSummaryEl.textContent = parts.join(' • ');
+  }
+
+  _updateTradingFormState() {
+    if (!this.tradingForm) return;
+    const submit = this.tradingForm.querySelector('[data-trading-submit]');
+    const itemId = this.tradingItemSelect?.value || '';
+    const amount = Math.max(0, Math.floor(Number(this.tradingAmountInput?.value) || 0));
+    const price = Math.max(0, Math.floor(Number(this.tradingPriceInput?.value) || 0));
+    const available = this._getTradingAvailable(itemId);
+    const listingsRemaining = Math.max(0, this.tradingMaxPerPlayer - this._countMyTradingListings());
+    const formReady =
+      !this.tradingFormPending &&
+      itemId &&
+      amount > 0 &&
+      price > 0 &&
+      amount <= this.tradingMaxStack &&
+      price <= this.tradingMaxPrice &&
+      amount <= available &&
+      listingsRemaining > 0;
+    if (submit) {
+      submit.disabled = !formReady;
+    }
+    if (this.tradingItemSelect) {
+      this.tradingItemSelect.disabled = this.tradingFormPending || this.tradingMaxPerPlayer <= 0;
+    }
+    if (this.tradingAmountInput) {
+      this.tradingAmountInput.disabled = this.tradingFormPending || !itemId || available <= 0;
+      const maxAmount = Math.min(this.tradingMaxStack, available || this.tradingMaxStack);
+      if (maxAmount > 0) {
+        this.tradingAmountInput.max = String(maxAmount);
+      }
+    }
+    if (this.tradingPriceInput) {
+      this.tradingPriceInput.disabled = this.tradingFormPending || !itemId || available <= 0;
+      this.tradingPriceInput.max = String(this.tradingMaxPrice);
+    }
+  }
+
+  _handleTradingFormSubmit(event) {
+    event.preventDefault();
+    if (this.tradingFormPending) return;
+    const itemId = this.tradingItemSelect?.value || '';
+    const amount = Math.max(0, Math.floor(Number(this.tradingAmountInput?.value) || 0));
+    const price = Math.max(0, Math.floor(Number(this.tradingPriceInput?.value) || 0));
+    const available = this._getTradingAvailable(itemId);
+    if (!itemId) {
+      this._showTradingFeedback('Select a resource to list.', false);
+      return;
+    }
+    if (amount <= 0) {
+      this._showTradingFeedback('Enter an amount greater than zero.', false);
+      return;
+    }
+    if (amount > this.tradingMaxStack) {
+      this._showTradingFeedback(`Listings are limited to ${this.tradingMaxStack.toLocaleString()} units.`, false);
+      return;
+    }
+    if (amount > available) {
+      this._showTradingFeedback('You do not have that many units available.', false);
+      return;
+    }
+    if (price <= 0) {
+      this._showTradingFeedback('Enter a price greater than zero.', false);
+      return;
+    }
+    if (price > this.tradingMaxPrice) {
+      this._showTradingFeedback(`Listings cannot exceed ${this.tradingMaxPrice.toLocaleString()} coins.`, false);
+      return;
+    }
+    if (this._countMyTradingListings() >= this.tradingMaxPerPlayer) {
+      this._showTradingFeedback('You have reached the listing limit.', false);
+      return;
+    }
+    this.tradingFormPending = true;
+    this._updateTradingFormState();
+    this._showTradingFeedback('Posting listing...', true);
+    this._sendTradingRequest('create', { itemId, amount, price });
+  }
+
+  _handleTradingFormChange() {
+    if (!this.tradingItemSelect) return;
+    const itemId = this.tradingItemSelect.value || '';
+    const available = this._getTradingAvailable(itemId);
+    if (this.tradingAmountInput) {
+      const rawAmount = Math.max(0, Math.floor(Number(this.tradingAmountInput.value) || 0));
+      const capped = Math.min(rawAmount, this.tradingMaxStack, available || this.tradingMaxStack);
+      if (capped !== rawAmount) {
+        this.tradingAmountInput.value = capped ? String(capped) : '';
+      }
+      if (available > 0) {
+        this.tradingAmountInput.max = String(Math.min(this.tradingMaxStack, available));
+      }
+    }
+    if (this.tradingPriceInput) {
+      const rawPrice = Math.max(0, Math.floor(Number(this.tradingPriceInput.value) || 0));
+      const cappedPrice = Math.min(rawPrice, this.tradingMaxPrice);
+      if (cappedPrice !== rawPrice) {
+        this.tradingPriceInput.value = cappedPrice ? String(cappedPrice) : '';
+      }
+      this.tradingPriceInput.max = String(this.tradingMaxPrice);
+    }
+    this._updateTradingSummary();
+    this._updateTradingFormState();
+  }
+
+  _handleTradingListClick(event) {
+    const button = event.target.closest('[data-trading-action]');
+    if (!button) return;
+    event.preventDefault();
+    const action = button.dataset.tradingAction;
+    const container = button.closest('[data-trading-listing-id], [data-trading-listing]');
+    const listingId = container?.dataset.tradingListingId || container?.dataset.tradingListing || button.dataset.tradingListingId;
+    if (!action || !listingId) return;
+    if (this.tradingPendingActions.has(listingId)) return;
+    this.tradingPendingActions.add(listingId);
+    button.disabled = true;
+    if (action === 'cancel') {
+      this._sendTradingRequest('cancel', { listingId });
+    } else if (action === 'buy') {
+      this._sendTradingRequest('buy', { listingId });
+    }
+  }
+
+  _sendTradingRequest(action, payload = {}) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    if (!action) return;
+    this.socket.send(
+      JSON.stringify({
+        type: 'trading',
+        action,
+        ...payload,
+      })
+    );
+  }
+
+  _getTradingAvailable(itemId) {
+    if (!itemId || !this.inventory?.items) return 0;
+    const value = Number(this.inventory.items[itemId]);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.floor(value));
+  }
+
+  _countMyTradingListings() {
+    if (!this.profileId) return 0;
+    let total = 0;
+    for (const listing of this.tradingListings.values()) {
+      if (listing.sellerProfileId === this.profileId) {
+        total += 1;
+      }
+    }
+    return total;
+  }
+
+  _formatTradingRemaining(expiresAt) {
+    const remaining = Math.max(0, Number(expiresAt) - Date.now());
+    if (remaining <= 0) return 'expired';
+    const minutes = Math.floor(remaining / 60000);
+    if (minutes < 1) return '<1 min';
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remHours = hours % 24;
+      return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+    }
+    const remMinutes = minutes % 60;
+    return remMinutes ? `${hours}h ${remMinutes}m` : `${hours}h`;
+  }
+
+  _formatOreLabel(id) {
+    if (!id) return 'Resource';
+    return id
+      .split('-')
+      .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+      .join(' ');
+  }
+
+  _showTradingFeedback(message, ok = true) {
+    if (!this.tradingFeedbackEl) return;
+    this.tradingFeedbackEl.textContent = message || '';
+    if (message) {
+      if (ok) {
+        this.tradingFeedbackEl.classList.remove('error');
+      } else {
+        this.tradingFeedbackEl.classList.add('error');
+      }
+    } else {
+      this.tradingFeedbackEl.classList.remove('error');
+    }
+    if (this.tradingFeedbackTimer) {
+      clearTimeout(this.tradingFeedbackTimer);
+    }
+    if (message) {
+      this.tradingFeedbackTimer = setTimeout(() => {
+        if (this.tradingFeedbackEl) {
+          this.tradingFeedbackEl.textContent = '';
+          this.tradingFeedbackEl.classList.remove('error');
+        }
+        this.tradingFeedbackTimer = null;
+      }, 3200);
+    } else {
+      this.tradingFeedbackTimer = null;
+    }
   }
 
   _handleChatInputKeydown(event) {

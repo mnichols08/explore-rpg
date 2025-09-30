@@ -189,6 +189,7 @@ const TRADING_POST_FEE = 0.05;
 const TRADING_POST_MAX_PRICE = 250000;
 const TRADING_POST_MAX_STACK = 250;
 const TRADING_POST_LISTING_LIFETIME_MS = 1000 * 60 * 60 * 24;
+const TRADING_POST_SWEEP_INTERVAL_MS = 60 * 1000;
 
 const TRADE_DISTANCE_THRESHOLD = 2.4;
 const TRADE_STATIONARY_THRESHOLD = 0.12;
@@ -592,6 +593,7 @@ const world = {
 world.levels = new Map();
 
 let bankLocation = null;
+let nextTradingSweepAt = 0;
 
 let profileSaveTimer = null;
 let nextEnemyId = 1;
@@ -2932,6 +2934,28 @@ function addInventoryItem(inventory, itemId, amount) {
   }
 }
 
+function getInventoryItemAmount(inventory, itemId) {
+  if (!inventory?.items || !itemId) return 0;
+  const value = Number(inventory.items[itemId]);
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
+function removeInventoryItem(inventory, itemId, amount) {
+  if (!inventory?.items || !itemId) return false;
+  const qty = Math.max(0, Math.floor(Number(amount) || 0));
+  if (!qty) return false;
+  const current = getInventoryItemAmount(inventory, itemId);
+  if (current < qty) return false;
+  const next = current - qty;
+  if (next > 0) {
+    inventory.items[itemId] = next;
+  } else {
+    delete inventory.items[itemId];
+  }
+  return true;
+}
+
 function normalizeItemMap(source) {
   const items = {};
   for (const [key, value] of Object.entries(source || {})) {
@@ -3167,6 +3191,357 @@ function handleBankOperation(player, action) {
     currency: movedCurrency,
     items: movedItems,
   };
+}
+
+function countTradingListingsForProfile(profileId) {
+  if (!profileId) return 0;
+  let total = 0;
+  for (const listing of tradingPostListings.values()) {
+    if (listing.sellerProfileId === profileId) {
+      total += 1;
+    }
+  }
+  return total;
+}
+
+function resolveTradingSellerName(listing) {
+  if (!listing) return 'Trader';
+  if (listing.sellerProfileId) {
+    const online = findPlayerByProfile(listing.sellerProfileId);
+    if (online?.profileMeta?.name) {
+      return online.profileMeta.name;
+    }
+    const record = profiles.get(listing.sellerProfileId);
+    if (record?.name) {
+      return record.name;
+    }
+  }
+  return listing.sellerName || 'Trader';
+}
+
+function serializeTradingListing(listing, viewerProfileId = null) {
+  if (!listing) return null;
+  return {
+    id: listing.id,
+    itemId: listing.itemId,
+    itemLabel: listing.itemLabel,
+    quantity: listing.quantity,
+    price: listing.price,
+    sellerName: resolveTradingSellerName(listing),
+    sellerProfileId: listing.sellerProfileId || null,
+    createdAt: listing.createdAt,
+    expiresAt: listing.expiresAt,
+    owned:
+      listing.sellerProfileId && viewerProfileId
+        ? listing.sellerProfileId === viewerProfileId
+        : undefined,
+  };
+}
+
+function sendTradingListingsSnapshot(player) {
+  if (!player) return;
+  const viewerProfileId = player.profileId || null;
+  const listings = Array.from(tradingPostListings.values())
+    .map((listing) => serializeTradingListing(listing, viewerProfileId))
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.price === b.price) return a.createdAt - b.createdAt;
+      return a.price - b.price;
+    });
+  sendTo(player, {
+    type: 'trading',
+    action: 'listings',
+    listings,
+    fee: TRADING_POST_FEE,
+    maxPerPlayer: TRADING_POST_MAX_PER_PLAYER,
+    maxPrice: TRADING_POST_MAX_PRICE,
+    maxStack: TRADING_POST_MAX_STACK,
+  });
+}
+
+function refundTradingListing(listing, { reason = 'cancelled', notifySeller = false } = {}) {
+  if (!listing || !listing.itemId || !listing.quantity) return;
+  const profileId = listing.sellerProfileId || null;
+  if (!profileId) return;
+  const amount = Math.max(0, Math.floor(Number(listing.quantity) || 0));
+  if (amount <= 0) return;
+  const seller = findPlayerByProfile(profileId);
+  if (seller) {
+    addInventoryItem(seller.inventory, listing.itemId, amount);
+    sendInventoryUpdate(seller);
+    if (notifySeller) {
+      sendTo(seller, {
+        type: 'trading',
+        event: 'listing-refunded',
+        listingId: listing.id,
+        itemId: listing.itemId,
+        quantity: amount,
+        reason,
+        message:
+          reason === 'expired'
+            ? 'A trading post listing expired and your items were returned.'
+            : 'A trading post listing was returned to your inventory.',
+      });
+    }
+    return;
+  }
+  mutateProfileRecord(profileId, (record) => {
+    const inventory = ensureInventoryData(record.inventory);
+    addInventoryItem(inventory, listing.itemId, amount);
+    record.inventory = inventory;
+  });
+}
+
+function payoutTradingListingSale(listing, price, feeAmount) {
+  if (!listing || !listing.sellerProfileId) return;
+  const gross = Math.max(0, Math.floor(Number(price) || 0));
+  const fee = Math.max(0, Math.floor(Number(feeAmount) || 0));
+  const payout = Math.max(0, gross - fee);
+  const seller = findPlayerByProfile(listing.sellerProfileId);
+  if (seller) {
+    seller.bank.currency = Math.max(0, Math.floor(Number(seller.bank.currency) || 0)) + payout;
+    sendInventoryUpdate(seller);
+    sendTo(seller, {
+      type: 'trading',
+      event: 'listing-sold',
+      listingId: listing.id,
+      itemId: listing.itemId,
+      quantity: listing.quantity,
+      price: gross,
+      fee,
+      payout,
+      message: `Trading post sale completed for ${gross.toLocaleString()} coins (${fee.toLocaleString()} coin fee).`,
+    });
+    return;
+  }
+  mutateProfileRecord(listing.sellerProfileId, (record) => {
+    const bank = ensureBankData(record.bank);
+    bank.currency = Math.max(0, Math.floor(Number(bank.currency) || 0)) + payout;
+    record.bank = bank;
+  });
+}
+
+function pruneExpiredTradingListings(now = Date.now()) {
+  const expired = [];
+  for (const [id, listing] of tradingPostListings.entries()) {
+    if (listing.expiresAt && listing.expiresAt <= now) {
+      tradingPostListings.delete(id);
+      expired.push({ id, listing });
+    }
+  }
+  if (!expired.length) return;
+  for (const { listing } of expired) {
+    refundTradingListing(listing, { reason: 'expired', notifySeller: true });
+  }
+  for (const { id } of expired) {
+    broadcast({
+      type: 'trading',
+      event: 'listing-removed',
+      listingId: id,
+      reason: 'expired',
+    });
+  }
+}
+
+function sendTradingFailure(player, action, message) {
+  sendTo(player, {
+    type: 'trading',
+    action,
+    ok: false,
+    message: message || 'Unable to complete trading post action.',
+  });
+}
+
+function handleTradingPostMessage(player, payload) {
+  if (!player?.profileId) return;
+  const action = typeof payload.action === 'string' ? payload.action.toLowerCase() : '';
+
+  if (action === 'listings') {
+    pruneExpiredTradingListings(Date.now());
+    sendTradingListingsSnapshot(player);
+    return;
+  }
+
+  if (player.isGhost) {
+    sendTradingFailure(player, action, 'Restless spirits cannot use the trading post.');
+    return;
+  }
+  if (!isPlayerWithinFacility(player, FACILITY_TYPES.TRADING)) {
+    sendTradingFailure(player, action, 'Step inside the trading hall to manage listings.');
+    return;
+  }
+
+  if (action === 'create') {
+    const itemId = typeof payload.itemId === 'string' ? payload.itemId.toLowerCase() : null;
+    const ore = ORE_TYPES.find((oreDef) => oreDef.id === itemId) || null;
+    if (!ore) {
+      sendTradingFailure(player, action, 'Select a valid resource to list.');
+      return;
+    }
+    const amountRaw = payload.amount ?? payload.quantity;
+    const priceRaw = payload.price ?? payload.total ?? payload.cost;
+    const amount = Math.max(0, Math.floor(Number(amountRaw) || 0));
+    const price = Math.max(0, Math.floor(Number(priceRaw) || 0));
+    if (amount <= 0) {
+      sendTradingFailure(player, action, 'Enter a valid quantity to list.');
+      return;
+    }
+    if (price <= 0) {
+      sendTradingFailure(player, action, 'Enter a price greater than zero.');
+      return;
+    }
+    if (amount > TRADING_POST_MAX_STACK) {
+      sendTradingFailure(player, action, `Listings are limited to ${TRADING_POST_MAX_STACK.toLocaleString()} units.`);
+      return;
+    }
+    if (price > TRADING_POST_MAX_PRICE) {
+      sendTradingFailure(player, action, `Listings cannot exceed ${TRADING_POST_MAX_PRICE.toLocaleString()} coins.`);
+      return;
+    }
+    if (tradingPostListings.size >= TRADING_POST_MAX_LISTINGS) {
+      sendTradingFailure(player, action, 'The trading post is full. Please try again soon.');
+      return;
+    }
+    if (countTradingListingsForProfile(player.profileId) >= TRADING_POST_MAX_PER_PLAYER) {
+      sendTradingFailure(player, action, `You already have ${TRADING_POST_MAX_PER_PLAYER} active listings.`);
+      return;
+    }
+    const available = getInventoryItemAmount(player.inventory, ore.id);
+    if (available < amount) {
+      sendTradingFailure(player, action, `You only have ${available.toLocaleString()} ${ore.label.toLowerCase()} available.`);
+      return;
+    }
+    if (!removeInventoryItem(player.inventory, ore.id, amount)) {
+      sendTradingFailure(player, action, 'Unable to reserve items for the listing.');
+      return;
+    }
+    const listingId = `listing${nextListingId++}`;
+    const now = Date.now();
+    const listing = {
+      id: listingId,
+      itemId: ore.id,
+      itemLabel: ore.label,
+      quantity: amount,
+      price,
+      sellerId: player.id,
+      sellerProfileId: player.profileId,
+      sellerName: player.profileMeta?.name || null,
+      createdAt: now,
+      expiresAt: now + TRADING_POST_LISTING_LIFETIME_MS,
+    };
+    tradingPostListings.set(listingId, listing);
+    sendInventoryUpdate(player);
+    const payloadListing = serializeTradingListing(listing, player.profileId);
+    sendTo(player, {
+      type: 'trading',
+      action: action,
+      ok: true,
+      listing: payloadListing,
+      message: 'Listing posted to the trading ledger.',
+    });
+    broadcast({
+      type: 'trading',
+      event: 'listing-created',
+      listing: serializeTradingListing(listing, null),
+    });
+    return;
+  }
+
+  if (action === 'cancel') {
+    const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
+    if (!listingId) {
+      sendTradingFailure(player, action, 'Listing not found.');
+      return;
+    }
+    const listing = tradingPostListings.get(listingId);
+    if (!listing) {
+      sendTradingFailure(player, action, 'That listing is no longer available.');
+      return;
+    }
+    if (listing.sellerProfileId !== player.profileId) {
+      sendTradingFailure(player, action, 'You can only cancel your own listings.');
+      return;
+    }
+    tradingPostListings.delete(listingId);
+    refundTradingListing(listing, { reason: 'cancelled', notifySeller: false });
+    sendTo(player, {
+      type: 'trading',
+      action: action,
+      ok: true,
+      listingId,
+      message: 'Listing removed and items returned to your inventory.',
+    });
+    broadcast({
+      type: 'trading',
+      event: 'listing-removed',
+      listingId,
+      reason: 'cancelled',
+    });
+    return;
+  }
+
+  if (action === 'buy') {
+    const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
+    if (!listingId) {
+      sendTradingFailure(player, action, 'Listing not found.');
+      return;
+    }
+    const listing = tradingPostListings.get(listingId);
+    if (!listing) {
+      sendTradingFailure(player, action, 'That listing was just taken.');
+      return;
+    }
+    if (listing.sellerProfileId === player.profileId) {
+      sendTradingFailure(player, action, 'You cannot purchase your own listing.');
+      return;
+    }
+    const price = Math.max(0, Math.floor(Number(listing.price) || 0));
+    if (price <= 0) {
+      tradingPostListings.delete(listingId);
+      refundTradingListing(listing, { reason: 'invalid', notifySeller: true });
+      broadcast({
+        type: 'trading',
+        event: 'listing-removed',
+        listingId,
+        reason: 'invalid',
+      });
+      sendTradingFailure(player, action, 'That listing is no longer valid.');
+      return;
+    }
+    const availableCurrency = Math.max(0, Math.floor(Number(player.inventory.currency) || 0));
+    if (availableCurrency < price) {
+      sendTradingFailure(player, action, 'Not enough coins to complete the purchase.');
+      return;
+    }
+    tradingPostListings.delete(listingId);
+    player.inventory.currency = availableCurrency - price;
+    addInventoryItem(player.inventory, listing.itemId, listing.quantity);
+    sendInventoryUpdate(player);
+    const fee = Math.floor(price * TRADING_POST_FEE);
+    payoutTradingListingSale(listing, price, fee);
+  const quantityLabel = Number(listing.quantity || 0).toLocaleString();
+  const priceLabel = price.toLocaleString();
+  const itemLabel = listing.itemLabel || listing.itemId || 'item';
+    sendTo(player, {
+      type: 'trading',
+      action: action,
+      ok: true,
+      listingId,
+      itemId: listing.itemId,
+      quantity: listing.quantity,
+      price,
+      message: `Purchased ${quantityLabel} ${itemLabel} for ${priceLabel} coins.`,
+    });
+    broadcast({
+      type: 'trading',
+      event: 'listing-removed',
+      listingId,
+      reason: 'sold',
+    });
+    return;
+  }
+
+  sendTradingFailure(player, action || 'unknown', 'Unknown trading post action.');
 }
 
 function handlePortalEnter(player, portalId) {
@@ -3722,6 +4097,11 @@ function gameTick(now, dt) {
   }
   world.chats = activeChats;
 
+  if (now >= nextTradingSweepAt) {
+    pruneExpiredTradingListings(now);
+    nextTradingSweepAt = now + TRADING_POST_SWEEP_INTERVAL_MS;
+  }
+
   const snapshot = {
     type: 'state',
     players: Array.from(clients.values()).map((player) => ({
@@ -3986,6 +4366,8 @@ function handleMessage(player, message) {
     if (result) {
       sendTo(player, { type: 'bank-result', ...result });
     }
+  } else if (payload.type === 'trading') {
+    handleTradingPostMessage(player, payload);
   } else if (payload.type === 'portal') {
     if (player.isGhost) {
       sendTo(player, {
