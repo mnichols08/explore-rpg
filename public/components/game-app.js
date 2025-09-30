@@ -1059,6 +1059,24 @@ template.innerHTML = `
       justify-self: start;
     }
 
+    .settings-name-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .settings-name-row input {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .settings-name-feedback {
+      min-height: 1rem;
+      font-size: 0.75rem;
+      color: #bae6fd;
+    }
+
     .settings-feedback {
       min-height: 1rem;
       font-size: 0.78rem;
@@ -1885,14 +1903,14 @@ template.innerHTML = `
       }
     }
 
-    .bank-actions {
+    .facility-actions {
       display: flex;
       gap: 0.5rem;
       flex-wrap: wrap;
       align-items: center;
     }
 
-    .bank-actions button {
+    .facility-actions button {
       all: unset;
       cursor: pointer;
       padding: 0.4rem 0.75rem;
@@ -1906,13 +1924,318 @@ template.innerHTML = `
       transition: background 150ms ease, border 150ms ease, transform 150ms ease, color 150ms ease;
     }
 
-    .bank-actions button:hover:not([disabled]) {
+    .facility-actions button:hover:not([disabled]) {
       background: rgba(56, 189, 248, 0.3);
       border-color: rgba(125, 211, 252, 0.65);
     }
 
-    .bank-actions button:active:not([disabled]) {
+    .facility-actions button:active:not([disabled]) {
       transform: translateY(1px);
+    }
+
+    .facility-actions button[disabled] {
+      cursor: not-allowed;
+      opacity: 0.4;
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.15);
+    }
+
+    .vault-hint {
+      margin: 0.4rem 0 0.65rem;
+      font-size: 0.68rem;
+      line-height: 1.5;
+      letter-spacing: 0.03em;
+      color: rgba(148, 163, 184, 0.75);
+      text-transform: none;
+    }
+
+    .vault-hint .key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.05rem 0.4rem;
+      border-radius: 0.4rem;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(30, 41, 59, 0.75);
+      font-family: "Menlo", "Consolas", "Segoe UI Mono", monospace;
+      font-size: 0.68rem;
+      color: rgba(226, 232, 240, 0.9);
+      letter-spacing: 0.08em;
+    }
+
+    .facility-prompt {
+      position: absolute;
+      top: 5.8rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem 0.85rem;
+      border-radius: 0.75rem;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      box-shadow: 0 0.9rem 2.1rem rgba(15, 23, 42, 0.42);
+      color: #f8fafc;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      pointer-events: none;
+      transition: opacity 140ms ease;
+      z-index: 5;
+    }
+
+    .facility-prompt[hidden] {
+      display: none;
+    }
+
+    .facility-prompt__icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.55rem;
+      height: 1.55rem;
+      border-radius: 0.45rem;
+      background: rgba(56, 189, 248, 0.18);
+      border: 1px solid rgba(125, 211, 252, 0.55);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+
+    .facility-overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(2, 6, 23, 0.65);
+      backdrop-filter: blur(8px);
+      z-index: 45;
+      pointer-events: auto;
+      padding: clamp(1rem, 4vw, 2.4rem);
+    }
+
+    .facility-overlay[hidden] {
+      display: none;
+    }
+
+    .facility-card {
+      width: min(920px, 96vw);
+      max-height: min(82vh, 720px);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding: clamp(1.2rem, 2vw, 1.8rem);
+      border-radius: 1.1rem;
+      background: rgba(10, 18, 32, 0.96);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 2.8rem 4.2rem rgba(8, 14, 29, 0.55);
+      color: rgba(226, 232, 240, 0.92);
+      overflow: hidden;
+    }
+
+    .facility-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .facility-title {
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .facility-title h3 {
+      margin: 0;
+      font-size: clamp(1.1rem, 2vw, 1.45rem);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(244, 247, 254, 0.95);
+    }
+
+    .facility-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      font-size: 0.64rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #bae6fd;
+    }
+
+    .facility-close {
+      all: unset;
+      cursor: pointer;
+      font-size: 1.4rem;
+      line-height: 1;
+      padding: 0.1rem 0.45rem;
+      border-radius: 0.6rem;
+      color: rgba(226, 232, 240, 0.75);
+      transition: background 120ms ease, color 120ms ease;
+    }
+
+    .facility-close:hover,
+    .facility-close:focus-visible {
+      background: rgba(56, 189, 248, 0.18);
+      color: rgba(224, 242, 254, 0.95);
+    }
+
+    .facility-subtitle {
+      margin: 0;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      color: rgba(148, 163, 184, 0.75);
+      text-transform: uppercase;
+    }
+
+    .facility-body {
+      flex: 1;
+      overflow-y: auto;
+      display: grid;
+      gap: 1.1rem;
+      padding-right: 0.25rem;
+    }
+
+    .facility-section[hidden] {
+      display: none;
+    }
+
+    .facility-columns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .facility-column {
+      flex: 1 1 clamp(220px, 28vw, 320px);
+      display: grid;
+      gap: 0.45rem;
+      padding: 0.7rem 0.75rem;
+      border-radius: 0.75rem;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+    }
+
+    .facility-column h4 {
+      margin: 0;
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(244, 247, 254, 0.94);
+    }
+
+    .facility-column ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.4rem;
+      max-height: 20rem;
+      overflow-y: auto;
+    }
+
+    .facility-column li {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      align-items: center;
+      padding: 0.35rem 0.45rem;
+      border-radius: 0.55rem;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+    }
+
+    .facility-column li button {
+      all: unset;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.45rem;
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #e0f2fe;
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      transition: background 120ms ease, border 120ms ease, color 120ms ease;
+    }
+
+    .facility-column li button:hover:not([disabled]) {
+      background: rgba(56, 189, 248, 0.32);
+      border-color: rgba(125, 211, 252, 0.55);
+    }
+
+    .facility-column li button[disabled] {
+      cursor: not-allowed;
+      opacity: 0.45;
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.15);
+    }
+
+    .facility-feedback {
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      color: #bae6fd;
+      min-height: 1.2rem;
+    }
+
+    .facility-feedback.error {
+      color: #fca5a5;
+    }
+
+    .facility-empty {
+      display: grid;
+      gap: 0.55rem;
+      padding: 0.85rem 1rem;
+      border-radius: 0.75rem;
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      font-size: 0.74rem;
+      letter-spacing: 0.04em;
+      color: rgba(226, 232, 240, 0.92);
+    }
+
+    .facility-empty h4 {
+      margin: 0;
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(244, 247, 254, 0.92);
+    }
+
+    .facility-note {
+      margin: 0;
+      font-size: 0.7rem;
+      color: rgba(148, 163, 184, 0.75);
+      text-transform: none;
+    }
+
+    .facility-footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .facility-close-button {
+      all: unset;
+      cursor: pointer;
+      padding: 0.4rem 0.9rem;
+      border-radius: 0.55rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(30, 41, 59, 0.72);
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(226, 232, 240, 0.9);
+      transition: background 120ms ease, border 120ms ease, color 120ms ease;
+    }
+
+    .facility-close-button:hover {
+      background: rgba(51, 65, 85, 0.85);
+      border-color: rgba(148, 163, 184, 0.5);
     }
 
     .gear-panel {
@@ -2239,9 +2562,9 @@ template.innerHTML = `
                 <ul data-inventory-items></ul>
               </div>
               <div>
-                <h4>Bank</h4>
-                <div class="totals"><span>Vault</span><span data-bank-currency>0</span></div>
-                <ul data-bank-items></ul>
+                <h4>Vault Access</h4>
+                <p class="vault-hint">Step inside the bank and press <span class="key">E</span> to open your vault.</p>
+                <div class="totals"><span>Last Balance</span><span data-bank-summary-balance>0</span></div>
               </div>
               <div class="status" data-safe-zone-status>
                 <span>Safe Zone</span>
@@ -2251,12 +2574,6 @@ template.innerHTML = `
                 <span>Zone</span>
                 <span data-zone-indicator>Overworld</span>
               </div>
-              <div class="bank-actions" data-bank-actions>
-                <button type="button" data-bank-deposit disabled>Deposit All</button>
-                <button type="button" data-bank-withdraw disabled>Withdraw All</button>
-                <button type="button" data-bank-sell disabled>Sell Ores</button>
-              </div>
-              <div class="bank-feedback" data-bank-feedback></div>
             </div>
             <div class="resource-panel gear-panel" data-gear-panel>
               <div class="gear-head">
@@ -2300,8 +2617,79 @@ template.innerHTML = `
       </div>
     </div>
     <div class="portal-prompt" hidden data-portal-prompt></div>
+    <div class="facility-prompt" hidden data-facility-prompt>
+      <span class="facility-prompt__icon" aria-hidden="true">E</span>
+      <span class="facility-prompt__message" data-facility-message>Step inside a facility to interact.</span>
+    </div>
     <div class="level-banner" hidden data-level-banner></div>
     <div class="message" hidden data-message>Connecting...</div>
+    <div class="facility-overlay" hidden data-facility-overlay aria-hidden="true">
+      <div class="facility-card" role="dialog" aria-modal="true">
+        <header class="facility-header">
+          <div class="facility-title">
+            <span class="facility-chip" data-facility-chip>Facility</span>
+            <h3 data-facility-title>Facility</h3>
+          </div>
+          <button type="button" class="facility-close" data-facility-close aria-label="Close facility window">×</button>
+        </header>
+        <p class="facility-subtitle" data-facility-subtitle></p>
+        <div class="facility-body">
+          <section class="facility-section" data-facility-section="bank" hidden>
+            <div class="facility-columns">
+              <div class="facility-column">
+                <h4>Vault</h4>
+                <div class="totals"><span>Coins</span><span data-bank-currency>0</span></div>
+                <ul data-bank-items></ul>
+              </div>
+              <div class="facility-column">
+                <h4>Inventory</h4>
+                <div class="totals"><span>Coins</span><span data-inventory-currency-modal>0</span></div>
+                <ul data-inventory-items-modal></ul>
+              </div>
+            </div>
+            <div class="facility-actions" data-bank-actions>
+              <button type="button" data-bank-deposit disabled>Deposit All</button>
+              <button type="button" data-bank-withdraw disabled>Withdraw All</button>
+            </div>
+            <div class="facility-feedback" data-bank-feedback></div>
+          </section>
+          <section class="facility-section" data-facility-section="shop" hidden>
+            <div class="facility-columns">
+              <div class="facility-column">
+                <h4>Gear for Sale</h4>
+                <ul data-shop-gear></ul>
+              </div>
+              <div class="facility-column">
+                <h4>Sell Gear</h4>
+                <ul data-shop-sellback></ul>
+              </div>
+              <div class="facility-column">
+                <h4>Ore Exchange</h4>
+                <ul data-shop-ore></ul>
+              </div>
+            </div>
+            <div class="facility-feedback" data-shop-feedback></div>
+          </section>
+          <section class="facility-section" data-facility-section="trading" hidden>
+            <div class="facility-empty">
+              <h4>Trading Post</h4>
+              <p>Browse listings, create offers, and negotiate player trades. This interface is preparing to open soon.</p>
+              <p class="facility-note">The trading ledger is not active yet, but you can scout the hall for when it opens.</p>
+            </div>
+          </section>
+          <section class="facility-section" data-facility-section="shrine" hidden>
+            <div class="facility-empty">
+              <h4>Shrine of Light</h4>
+              <p>Rest within the circle of runes to heal over time. Fallen heroes are restored automatically when they reach the shrine.</p>
+              <p class="facility-note">You feel a calming warmth settle over you.</p>
+            </div>
+          </section>
+        </div>
+        <footer class="facility-footer">
+          <button type="button" class="facility-close-button" data-facility-close-footer>Close</button>
+        </footer>
+      </div>
+    </div>
     <div class="touch-controls" data-touch-controls>
       <div class="touch-pad" data-joystick aria-label="Virtual joystick">
         <div class="touch-thumb" data-joystick-thumb></div>
@@ -2411,7 +2799,7 @@ template.innerHTML = `
   <div class="identity-overlay" hidden data-onboarding-overlay>
     <div class="identity-card onboarding-card">
       <h3>Create Your Hero</h3>
-      <p>Choose a name for your new adventurer. You can always change it later from the admin panel.</p>
+      <p>Choose a name for your new adventurer. You can always change it later from the Settings panel.</p>
       <input type="text" maxlength="24" placeholder="Enter hero name" data-hero-name-input />
       <p class="onboarding-feedback" data-hero-name-feedback></p>
       <div class="actions">
@@ -2447,6 +2835,15 @@ template.innerHTML = `
   <div class="identity-overlay" hidden data-settings-overlay>
     <div class="identity-card settings-card">
       <h3>Player Settings</h3>
+      <div class="settings-section">
+        <h4>Hero Identity</h4>
+        <p>Update the name other heroes see in chat, combat, and leaderboards.</p>
+        <div class="settings-name-row">
+          <input type="text" maxlength="24" placeholder="Enter hero name" aria-label="Hero name" data-settings-name-input />
+          <button type="button" data-settings-name-submit>Save Name</button>
+        </div>
+        <p class="settings-name-feedback" data-settings-name-feedback></p>
+      </div>
       <div class="settings-section">
         <h4>Player-versus-Player</h4>
         <p data-settings-pvp-status>Loading PvP status…</p>
@@ -2498,6 +2895,33 @@ const EFFECT_FADE_MS = 600;
 const COMPACT_BREAKPOINT = 820;
 
 const EQUIPMENT_ORDER = ['melee', 'ranged', 'spell', 'armor'];
+const FACILITY_INTERACT_RADIUS = 2.2;
+const FACILITY_LABELS = {
+  bank: {
+    title: 'Bank',
+    prompt: 'Press E to open your vault.',
+    chip: 'Bank',
+    subtitle: 'Secure deposits, withdrawals, and vault management.',
+  },
+  shop: {
+    title: 'Shop',
+    prompt: 'Press E to browse the shop.',
+    chip: 'Shop',
+    subtitle: 'Purchase new gear and exchange ores for coin.',
+  },
+  trading: {
+    title: 'Trading Post',
+    prompt: 'Press E to enter the trading hall.',
+    chip: 'Trading',
+    subtitle: 'Player listings and barter coming online soon.',
+  },
+  shrine: {
+    title: 'Shrine',
+    prompt: 'Press E to commune at the shrine.',
+    chip: 'Shrine',
+    subtitle: 'Sanctuary for the fallen and a place of respite.',
+  },
+};
 
 const EQUIPMENT_SLOT_META = {
   melee: { label: 'Melee Weapon', actionFallback: 'Slash' },
@@ -2872,6 +3296,9 @@ class GameApp extends HTMLElement {
   this.settingsResetTutorialButton = this.shadowRoot.querySelector('[data-settings-reset-tutorial]');
   this.settingsCloseButton = this.shadowRoot.querySelector('[data-settings-close]');
   this.settingsFeedbackEl = this.shadowRoot.querySelector('[data-settings-feedback]');
+  this.settingsNameInput = this.shadowRoot.querySelector('[data-settings-name-input]');
+  this.settingsNameSubmitButton = this.shadowRoot.querySelector('[data-settings-name-submit]');
+  this.settingsNameFeedbackEl = this.shadowRoot.querySelector('[data-settings-name-feedback]');
   this.chatEntry = this.shadowRoot.querySelector('[data-chat-entry]');
   this.chatInput = this.shadowRoot.querySelector('[data-chat-input]');
     this.touchControlsEl = this.shadowRoot.querySelector('[data-touch-controls]');
@@ -2892,18 +3319,38 @@ class GameApp extends HTMLElement {
     this.inventoryPanel = this.shadowRoot.querySelector('[data-inventory-panel]');
     this.inventoryCurrencyEl = this.shadowRoot.querySelector('[data-inventory-currency]');
     this.inventoryItemsEl = this.shadowRoot.querySelector('[data-inventory-items]');
+    this.bankSummaryBalanceEl = this.shadowRoot.querySelector('[data-bank-summary-balance]');
     this.bankCurrencyEl = this.shadowRoot.querySelector('[data-bank-currency]');
     this.bankItemsEl = this.shadowRoot.querySelector('[data-bank-items]');
+    this.inventoryCurrencyModalEl = this.shadowRoot.querySelector('[data-inventory-currency-modal]');
+    this.inventoryItemsModalEl = this.shadowRoot.querySelector('[data-inventory-items-modal]');
     this.safeZoneStatusEl = this.shadowRoot.querySelector('[data-safe-zone-status]');
     this.safeZoneIndicatorEl = this.shadowRoot.querySelector('[data-safe-zone-indicator]');
     this.zoneStatusEl = this.shadowRoot.querySelector('[data-zone-status]');
     this.zoneIndicatorEl = this.shadowRoot.querySelector('[data-zone-indicator]');
     this.levelBannerEl = this.shadowRoot.querySelector('[data-level-banner]');
     this.portalPromptEl = this.shadowRoot.querySelector('[data-portal-prompt]');
+    this.facilityPromptEl = this.shadowRoot.querySelector('[data-facility-prompt]');
+    this.facilityMessageEl = this.shadowRoot.querySelector('[data-facility-message]');
+    this.facilityOverlayEl = this.shadowRoot.querySelector('[data-facility-overlay]');
+    this.facilityTitleEl = this.shadowRoot.querySelector('[data-facility-title]');
+    this.facilitySubtitleEl = this.shadowRoot.querySelector('[data-facility-subtitle]');
+    this.facilityChipEl = this.shadowRoot.querySelector('[data-facility-chip]');
+    this.facilityCloseButton = this.shadowRoot.querySelector('[data-facility-close]');
+    this.facilityCloseFooterButton = this.shadowRoot.querySelector('[data-facility-close-footer]');
+    this.facilitySections = new Map(
+      Array.from(this.shadowRoot.querySelectorAll('[data-facility-section]')).map((section) => [
+        section.dataset.facilitySection,
+        section,
+      ])
+    );
+    this.shopGearList = this.shadowRoot.querySelector('[data-shop-gear]');
+    this.shopSellbackList = this.shadowRoot.querySelector('[data-shop-sellback]');
+    this.shopOreList = this.shadowRoot.querySelector('[data-shop-ore]');
+    this.shopFeedbackEl = this.shadowRoot.querySelector('[data-shop-feedback]');
   this.bankActionsEl = this.shadowRoot.querySelector('[data-bank-actions]');
   this.bankDepositButton = this.shadowRoot.querySelector('[data-bank-deposit]');
   this.bankWithdrawButton = this.shadowRoot.querySelector('[data-bank-withdraw]');
-  this.bankSellButton = this.shadowRoot.querySelector('[data-bank-sell]');
   this.bankFeedbackEl = this.shadowRoot.querySelector('[data-bank-feedback]');
   this.ghostHintEl = this.shadowRoot.querySelector('[data-ghost-hint]');
   this.ghostHintMessageEl = this.shadowRoot.querySelector('[data-ghost-message]');
@@ -2980,6 +3427,14 @@ class GameApp extends HTMLElement {
     this.inventory = { currency: 0, items: {} };
     this.bankInventory = { currency: 0, items: {} };
     this.bankInfo = null;
+  this.activeFacilities = {};
+  this.currentFacility = null;
+  this.facilityPromptType = null;
+  this.facilityPromptTimer = null;
+  this.activeFacilityOverlay = null;
+  this.shopCatalog = null;
+  this.shopCatalogRequestedAt = 0;
+  this.shopRequestPending = false;
   this.safeZones = new Map();
   this.activeZoneId = 'frontier';
   this.activeZoneLabel = 'Frontier';
@@ -3064,6 +3519,7 @@ class GameApp extends HTMLElement {
   this.settingsPanelOpen = false;
   this.settingsPvpPending = false;
   this.settingsTutorialPending = false;
+  this.settingsNamePending = false;
   this.chatActive = false;
     this.spellKeyActive = false;
 
@@ -3126,15 +3582,21 @@ class GameApp extends HTMLElement {
   this._handleSettingsIsoToggle = this._handleSettingsIsoToggle.bind(this);
   this._handleSettingsGlowToggle = this._handleSettingsGlowToggle.bind(this);
   this._handleSettingsResetTutorial = this._handleSettingsResetTutorial.bind(this);
+  this._handleSettingsNameSubmit = this._handleSettingsNameSubmit.bind(this);
+  this._handleSettingsNameInput = this._handleSettingsNameInput.bind(this);
+  this._handleSettingsNameKeydown = this._handleSettingsNameKeydown.bind(this);
   this._handleControlHintsToggle = this._handleControlHintsToggle.bind(this);
     this._resizeCanvas = this._resizeCanvas.bind(this);
   this._syncMapOverlaySize = this._syncMapOverlaySize.bind(this);
     this._handleBankDeposit = this._handleBankDeposit.bind(this);
     this._handleBankWithdraw = this._handleBankWithdraw.bind(this);
-    this._handleBankSell = this._handleBankSell.bind(this);
+    this._handleFacilityClose = this._handleFacilityClose.bind(this);
+    this._handleShopListClick = this._handleShopListClick.bind(this);
+    this._handleFacilityOverlayPointerDown = this._handleFacilityOverlayPointerDown.bind(this);
     this.bankFeedbackTimer = null;
     this._updateBankButtons(false);
     this._showBankFeedback('');
+    this.shopFeedbackTimer = null;
   this.gearFeedbackTimer = null;
   this._showGearFeedback('');
     this._updateInventoryPanel();
@@ -3217,12 +3679,20 @@ class GameApp extends HTMLElement {
   this.settingsIsoToggleButton?.addEventListener('click', this._handleSettingsIsoToggle);
   this.settingsGlowToggleButton?.addEventListener('click', this._handleSettingsGlowToggle);
   this.settingsResetTutorialButton?.addEventListener('click', this._handleSettingsResetTutorial);
+  this.settingsNameSubmitButton?.addEventListener('click', this._handleSettingsNameSubmit);
+  this.settingsNameInput?.addEventListener('input', this._handleSettingsNameInput);
+  this.settingsNameInput?.addEventListener('keydown', this._handleSettingsNameKeydown);
   this.settingsCloseButton?.addEventListener('click', this._handleSettingsClose);
   this.controlHintsToggleButton?.addEventListener('click', this._handleControlHintsToggle);
     this.chatInput?.addEventListener('keydown', this._handleChatInputKeydown);
   this.bankDepositButton?.addEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.addEventListener('click', this._handleBankWithdraw);
-  this.bankSellButton?.addEventListener('click', this._handleBankSell);
+  this.facilityCloseButton?.addEventListener('click', this._handleFacilityClose);
+  this.facilityCloseFooterButton?.addEventListener('click', this._handleFacilityClose);
+  this.facilityOverlayEl?.addEventListener('click', this._handleFacilityOverlayPointerDown);
+  this.shopGearList?.addEventListener('click', this._handleShopListClick);
+  this.shopSellbackList?.addEventListener('click', this._handleShopListClick);
+  this.shopOreList?.addEventListener('click', this._handleShopListClick);
     this.gearPanel?.addEventListener('click', this._handleGearPanelClick);
     window.addEventListener('pointerdown', this._handleGlobalPointerDown, { passive: true });
     if (this.coarsePointerQuery) {
@@ -3313,12 +3783,20 @@ class GameApp extends HTMLElement {
   this.settingsIsoToggleButton?.removeEventListener('click', this._handleSettingsIsoToggle);
   this.settingsGlowToggleButton?.removeEventListener('click', this._handleSettingsGlowToggle);
   this.settingsResetTutorialButton?.removeEventListener('click', this._handleSettingsResetTutorial);
+  this.settingsNameSubmitButton?.removeEventListener('click', this._handleSettingsNameSubmit);
+  this.settingsNameInput?.removeEventListener('input', this._handleSettingsNameInput);
+  this.settingsNameInput?.removeEventListener('keydown', this._handleSettingsNameKeydown);
   this.settingsCloseButton?.removeEventListener('click', this._handleSettingsClose);
   this.controlHintsToggleButton?.removeEventListener('click', this._handleControlHintsToggle);
   this.chatInput?.removeEventListener('keydown', this._handleChatInputKeydown);
   this.bankDepositButton?.removeEventListener('click', this._handleBankDeposit);
   this.bankWithdrawButton?.removeEventListener('click', this._handleBankWithdraw);
-  this.bankSellButton?.removeEventListener('click', this._handleBankSell);
+  this.facilityCloseButton?.removeEventListener('click', this._handleFacilityClose);
+  this.facilityCloseFooterButton?.removeEventListener('click', this._handleFacilityClose);
+  this.facilityOverlayEl?.removeEventListener('click', this._handleFacilityOverlayPointerDown);
+  this.shopGearList?.removeEventListener('click', this._handleShopListClick);
+  this.shopSellbackList?.removeEventListener('click', this._handleShopListClick);
+  this.shopOreList?.removeEventListener('click', this._handleShopListClick);
   this.gearPanel?.removeEventListener('click', this._handleGearPanelClick);
   if (this.settingsOverlay) {
     this.settingsOverlay.hidden = true;
@@ -3330,6 +3808,10 @@ class GameApp extends HTMLElement {
   if (this.bankFeedbackTimer) {
     clearTimeout(this.bankFeedbackTimer);
     this.bankFeedbackTimer = null;
+  }
+  if (this.shopFeedbackTimer) {
+    clearTimeout(this.shopFeedbackTimer);
+    this.shopFeedbackTimer = null;
   }
   if (this.gearFeedbackTimer) {
     clearTimeout(this.gearFeedbackTimer);
@@ -3688,6 +4170,18 @@ class GameApp extends HTMLElement {
         if (ok) {
           this._flashInventoryPanel();
         }
+      } else if (data.type === 'shop') {
+        const action =
+          typeof data.action === 'string'
+            ? data.action
+            : typeof data.event === 'string'
+            ? data.event
+            : null;
+        if (data.catalog !== undefined || action === 'catalog') {
+          this._applyShopCatalog(data.catalog || data.payload || null);
+        } else {
+          this._handleShopResult(data);
+        }
       } else if (data.type === 'equip-result') {
         const ok = data.ok !== false;
         if (data.equipment) {
@@ -3737,10 +4231,15 @@ class GameApp extends HTMLElement {
           const safeX = Number(data.safeZone.x) || 0;
           const safeY = Number(data.safeZone.y) || 0;
           const safeRadius = Math.max(0, Number(data.safeZone.radius) || 0);
+          const facilities = this._normalizeFacilities(data.safeZone.facilities);
           const map = this.safeZones instanceof Map ? new Map(this.safeZones) : new Map();
           const key = zone?.id || this.activeZoneId || 'frontier';
           const existing = map.get(key) || { id: key };
-          map.set(key, { ...existing, x: safeX, y: safeY, radius: safeRadius });
+          const next = { ...existing, x: safeX, y: safeY, radius: safeRadius };
+          if (Object.keys(facilities).length) {
+            next.facilities = facilities;
+          }
+          map.set(key, next);
           this.safeZones = map;
         }
         this._syncActiveSafeZone(zone?.id || this.activeZoneId, data.safeZone);
@@ -3851,6 +4350,7 @@ class GameApp extends HTMLElement {
     }
 
   const local = this.players.get(this.youId);
+  this._updateFacilityPresence(local);
   if (this.pointerSource === 'mouse' && this.pointerScreen) {
     const pointerX = (this.pointerScreen.relX ?? 0.5) * width;
     const pointerY = (this.pointerScreen.relY ?? 0.5) * height;
@@ -4544,17 +5044,399 @@ class GameApp extends HTMLElement {
     this._sendBankRequest('withdraw');
   }
 
-  _handleBankSell() {
-    this._sendBankRequest('sell');
+  _sendBankRequest(action) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    const normalized = action === 'deposit' || action === 'withdraw' ? action : null;
+    if (!normalized) return;
+    this.socket.send(
+      JSON.stringify({
+        type: 'bank',
+        action: normalized,
+      })
+    );
   }
 
-  _sendBankRequest(action) {
+  _canUseBank() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    return this.currentFacility === 'bank' || this.activeFacilityOverlay === 'bank';
+  }
+
+  _attemptFacilityInteraction() {
+    const overlayOpen = Boolean(this.facilityOverlayEl && !this.facilityOverlayEl.hidden);
+    const current = this.currentFacility;
+    if (!current) {
+      if (overlayOpen) {
+        this._closeFacilityOverlay();
+        return true;
+      }
+      return false;
+    }
+    if (overlayOpen && this.activeFacilityOverlay === current) {
+      this._closeFacilityOverlay();
+      return true;
+    }
+    if (!FACILITY_LABELS[current]) {
+      return false;
+    }
+    this._openFacilityOverlay(current);
+    if (current === 'shop') {
+      this._requestShopCatalog(false);
+    }
+    return true;
+  }
+
+  _openFacilityOverlay(type) {
+    if (!this.facilityOverlayEl) return false;
+    const meta = FACILITY_LABELS[type] || {
+      title: 'Facility',
+      prompt: 'Press E to interact.',
+      chip: 'Facility',
+      subtitle: '',
+    };
+    if (this.facilityTitleEl) {
+      this.facilityTitleEl.textContent = meta.title;
+    }
+    if (this.facilitySubtitleEl) {
+      this.facilitySubtitleEl.textContent = meta.subtitle || '';
+    }
+    if (this.facilityChipEl) {
+      this.facilityChipEl.textContent = meta.chip || meta.title;
+    }
+    if (this.facilitySections instanceof Map) {
+      for (const [name, section] of this.facilitySections.entries()) {
+        if (!section) continue;
+        section.hidden = name !== type;
+      }
+    }
+    this.facilityOverlayEl.hidden = false;
+    this.facilityOverlayEl.setAttribute('aria-hidden', 'false');
+    this.activeFacilityOverlay = type;
+    this.setAttribute('data-facility-open', type);
+    this._setFacilityPrompt(null);
+    if (type === 'bank') {
+      this._updateBankButtons(true);
+    } else {
+      this._updateBankButtons(false);
+    }
+    if (type === 'shop') {
+      this._renderShopCatalog();
+    }
+    return true;
+  }
+
+  _closeFacilityOverlay() {
+    if (!this.facilityOverlayEl) return;
+    if (!this.facilityOverlayEl.hidden) {
+      this.facilityOverlayEl.hidden = true;
+      this.facilityOverlayEl.setAttribute('aria-hidden', 'true');
+    }
+    this.removeAttribute('data-facility-open');
+    this.activeFacilityOverlay = null;
+    if (this.currentFacility) {
+      this._setFacilityPrompt(this.currentFacility);
+      this._updateBankButtons(this.currentFacility === 'bank');
+    } else {
+      this._setFacilityPrompt(null);
+      this._updateBankButtons(false);
+    }
+  }
+
+  _handleFacilityClose(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    this._closeFacilityOverlay();
+  }
+
+  _handleFacilityOverlayPointerDown(event) {
+    if (!this.facilityOverlayEl) return;
+    if (event?.target === this.facilityOverlayEl) {
+      event.preventDefault();
+      this._closeFacilityOverlay();
+    }
+  }
+
+  _setFacilityPrompt(type) {
+    if (!this.facilityPromptEl || !this.facilityMessageEl) return;
+    const overlayOpen = Boolean(this.facilityOverlayEl && !this.facilityOverlayEl.hidden);
+    if (!type || overlayOpen) {
+      this.facilityPromptEl.hidden = true;
+      this.facilityPromptType = null;
+      return;
+    }
+    const meta = FACILITY_LABELS[type] || null;
+    const message = meta?.prompt || 'Press E to interact.';
+    this.facilityMessageEl.textContent = message;
+    this.facilityPromptEl.hidden = false;
+    this.facilityPromptType = type;
+  }
+
+  _updateFacilityPresence(localPlayer) {
+    const facilities = this.activeFacilities || {};
+    let nextType = null;
+    if (localPlayer) {
+      for (const [key, spot] of Object.entries(facilities)) {
+        if (!spot) continue;
+        if (this._isWithinFacility(localPlayer, spot)) {
+          nextType = key;
+          break;
+        }
+      }
+    }
+    const previous = this.currentFacility;
+    if (nextType !== previous) {
+      if (previous === 'bank' && nextType !== 'bank') {
+        this._updateBankButtons(false);
+      }
+      if (this.activeFacilityOverlay && this.activeFacilityOverlay !== nextType) {
+        this._closeFacilityOverlay();
+      }
+    }
+    this.currentFacility = nextType;
+    if (nextType) {
+      this._setFacilityPrompt(nextType);
+      if (nextType === 'bank') {
+        this._updateBankButtons(true);
+      }
+    } else {
+      this._setFacilityPrompt(null);
+    }
+  }
+
+  _isWithinFacility(player, facility) {
+    if (!player || !facility) return false;
+    const px = Number(player.x);
+    const py = Number(player.y);
+    const fx = Number(facility.x);
+    const fy = Number(facility.y);
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(fx) || !Number.isFinite(fy)) {
+      return false;
+    }
+    const radius = Math.max(0.5, Number(facility.radius) || FACILITY_INTERACT_RADIUS);
+    const dx = px - fx;
+    const dy = py - fy;
+    return dx * dx + dy * dy <= radius * radius;
+  }
+
+  _requestShopCatalog(force = false) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    const now = Date.now();
+    if (!force) {
+      if (this.shopRequestPending) return;
+      if (now - this.shopCatalogRequestedAt < 1500) return;
+    }
+    this.shopRequestPending = true;
+    this.shopCatalogRequestedAt = now;
+    this._showShopFeedback('Fetching merchant inventory...', true);
+    this._renderShopCatalog();
+    this.socket.send(
+      JSON.stringify({
+        type: 'shop',
+        action: 'catalog',
+      })
+    );
+  }
+
+  _applyShopCatalog(catalog) {
+    this.shopRequestPending = false;
+    if (!catalog) {
+      this.shopCatalog = null;
+      this._renderShopCatalog();
+      return;
+    }
+    this.shopCatalog = {
+      gear: Array.isArray(catalog.gear) ? catalog.gear : [],
+      sellback: Array.isArray(catalog.sellback) ? catalog.sellback : [],
+      ore: Array.isArray(catalog.ore) ? catalog.ore : [],
+    };
+    this._renderShopCatalog();
+    if (this.shopCatalog?.gear?.length) {
+      this._showShopFeedback('Welcome back! Everything is in stock.', true);
+    } else {
+      this._showShopFeedback('', true);
+    }
+  }
+
+  _handleShopResult(data) {
+    this.shopRequestPending = false;
+    const ok = data?.ok !== false;
+    const message = typeof data?.message === 'string'
+      ? data.message
+      : ok
+      ? 'Shop transaction complete.'
+      : 'Unable to complete shop action.';
+    this._showShopFeedback(message, ok);
+    this._renderShopCatalog();
+    if (ok) {
+      this._requestShopCatalog(true);
+    }
+  }
+
+  _renderShopCatalog() {
+    if (!this.shopCatalog) {
+      if (this.shopGearList) {
+        this.shopGearList.innerHTML = '';
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = 'Merchant inventory is loading...';
+        this.shopGearList.append(li);
+      }
+      if (this.shopSellbackList) {
+        this.shopSellbackList.innerHTML = '';
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = 'Bring gear to sell back here.';
+        this.shopSellbackList.append(li);
+      }
+      if (this.shopOreList) {
+        this.shopOreList.innerHTML = '';
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = 'Mine ore to exchange for coins.';
+        this.shopOreList.append(li);
+      }
+      return;
+    }
+    this._renderShopList(this.shopGearList, this.shopCatalog.gear, {
+      empty: 'Everything you can buy is already owned.',
+      build: (item) => {
+        const li = document.createElement('li');
+        const label = document.createElement('span');
+        label.textContent = `${item.label} — ${Number(item.price || 0).toLocaleString()}c`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.shopAction = 'buy';
+        button.dataset.itemId = item.id;
+        button.textContent = item.owned ? 'Owned' : 'Buy';
+        const affordable = Number(this.inventory?.currency || 0) >= Number(item.price || 0);
+        button.disabled = Boolean(item.owned || !affordable || this.shopRequestPending);
+        li.append(label, button);
+        return li;
+      },
+    });
+    this._renderShopList(this.shopSellbackList, this.shopCatalog.sellback, {
+      empty: 'No owned gear available to sell back.',
+      build: (item) => {
+        const li = document.createElement('li');
+        const label = document.createElement('span');
+        label.textContent = `${item.label} — ${Number(item.price || 0).toLocaleString()}c`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.shopAction = 'sell-gear';
+        button.dataset.itemId = item.id;
+        button.textContent = item.equipped ? 'Equipped' : 'Sell';
+        button.disabled = Boolean(item.equipped || this.shopRequestPending);
+        li.append(label, button);
+        return li;
+      },
+    });
+    this._renderShopList(this.shopOreList, this.shopCatalog.ore, {
+      empty: 'Bring ore to exchange with the merchant.',
+      build: (item) => {
+        const li = document.createElement('li');
+        const label = document.createElement('span');
+        const amount = Math.max(0, Number(item.amount) || 0);
+        label.textContent = `${item.label} — ${amount.toLocaleString()} • ${Number(item.price || 0).toLocaleString()}c each`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.shopAction = 'sell-ore';
+        button.dataset.oreId = item.id;
+        button.textContent = 'Sell All';
+        button.disabled = amount <= 0 || this.shopRequestPending;
+        li.append(label, button);
+        return li;
+      },
+    });
+  }
+
+  _renderShopList(listEl, items, options) {
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (!Array.isArray(items) || items.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = options?.empty || 'Nothing to list.';
+      listEl.append(li);
+      return;
+    }
+    for (const item of items) {
+      const entry = options?.build?.(item);
+      if (entry) {
+        listEl.append(entry);
+      }
+    }
+  }
+
+  _handleShopListClick(event) {
+    const button = event.target.closest('[data-shop-action]');
+    if (!button) return;
+    event.preventDefault();
+    if (button.disabled) return;
+    const action = button.dataset.shopAction;
+    if (!action) return;
+    let payload = null;
+    let feedback = 'Processing request...';
+    if (action === 'buy') {
+      const itemId = button.dataset.itemId;
+      if (itemId) {
+        payload = { itemId };
+        feedback = 'Processing purchase...';
+      }
+    } else if (action === 'sell-gear') {
+      const itemId = button.dataset.itemId;
+      if (itemId) {
+        payload = { itemId };
+        feedback = 'Processing sale...';
+      }
+    } else if (action === 'sell-ore') {
+      const oreId = button.dataset.oreId;
+      if (oreId) {
+        payload = { oreId };
+        feedback = 'Processing trade...';
+      }
+    }
+    if (payload) {
+      this.shopRequestPending = true;
+      button.disabled = true;
+      this._showShopFeedback(feedback, true);
+      this._renderShopCatalog();
+      this._sendShopRequest(action, payload);
+    }
+  }
+
+  _showShopFeedback(message, ok = true) {
+    if (!this.shopFeedbackEl) return;
+    this.shopFeedbackEl.textContent = message || '';
+    if (ok) {
+      this.shopFeedbackEl.classList.remove('error');
+    } else {
+      this.shopFeedbackEl.classList.add('error');
+    }
+    if (this.shopFeedbackTimer) {
+      clearTimeout(this.shopFeedbackTimer);
+    }
+    if (message) {
+      this.shopFeedbackTimer = setTimeout(() => {
+        if (this.shopFeedbackEl) {
+          this.shopFeedbackEl.textContent = '';
+          this.shopFeedbackEl.classList.remove('error');
+        }
+        this.shopFeedbackTimer = null;
+      }, 3200);
+    } else {
+      this.shopFeedbackTimer = null;
+    }
+  }
+
+  _sendShopRequest(action, payload = {}) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
     if (!action) return;
     this.socket.send(
       JSON.stringify({
-        type: 'bank',
+        type: 'shop',
         action,
+        ...payload,
       })
     );
   }
@@ -4659,8 +5541,11 @@ class GameApp extends HTMLElement {
       }
       return;
     }
-    if (event.code === 'KeyE') {
+    if (event.code === 'KeyE' && noModifiers) {
       event.preventDefault();
+      if (this._attemptFacilityInteraction()) {
+        return;
+      }
       if (this._attemptPortalInteraction()) {
         return;
       }
@@ -7387,10 +8272,32 @@ class GameApp extends HTMLElement {
     this.lootDrops = next;
   }
 
+  _normalizeFacilitySpot(spot, fallbackType = null) {
+    if (!spot || typeof spot !== 'object') return null;
+    const x = Number(spot.x);
+    const y = Number(spot.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const radius = Math.max(0.5, Number(spot.radius) || FACILITY_INTERACT_RADIUS);
+    const type = typeof spot.type === 'string' && spot.type ? spot.type : fallbackType;
+    return { x, y, radius, type: type || null };
+  }
+
+  _normalizeFacilities(payload) {
+    if (!payload || typeof payload !== 'object') return {};
+    const facilities = {};
+    for (const [key, value] of Object.entries(payload)) {
+      const normalized = this._normalizeFacilitySpot(value, key);
+      if (normalized) {
+        facilities[key] = normalized;
+      }
+    }
+    return facilities;
+  }
+
   _normalizeZonePayload(zone) {
     if (!zone || !zone.id) return null;
     const id = String(zone.id);
-    return {
+    const normalized = {
       id,
       name: zone.name || id,
       color: zone.color || '#22c55e',
@@ -7401,6 +8308,11 @@ class GameApp extends HTMLElement {
       y: Number(zone.y) || 0,
       radius: Math.max(0, Number(zone.radius) || 0),
     };
+    const facilities = this._normalizeFacilities(zone?.facilities);
+    if (Object.keys(facilities).length) {
+      normalized.facilities = facilities;
+    }
+    return normalized;
   }
 
   _ingestSafeZones(safeZones, fallbackBank = null) {
@@ -7426,6 +8338,9 @@ class GameApp extends HTMLElement {
           x: bank.x,
           y: bank.y,
           radius: bank.radius,
+          facilities: {
+            bank: { ...bank, type: 'bank' },
+          },
         });
       }
     }
@@ -7453,19 +8368,70 @@ class GameApp extends HTMLElement {
           x: bank.x,
           y: bank.y,
           radius: bank.radius,
+          facilities: {
+            bank: { ...bank, type: 'bank' },
+          },
         };
       }
     }
     if (safe) {
       this.activeZoneLabel = safe.name || safe.id;
-      this.bankInfo = {
-        x: safe.x,
-        y: safe.y,
-        radius: Math.max(0, Number(safe.radius) || 0),
-      };
+      const facilities = safe.facilities ? { ...safe.facilities } : {};
+      if (!facilities.bank && Number.isFinite(safe.x) && Number.isFinite(safe.y)) {
+        const fallbackSpot = this._normalizeFacilitySpot(
+          { x: safe.x, y: safe.y, radius: safe.radius },
+          'bank'
+        );
+        if (fallbackSpot) {
+          facilities.bank = fallbackSpot;
+        }
+      }
+      this.activeFacilities = facilities;
+      const bankSpot = facilities.bank || null;
+      if (bankSpot) {
+        this.bankInfo = {
+          x: bankSpot.x,
+          y: bankSpot.y,
+          radius: Math.max(0, Number(bankSpot.radius) || 0),
+        };
+      } else {
+        this.bankInfo = this._normalizeBankInfo(safe);
+      }
     } else if (fallbackBank) {
-      this.bankInfo = this._normalizeBankInfo(fallbackBank);
+      const facilities = fallbackBank?.facilities ? this._normalizeFacilities(fallbackBank.facilities) : {};
+      let bankSpot = facilities.bank || null;
+      if (!bankSpot) {
+        bankSpot = this._normalizeFacilitySpot(fallbackBank, 'bank');
+      }
+      if (bankSpot) {
+        facilities.bank = bankSpot;
+        this.bankInfo = {
+          x: bankSpot.x,
+          y: bankSpot.y,
+          radius: Math.max(0, Number(bankSpot.radius) || 0),
+        };
+      } else {
+        const bankInfo = this._normalizeBankInfo(fallbackBank);
+        this.bankInfo = bankInfo;
+        if (bankInfo) {
+          facilities.bank = { ...bankInfo, type: 'bank' };
+        }
+      }
+      this.activeFacilities = facilities;
+    } else {
+      this.activeFacilities = {};
+      this.bankInfo = null;
+      this.currentFacility = null;
+      this.activeZoneLabel = null;
+      if (this.activeFacilityOverlay) {
+        this._closeFacilityOverlay();
+      } else {
+        this._setFacilityPrompt(null);
+        this._updateBankButtons(false);
+      }
     }
+    const local = this.players instanceof Map ? this.players.get(this.youId) : null;
+    this._updateFacilityPresence(local || null);
   }
 
   _normalizeBankInfo(bank) {
@@ -7698,7 +8664,12 @@ class GameApp extends HTMLElement {
   }
 
   _updateBankButtons(enabled) {
-    const allow = Boolean(enabled) && this.socket && this.socket.readyState === WebSocket.OPEN;
+    const socketOpen = Boolean(this.socket && this.socket.readyState === WebSocket.OPEN);
+    const overlayActive = Boolean(this.facilityOverlayEl && !this.facilityOverlayEl.hidden);
+    const bankOverlayActive = overlayActive && this.activeFacilityOverlay === 'bank';
+    const insideBank = Boolean(enabled) && (this.currentFacility === 'bank' || this.activeFacilityOverlay === 'bank');
+    const isGhost = Boolean(this.localGhost);
+    const allow = socketOpen && bankOverlayActive && insideBank && !isGhost;
     const buttons = [this.bankDepositButton, this.bankWithdrawButton, this.bankSellButton];
     for (const button of buttons) {
       if (!button) continue;
@@ -8909,11 +9880,22 @@ class GameApp extends HTMLElement {
     const event = data?.event;
     if (!event) return;
     if (event === 'error') {
-      if (data.field === 'name' && this.heroNameFeedback) {
-        this.heroNameFeedback.textContent = data.message || 'Name rejected. Try another variation.';
-        this.heroNameFeedback.style.color = '#fca5a5';
-        this.heroNameSubmitButton?.removeAttribute('disabled');
+      if (data.field === 'name') {
+        const message = data.message || 'Name rejected. Try another variation.';
         this.pendingNameRequest = false;
+        this.settingsNamePending = false;
+        this.heroNameSubmitButton?.removeAttribute('disabled');
+        this.settingsNameSubmitButton?.removeAttribute('disabled');
+        this.settingsNameInput?.removeAttribute('disabled');
+        if (this.heroNameFeedback) {
+          this.heroNameFeedback.textContent = message;
+          this.heroNameFeedback.style.color = '#fca5a5';
+        }
+        if (this.settingsNameFeedbackEl) {
+          this.settingsNameFeedbackEl.textContent = message;
+          this.settingsNameFeedbackEl.style.color = '#fca5a5';
+        }
+        this._updateSettingsState();
       } else if (data.field === 'pvp' && this.settingsFeedbackEl) {
         this.settingsFeedbackEl.textContent = data.message || 'Unable to change PvP status right now.';
         this.settingsFeedbackEl.style.color = '#fca5a5';
@@ -8932,19 +9914,33 @@ class GameApp extends HTMLElement {
     }
 
     if (event === 'name-set') {
+      const onboardingActive = this.onboardingOverlay && !this.onboardingOverlay.hidden;
       this.pendingNameRequest = false;
+      this.settingsNamePending = false;
       this.heroNameSubmitButton?.removeAttribute('disabled');
+      this.settingsNameSubmitButton?.removeAttribute('disabled');
+      this.settingsNameInput?.removeAttribute('disabled');
       if (this.heroNameFeedback) {
-        this.heroNameFeedback.textContent = 'Name saved!';
-        this.heroNameFeedback.style.color = '#bbf7d0';
+        if (onboardingActive) {
+          this.heroNameFeedback.textContent = 'Name saved!';
+          this.heroNameFeedback.style.color = '#bbf7d0';
+        } else {
+          this.heroNameFeedback.textContent = '';
+        }
+      }
+      if (this.settingsNameFeedbackEl) {
+        this.settingsNameFeedbackEl.textContent = 'Hero name updated!';
+        this.settingsNameFeedbackEl.style.color = '#bbf7d0';
       }
       this._applyProfileSnapshot({ name: data.name });
-      setTimeout(() => {
-        this._hideOnboarding(true);
-        if (!this.profileMeta?.tutorialCompleted) {
-          this._startTutorialFlow(true);
-        }
-      }, 1200);
+      if (onboardingActive) {
+        setTimeout(() => {
+          this._hideOnboarding(true);
+          if (!this.profileMeta?.tutorialCompleted) {
+            this._startTutorialFlow(true);
+          }
+        }, 1200);
+      }
       return;
     }
 
@@ -9379,6 +10375,16 @@ class GameApp extends HTMLElement {
         this.settingsFeedbackEl.textContent = '';
         this.settingsFeedbackEl.style.color = '#bae6fd';
       }
+        if (this.settingsNameFeedbackEl) {
+          this.settingsNameFeedbackEl.textContent = '';
+          this.settingsNameFeedbackEl.style.color = '#bae6fd';
+        }
+        this.settingsNamePending = false;
+        this.settingsNameInput?.removeAttribute('disabled');
+        this.settingsNameSubmitButton?.removeAttribute('disabled');
+        if (this.settingsNameInput && !this.settingsNameInput.matches(':focus')) {
+          this.settingsNameInput.value = this.profileMeta?.name || '';
+        }
       this._updateSettingsState();
     }
 
@@ -9389,6 +10395,12 @@ class GameApp extends HTMLElement {
       if (this.settingsFeedbackEl) {
         this.settingsFeedbackEl.textContent = '';
       }
+        if (this.settingsNameFeedbackEl) {
+          this.settingsNameFeedbackEl.textContent = '';
+        }
+        this.settingsNamePending = false;
+        this.settingsNameInput?.removeAttribute('disabled');
+        this.settingsNameSubmitButton?.removeAttribute('disabled');
     }
 
     _handleSettingsPvpToggle() {
@@ -9442,6 +10454,70 @@ class GameApp extends HTMLElement {
         this.settingsFeedbackEl.textContent = nextEnabled ? 'Glow effects enabled.' : 'Glow effects disabled.';
         this.settingsFeedbackEl.style.color = '#bae6fd';
       }
+    }
+
+    _handleSettingsNameInput() {
+      if (this.settingsNameFeedbackEl) {
+        this.settingsNameFeedbackEl.textContent = '';
+        this.settingsNameFeedbackEl.style.color = '#bae6fd';
+      }
+      if (!this.settingsNamePending) {
+        this._updateSettingsState();
+      }
+    }
+
+    _handleSettingsNameKeydown(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this._handleSettingsNameSubmit();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        if (this.settingsNameInput) {
+          this.settingsNameInput.value = this.profileMeta?.name || '';
+          this.settingsNameInput.blur();
+        }
+        if (this.settingsNameFeedbackEl) {
+          this.settingsNameFeedbackEl.textContent = '';
+          this.settingsNameFeedbackEl.style.color = '#bae6fd';
+        }
+        this._updateSettingsState();
+      }
+    }
+
+    _handleSettingsNameSubmit() {
+      if (!this.settingsNameInput) return;
+      const value = this.settingsNameInput.value.trim();
+      const currentName = this.profileMeta?.name || '';
+      if (!value) {
+        if (this.settingsNameFeedbackEl) {
+          this.settingsNameFeedbackEl.textContent = 'Please enter a hero name before saving.';
+          this.settingsNameFeedbackEl.style.color = '#fca5a5';
+        }
+        this.settingsNameInput.focus();
+        return;
+      }
+      if (value === currentName) {
+        if (this.settingsNameFeedbackEl) {
+          this.settingsNameFeedbackEl.textContent = 'That is already your current hero name.';
+          this.settingsNameFeedbackEl.style.color = '#bae6fd';
+        }
+        return;
+      }
+      if (!this._sendProfileAction('set-name', { name: value })) {
+        if (this.settingsNameFeedbackEl) {
+          this.settingsNameFeedbackEl.textContent = 'Connection unavailable. Try again shortly.';
+          this.settingsNameFeedbackEl.style.color = '#fca5a5';
+        }
+        return;
+      }
+      this.settingsNamePending = true;
+      this.settingsNameSubmitButton?.setAttribute('disabled', 'disabled');
+      this.settingsNameInput?.setAttribute('disabled', 'disabled');
+      if (this.settingsNameFeedbackEl) {
+        this.settingsNameFeedbackEl.textContent = 'Saving hero name...';
+        this.settingsNameFeedbackEl.style.color = '#bae6fd';
+      }
+      this._updateSettingsState();
     }
 
     _handleSettingsResetTutorial() {
@@ -9545,6 +10621,31 @@ class GameApp extends HTMLElement {
           this.settingsGlowToggleButton.textContent = glowEnabled ? 'Disable Glow Effects' : 'Enable Glow Effects';
           this.settingsGlowToggleButton.removeAttribute('disabled');
           this.settingsGlowToggleButton.setAttribute('aria-pressed', glowEnabled ? 'true' : 'false');
+        }
+      }
+
+      const currentName = this.profileMeta?.name || '';
+      if (this.settingsNameInput) {
+        if (!this.settingsNameInput.matches(':focus') && !this.settingsNamePending) {
+          this.settingsNameInput.value = currentName;
+        }
+        if (this.settingsNamePending) {
+          this.settingsNameInput.setAttribute('disabled', 'disabled');
+        } else {
+          this.settingsNameInput.removeAttribute('disabled');
+        }
+      }
+
+      if (this.settingsNameSubmitButton) {
+        if (this.settingsNamePending) {
+          this.settingsNameSubmitButton.setAttribute('disabled', 'disabled');
+        } else {
+          const proposed = this.settingsNameInput?.value.trim() || '';
+          if (!proposed || proposed === currentName) {
+            this.settingsNameSubmitButton.setAttribute('disabled', 'disabled');
+          } else {
+            this.settingsNameSubmitButton.removeAttribute('disabled');
+          }
         }
       }
     }
@@ -9905,13 +11006,15 @@ class GameApp extends HTMLElement {
     event.stopPropagation();
     button?.classList.add('active');
     this._enableTouchControls();
-    const portalUsed = this._attemptPortalInteraction();
-    this._requestGatherLoot();
-    if (!portalUsed) {
-      setTimeout(() => {
-        button?.classList.remove('active');
-      }, 160);
+    const facilityUsed = this._attemptFacilityInteraction();
+    const portalUsed = facilityUsed ? false : this._attemptPortalInteraction();
+    if (!facilityUsed && !portalUsed) {
+      this._requestGatherLoot();
     }
+    const releaseDelay = facilityUsed || portalUsed ? 220 : 160;
+    setTimeout(() => {
+      button?.classList.remove('active');
+    }, releaseDelay);
   }
 
   _handleTouchInteractEnd(event) {
