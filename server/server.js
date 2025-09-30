@@ -151,6 +151,27 @@ const MOMENTUM_DURATION_MS = 15000;
 const MOMENTUM_DAMAGE_SCALE = 0.1;
 const MOMENTUM_SPEED_SCALE = 0.06;
 const MOMENTUM_XP_SCALE = 0.08;
+const GHOST_REVIVE_RADIUS = 1.8;
+const FACILITY_INTERACT_RADIUS = 2.2;
+const SHOP_GEAR_PRICES = {
+  melee: {
+    'melee-stick': 160,
+    'melee-sword': 420,
+  },
+  ranged: {
+    'ranged-sling': 190,
+    'ranged-bow': 460,
+  },
+  spell: {
+    'spell-fire': 210,
+    'spell-ice': 520,
+    'spell-lightning': 760,
+  },
+  armor: {
+    'armor-leather': 220,
+    'armor-mail': 540,
+  },
+};
 
 const PASSWORD_ITERATIONS = 210000;
 const PASSWORD_SALT_BYTES = 16;
@@ -1040,6 +1061,9 @@ function createPlayer(connection, requestedProfileId) {
       admin: isFirstProfile,
       banned: false,
       createdAt: timestamp,
+      ghost: false,
+      ghostTarget: null,
+      ghostSince: null,
     };
   } else {
     profileData.xp = cloneXP(profileData.xp);
@@ -1054,6 +1078,10 @@ function createPlayer(connection, requestedProfileId) {
     profileData.banned = Boolean(profileData.banned);
     const createdAt = Number(profileData.createdAt);
     profileData.createdAt = Number.isFinite(createdAt) && createdAt > 0 ? createdAt : timestamp;
+    profileData.ghost = Boolean(profileData.ghost);
+    profileData.ghostTarget = normalizeGhostTarget(profileData.ghostTarget);
+    const ghostSince = Number(profileData.ghostSince);
+    profileData.ghostSince = Number.isFinite(ghostSince) && ghostSince > 0 ? ghostSince : null;
   }
 
   profileData.inventory = ensureInventoryData(profileData.inventory);
@@ -1098,9 +1126,12 @@ function createPlayer(connection, requestedProfileId) {
   const xp = cloneXP(profileData?.xp);
   const baseMaxHealth = Number(profileData?.maxHealth) || 100;
   let savedHealth = Number(profileData?.health);
-  if (!Number.isFinite(savedHealth) || savedHealth <= 0) {
-    savedHealth = baseMaxHealth;
+  if (!Number.isFinite(savedHealth)) {
+    savedHealth = profileData.ghost ? 0 : baseMaxHealth;
   }
+  const startingHealth = profileData.ghost
+    ? clamp(savedHealth, 0, baseMaxHealth)
+    : clamp(savedHealth > 0 ? savedHealth : baseMaxHealth, 1, baseMaxHealth);
   const inventory = ensureInventoryData(profileData?.inventory);
   const bank = ensureBankData(profileData?.bank);
   const gear = ensureGearData(profileData?.gear);
@@ -1114,7 +1145,7 @@ function createPlayer(connection, requestedProfileId) {
     zoneId: spawnZone,
     move: { x: 0, y: 0 },
     aim: { x: 1, y: 0 },
-    health: clamp(savedHealth, 1, baseMaxHealth),
+  health: startingHealth,
     maxHealth: baseMaxHealth,
     baseMaxHealth,
     lastUpdate: timestamp,
@@ -1129,6 +1160,9 @@ function createPlayer(connection, requestedProfileId) {
     levelId: null,
     levelReturn: null,
     momentum: createMomentumState(),
+    isGhost: Boolean(profileData.ghost),
+    ghostTarget: profileData.ghostTarget ? { ...profileData.ghostTarget } : null,
+    ghostSince: profileData.ghostSince || (profileData.ghost ? timestamp : null),
   };
 
   player.profileMeta = {
@@ -1148,7 +1182,10 @@ function createPlayer(connection, requestedProfileId) {
     player.levelReturn = spawnLevel.entrance ? { ...spawnLevel.entrance } : null;
   }
   applyStats(player);
-  player.health = clamp(savedHealth, 1, player.maxHealth);
+  player.health = player.isGhost ? 0 : clamp(startingHealth, 1, player.maxHealth);
+  if (player.isGhost && !player.ghostTarget) {
+    assignGhostObjective(player, player.zoneId || spawnZone);
+  }
   profileData.health = player.health;
   profileData.maxHealth = player.baseMaxHealth;
   profileData.name = player.profileMeta.name;
@@ -1159,6 +1196,9 @@ function createPlayer(connection, requestedProfileId) {
   profileData.pvpCooldownUntil = player.profileMeta.pvpCooldownUntil;
   profileData.pvpLastCombatAt = player.profileMeta.pvpLastCombatAt;
   profileData.lastSeen = timestamp;
+  profileData.ghost = player.isGhost;
+  profileData.ghostTarget = player.ghostTarget ? { ...player.ghostTarget } : null;
+  profileData.ghostSince = player.ghostSince;
   syncProfile(player);
 
   return { player, profileId, profileData };
@@ -1287,6 +1327,7 @@ function updateEnemies(dt) {
         if (playerZone !== enemyZone) continue;
       }
       if (playerInSafeZone(player)) continue;
+      if (player.isGhost) continue;
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist < targetDistance) {
         targetDistance = dist;
@@ -1701,6 +1742,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     for (const player of clients.values()) {
       if ((player.levelId || null) !== (enemy.levelId || null)) continue;
       if (playerInSafeZone(player)) continue;
+      if (player.isGhost) continue;
       const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
       if (dist <= attack.range + PLAYER_HIT_RADIUS + enemy.radius && Math.random() <= hitChance) {
         damagePlayer(player, attack.damage);
@@ -1716,6 +1758,7 @@ function performEnemyAttack(enemy, attack, targetPlayer) {
     for (const player of clients.values()) {
       if ((player.levelId || null) !== (enemy.levelId || null)) continue;
       if (playerInSafeZone(player)) continue;
+      if (player.isGhost) continue;
       const travel = projectileTravel(enemy, aim, player, PLAYER_HIT_RADIUS, attack.range, halfWidth);
       if (travel !== null && travel < bestTravel) {
         bestTravel = travel;
@@ -1819,6 +1862,62 @@ function determineZoneForPosition(x, y) {
     }
   }
   return zoneStates.get(DEFAULT_ZONE_ID) || getZoneDefinition(DEFAULT_ZONE_ID);
+}
+
+function normalizeFacilitySpot(facility, fallbackRadius = 1.4) {
+  if (!facility) return null;
+  const x = Number(facility.x);
+  const y = Number(facility.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const radius = Math.max(0.4, Number(facility.radius) || fallbackRadius);
+  return { x, y, radius };
+}
+
+function findFacilityPosition(center, zoneState, angle, distance, radius) {
+  if (!center) return null;
+  const bounds = normalizeZoneBounds(zoneState?.bounds);
+  const maxDistance = Math.max(1.2, Math.min(distance, SAFE_ZONE_RADIUS - 0.6));
+  const attempts = 18;
+  for (let i = 0; i < attempts; i += 1) {
+    const scaledDistance = Math.max(0.8, maxDistance - i * 0.35);
+    const offsetAngle = angle + i * (Math.PI / 5) * (i % 2 ? 1 : -1);
+    const candidateX = clamp(center.x + Math.cos(offsetAngle) * scaledDistance, bounds.minX + 0.5, bounds.maxX - 0.5);
+    const candidateY = clamp(center.y + Math.sin(offsetAngle) * scaledDistance, bounds.minY + 0.5, bounds.maxY - 0.5);
+    if (!walkable(candidateX, candidateY)) continue;
+    const dist = Math.hypot(candidateX - center.x, candidateY - center.y);
+    if (dist > SAFE_ZONE_RADIUS - 0.4) continue;
+    return { x: candidateX, y: candidateY, radius };
+  }
+  return { x: center.x, y: center.y, radius };
+}
+
+function ensureSafeZoneFacilities(zoneState) {
+  if (!zoneState?.safeZone) return;
+  const center = {
+    x: Number(zoneState.safeZone.x) || 0,
+    y: Number(zoneState.safeZone.y) || 0,
+  };
+  const facilities = zoneState.safeZone.facilities ? { ...zoneState.safeZone.facilities } : {};
+  facilities.shrine = normalizeFacilitySpot({
+    x: center.x,
+    y: center.y,
+    radius: GHOST_REVIVE_RADIUS,
+  }, GHOST_REVIVE_RADIUS) || { x: center.x, y: center.y, radius: GHOST_REVIVE_RADIUS };
+  facilities.bank = normalizeFacilitySpot(
+    facilities.bank || findFacilityPosition(center, zoneState, Math.PI / 4, SAFE_ZONE_RADIUS * 0.55, FACILITY_INTERACT_RADIUS),
+    FACILITY_INTERACT_RADIUS
+  );
+  facilities.shop = normalizeFacilitySpot(
+    facilities.shop || findFacilityPosition(center, zoneState, (Math.PI * 3) / 4, SAFE_ZONE_RADIUS * 0.6, FACILITY_INTERACT_RADIUS),
+    FACILITY_INTERACT_RADIUS
+  );
+  zoneState.safeZone = {
+    ...zoneState.safeZone,
+    x: center.x,
+    y: center.y,
+    radius: SAFE_ZONE_RADIUS,
+    facilities,
+  };
 }
 
 function resolveSafeZonePosition(zoneState) {
@@ -1966,15 +2065,17 @@ function initializeZones() {
       overlayZoneTerrain(state);
     }
     state.safeZone = resolveSafeZonePosition(state);
+    ensureSafeZoneFacilities(state);
     zoneSafeZones.set(state.id, state.safeZone);
     carveZoneSanctuary(state);
   }
   const frontier = zoneStates.get(DEFAULT_ZONE_ID);
   if (frontier) {
     frontier.safeZone = resolveSafeZonePosition(frontier);
+    ensureSafeZoneFacilities(frontier);
     zoneSafeZones.set(DEFAULT_ZONE_ID, frontier.safeZone);
     carveZoneSanctuary(frontier);
-    bankLocation = frontier.safeZone;
+    bankLocation = frontier.safeZone.facilities?.bank || frontier.safeZone;
   } else {
     bankLocation = { x: BANK_POSITION.x, y: BANK_POSITION.y };
   }
@@ -2047,11 +2148,118 @@ function regenerateZone(zoneId, force = false) {
   const seed = (WORLD_SEED ^ state.seedOffset ^ state.generation ^ Date.now()) >>> 0;
   overlayZoneTerrain(state, seed);
   state.safeZone = resolveSafeZonePosition(state);
+  ensureSafeZoneFacilities(state);
   zoneSafeZones.set(zoneId, state.safeZone);
   carveZoneSanctuary(state);
   updateZoneReturnPortal(state);
   world.enemies = world.enemies.filter((enemy) => enemy.levelId || enemy.zoneId !== zoneId);
   initializeOreNodes();
+}
+
+function serializeFacilitySpot(facility) {
+  if (!facility) return null;
+  const x = Number(facility.x);
+  const y = Number(facility.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return {
+    x,
+    y,
+    radius: Math.max(0.5, Number(facility.radius) || FACILITY_INTERACT_RADIUS),
+  };
+}
+
+function normalizeGhostTarget(value) {
+  if (!value) return null;
+  const x = Number(value.x);
+  const y = Number(value.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const radius = Math.max(GHOST_REVIVE_RADIUS, Number(value.radius) || GHOST_REVIVE_RADIUS);
+  const zoneId = typeof value.zoneId === 'string' && value.zoneId ? value.zoneId : DEFAULT_ZONE_ID;
+  return { x, y, radius, zoneId };
+}
+
+function assignGhostObjective(player, zoneId) {
+  if (!player) return null;
+  const targetZoneId = zoneId || player.zoneId || DEFAULT_ZONE_ID;
+  const zoneState = getZoneState(targetZoneId) || getZoneDefinition(targetZoneId);
+  const shrineSpot = zoneState?.safeZone?.facilities?.shrine
+    ? serializeFacilitySpot(zoneState.safeZone.facilities.shrine)
+    : null;
+  const fallback = getSafeZoneLocation(targetZoneId);
+  const payload = shrineSpot
+    ? {
+        x: shrineSpot.x,
+        y: shrineSpot.y,
+        radius: Math.max(GHOST_REVIVE_RADIUS, shrineSpot.radius || GHOST_REVIVE_RADIUS),
+        zoneId: zoneState?.id || targetZoneId,
+      }
+    : fallback
+    ? {
+        x: fallback.x,
+        y: fallback.y,
+        radius: GHOST_REVIVE_RADIUS,
+        zoneId: zoneState?.id || targetZoneId,
+      }
+    : null;
+  player.ghostTarget = payload;
+  const profile = player.profileId ? profiles.get(player.profileId) : null;
+  if (profile) {
+    profile.ghostTarget = payload ? { ...payload } : null;
+    if (payload) {
+      profile.ghost = true;
+      profile.ghostSince = player.ghostSince || Date.now();
+    }
+  }
+  return payload;
+}
+
+function reviveGhost(player, shrineTarget) {
+  if (!player) return;
+  player.isGhost = false;
+  player.ghostTarget = null;
+  player.ghostSince = null;
+  player.health = player.maxHealth;
+  resetMomentum(player);
+  sendTo(player, {
+    type: 'ghost-event',
+    event: 'revived',
+    shrine: shrineTarget ? { x: shrineTarget.x, y: shrineTarget.y, radius: shrineTarget.radius, zoneId: shrineTarget.zoneId } : null,
+  });
+  const profile = player.profileId ? profiles.get(player.profileId) : null;
+  if (profile) {
+    profile.ghost = false;
+    profile.ghostTarget = null;
+    profile.ghostSince = null;
+    profile.health = clamp(player.health, 0, player.maxHealth);
+  }
+  syncProfile(player);
+}
+
+function handleGhostState(player) {
+  if (!player?.isGhost) return;
+  player.health = 0;
+  if (player.action) {
+    player.action = null;
+  }
+  const currentZoneId = player.zoneId || determineZoneForPosition(player.x, player.y)?.id || DEFAULT_ZONE_ID;
+  const needsObjective = !player.ghostTarget || player.ghostTarget.zoneId !== currentZoneId;
+  if (needsObjective) {
+    const newTarget = assignGhostObjective(player, currentZoneId);
+    if (newTarget) {
+      sendTo(player, {
+        type: 'ghost-event',
+        event: 'objective',
+        shrine: { x: newTarget.x, y: newTarget.y, radius: newTarget.radius, zoneId: newTarget.zoneId },
+      });
+    }
+  }
+  const target = player.ghostTarget;
+  if (!target) return;
+  if ((target.zoneId || DEFAULT_ZONE_ID) !== currentZoneId) return;
+  const distance = Math.hypot(player.x - target.x, player.y - target.y);
+  if (distance <= target.radius) {
+    reviveGhost(player, target);
+  }
 }
 
 function serializeZone(zoneStateOrDef) {
@@ -2068,6 +2276,26 @@ function serializeZone(zoneStateOrDef) {
     x: safe?.x ?? null,
     y: safe?.y ?? null,
     radius: SAFE_ZONE_RADIUS,
+    facilities: {
+      shrine: serializeFacilitySpot(safe?.facilities?.shrine),
+      bank: serializeFacilitySpot(safe?.facilities?.bank),
+      shop: serializeFacilitySpot(safe?.facilities?.shop),
+    },
+  };
+}
+
+function serializeSafeZonePayload(zoneId) {
+  const safe = getSafeZoneLocation(zoneId);
+  if (!safe) return null;
+  return {
+    x: safe.x,
+    y: safe.y,
+    radius: SAFE_ZONE_RADIUS,
+    facilities: {
+      shrine: serializeFacilitySpot(safe.facilities?.shrine),
+      bank: serializeFacilitySpot(safe.facilities?.bank),
+      shop: serializeFacilitySpot(safe.facilities?.shop),
+    },
   };
 }
 
@@ -2102,10 +2330,11 @@ function getSafeZoneLocation(zoneId = DEFAULT_ZONE_ID) {
     }
   }
   state.safeZone = resolveSafeZonePosition(state);
+  ensureSafeZoneFacilities(state);
   zoneSafeZones.set(state.id, state.safeZone);
   carveZoneSanctuary(state);
   if (state.id === DEFAULT_ZONE_ID) {
-    bankLocation = state.safeZone;
+    bankLocation = state.safeZone.facilities?.bank || state.safeZone;
   }
   return state.safeZone;
 }
@@ -2162,12 +2391,24 @@ function teleportPlayerToZone(player, zoneId, options = {}) {
   player.move.x = 0;
   player.move.y = 0;
   player.action = null;
-  player.health = player.maxHealth;
+  if (player.isGhost) {
+    player.health = 0;
+    const shrineTarget = assignGhostObjective(player, targetZoneId);
+    if (shrineTarget) {
+      sendTo(player, {
+        type: 'ghost-event',
+        event: 'objective',
+        shrine: { x: shrineTarget.x, y: shrineTarget.y, radius: shrineTarget.radius, zoneId: shrineTarget.zoneId },
+      });
+    }
+  } else {
+    player.health = player.maxHealth;
+  }
   sendTo(player, {
     type: 'zone-event',
     event: 'enter',
     zone: serializeZone(zoneStates.get(targetZoneId) || def),
-    safeZone: { x: safe.x, y: safe.y, radius: SAFE_ZONE_RADIUS },
+    safeZone: serializeSafeZonePayload(targetZoneId),
   });
   return { x: player.x, y: player.y, zoneId: targetZoneId };
 }
@@ -2187,7 +2428,7 @@ function updatePlayerZone(player) {
     type: 'zone-event',
     event: 'change',
     zone: serializeZone(zoneStates.get(zoneId) || zone),
-    safeZone: { x: safe.x, y: safe.y, radius: SAFE_ZONE_RADIUS },
+    safeZone: serializeSafeZonePayload(zoneId),
   });
 }
 
@@ -2660,6 +2901,9 @@ function handleBankOperation(player, action) {
   if (!normalizedAction) {
     return { ok: false, action, message: 'Unknown bank action.' };
   }
+  if (player.isGhost) {
+    return { ok: false, action: normalizedAction, message: 'Restless spirits cannot access the bank.' };
+  }
   if (!playerInSafeZone(player)) {
     return { ok: false, action, message: 'You must stand in the bank safe zone.' };
   }
@@ -2856,6 +3100,8 @@ function resolveMovement(player, dt) {
 }
 
 function damagePlayer(target, amount) {
+  if (!target) return;
+  if (target.isGhost) return;
   if (playerInSafeZone(target)) return;
   target.health = clamp(target.health - amount, 0, target.maxHealth);
   const profile = target.profileId ? profiles.get(target.profileId) : null;
@@ -2865,19 +3111,50 @@ function damagePlayer(target, amount) {
   if (target.health <= 0) {
     dropPlayerInventory(target);
     sendInventoryUpdate(target);
+    const previousLevelId = target.levelId;
+    const previousReturn = target.levelReturn;
     target.levelId = null;
     target.levelReturn = null;
     resetMomentum(target);
-    const spawn = findSpawn();
-    const spawnZone = determineZoneForPosition(spawn.x, spawn.y)?.id || DEFAULT_ZONE_ID;
-    target.x = spawn.x;
-    target.y = spawn.y;
-    target.zoneId = spawnZone;
-    target.health = target.maxHealth;
-    if (profile) {
-      profile.position = { x: target.x, y: target.y, zoneId: spawnZone };
-      profile.health = target.health;
+    target.action = null;
+    target.isGhost = true;
+    target.ghostSince = Date.now();
+    let destinationZone = target.zoneId || determineZoneForPosition(target.x, target.y)?.id || DEFAULT_ZONE_ID;
+    let destination = { x: target.x, y: target.y };
+    if (previousLevelId || previousReturn) {
+      const returnInfo = previousReturn || {};
+      destinationZone = returnInfo.zoneId || destinationZone;
+      const safe = getSafeZoneLocation(destinationZone);
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.max(0.5, Math.min(SAFE_ZONE_RADIUS - 1, SAFE_ZONE_RADIUS * 0.65));
+      destination = {
+        x: clamp(safe.x + Math.cos(angle) * radius, 0.5, world.width - 0.5),
+        y: clamp(safe.y + Math.sin(angle) * radius, 0.5, world.height - 0.5),
+      };
     }
+    target.zoneId = destinationZone;
+    target.x = destination.x;
+    target.y = destination.y;
+    target.health = 0;
+    target.move.x = 0;
+    target.move.y = 0;
+    const ghostTarget = assignGhostObjective(target, destinationZone);
+    sendTo(target, {
+      type: 'ghost-event',
+      event: 'transformed',
+      zoneId: ghostTarget?.zoneId || destinationZone,
+      shrine: ghostTarget
+        ? { x: ghostTarget.x, y: ghostTarget.y, radius: ghostTarget.radius, zoneId: ghostTarget.zoneId }
+        : null,
+    });
+    if (profile) {
+      profile.position = { x: target.x, y: target.y, zoneId: destinationZone };
+      profile.health = 0;
+      profile.ghost = true;
+      profile.ghostTarget = ghostTarget ? { ...ghostTarget } : null;
+      profile.ghostSince = target.ghostSince;
+    }
+    syncProfile(target);
   }
 }
 
@@ -2916,6 +3193,14 @@ function recordPvpEngagement(player) {
 }
 
 function resolveAction(player, actionType, aimVector, chargeSeconds) {
+  if (player?.isGhost) {
+    sendTo(player, {
+      type: 'ghost-event',
+      event: 'blocked',
+      reason: 'no-combat',
+    });
+    return;
+  }
   const now = Date.now();
   ensureEquipment(player);
   const bonuses = player.bonuses || computeBonuses(player);
@@ -3018,6 +3303,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
       if (target.id === player.id) continue;
       if ((target.levelId || null) !== (player.levelId || null)) continue;
       if (playerInSafeZone(target)) continue;
+      if (target.isGhost) continue;
       const travel = projectileTravel(player, aim, target, PLAYER_HIT_RADIUS, range, projectileHalfWidth);
       if (travel !== null && travel < candidateDistance) {
         candidateDistance = travel;
@@ -3044,6 +3330,7 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
       if (target.id === player.id) continue;
       if ((target.levelId || null) !== (player.levelId || null)) continue;
       if (playerInSafeZone(target)) continue;
+      if (target.isGhost) continue;
       const within = isWithinCone(player, aim, target, range + PLAYER_HIT_RADIUS, coneCosHalfAngle, PLAYER_HIT_RADIUS);
       if (!within) continue;
       if (Math.random() <= hitChance && canEngageInPvp(player, target)) {
@@ -3160,7 +3447,9 @@ function gameTick(now, dt) {
     if (!player.levelId) {
       updatePlayerZone(player);
     }
-    if (player.health < player.maxHealth) {
+    if (player.isGhost) {
+      handleGhostState(player);
+    } else if (player.health < player.maxHealth) {
       const healRatePerMs = player.maxHealth / SAFE_ZONE_HEAL_DURATION_MS;
       const healMultiplier = playerInSafeZone(player) ? 1 : WILDERNESS_HEAL_SCALE;
       const healAmount = healRatePerMs * healMultiplier * dt * 1000;
@@ -3168,7 +3457,7 @@ function gameTick(now, dt) {
         player.health = clamp(player.health + healAmount, 0, player.maxHealth);
       }
     }
-  if (player.action && player.action.startedAt && player.action.kind) {
+    if (!player.isGhost && player.action && player.action.startedAt && player.action.kind) {
       const baseChargeCap = clamp(player.bonuses?.maxCharge ?? 0.5, 0.5, 5);
       const maxChargeTime = baseChargeCap + CHARGE_TIME_BONUS;
       const elapsedMs = now - player.action.startedAt;
@@ -3187,6 +3476,11 @@ function gameTick(now, dt) {
           zoneId: player.zoneId || DEFAULT_ZONE_ID,
         };
         profile.health = clamp(player.health, 0, player.maxHealth);
+        profile.ghost = Boolean(player.isGhost);
+        profile.ghostTarget = player.ghostTarget
+          ? { x: player.ghostTarget.x, y: player.ghostTarget.y, radius: player.ghostTarget.radius, zoneId: player.ghostTarget.zoneId }
+          : null;
+        profile.ghostSince = player.ghostSince || null;
       }
     }
   }
@@ -3235,6 +3529,11 @@ function gameTick(now, dt) {
       pvpOptIn: Boolean(player.profileMeta?.pvpOptIn),
       pvpCooldownEndsAt: Number(player.profileMeta?.pvpCooldownUntil) || 0,
       pvpLastCombatAt: Number(player.profileMeta?.pvpLastCombatAt) || 0,
+      ghost: Boolean(player.isGhost),
+      ghostTarget: player.ghostTarget
+        ? { x: player.ghostTarget.x, y: player.ghostTarget.y, radius: player.ghostTarget.radius, zoneId: player.ghostTarget.zoneId }
+        : null,
+      ghostSince: player.ghostSince || null,
     })),
     effects: world.effects.map((effect) => ({
       id: effect.id,
@@ -3335,6 +3634,17 @@ function handleMessage(player, message) {
       player.aim = aim;
     }
   } else if (payload.type === 'action') {
+    if (player.isGhost) {
+      if (payload.phase === 'start') {
+        sendTo(player, {
+          type: 'ghost-event',
+          event: 'blocked',
+          reason: 'no-combat',
+        });
+      }
+      player.action = null;
+      return;
+    }
     if (payload.phase === 'start') {
       const aim = normalizeVector({ x: payload.aimX ?? player.aim.x, y: payload.aimY ?? player.aim.y });
       player.action = {
@@ -3378,6 +3688,14 @@ function handleMessage(player, message) {
       },
     });
   } else if (payload.type === 'gather') {
+    if (player.isGhost) {
+      sendTo(player, {
+        type: 'ghost-event',
+        event: 'blocked',
+        reason: 'no-gather',
+      });
+      return;
+    }
     const result = gatherNearestOre(player);
     if (!result) return;
     const now = Date.now();
@@ -3410,6 +3728,14 @@ function handleMessage(player, message) {
       },
     });
   } else if (payload.type === 'loot') {
+    if (player.isGhost) {
+      sendTo(player, {
+        type: 'ghost-event',
+        event: 'blocked',
+        reason: 'no-loot',
+      });
+      return;
+    }
     const result = lootNearestDrop(player);
     if (!result) return;
     sendInventoryUpdate(player);
@@ -3440,6 +3766,14 @@ function handleMessage(player, message) {
       sendTo(player, { type: 'bank-result', ...result });
     }
   } else if (payload.type === 'portal') {
+    if (player.isGhost) {
+      sendTo(player, {
+        type: 'ghost-event',
+        event: 'blocked',
+        reason: 'no-portal',
+      });
+      return;
+    }
     const action = typeof payload.action === 'string' ? payload.action.toLowerCase() : '';
     if (action === 'enter') {
       const portalId = typeof payload.portalId === 'string' ? payload.portalId : null;
@@ -4335,6 +4669,11 @@ function syncProfile(player) {
     pvpOptIn,
     pvpCooldownUntil,
     pvpLastCombatAt,
+    ghost: Boolean(player.isGhost),
+    ghostTarget: player.ghostTarget
+      ? { x: player.ghostTarget.x, y: player.ghostTarget.y, radius: player.ghostTarget.radius, zoneId: player.ghostTarget.zoneId }
+      : null,
+    ghostSince: player.ghostSince || null,
   };
   profiles.set(player.profileId, record);
   if (usingMongo && profilesCollection) {
@@ -4365,11 +4704,20 @@ function buildProfileCache(entries) {
     if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
       const px = clamp(pos.x, 0.5, WORLD_WIDTH - 0.5);
       const py = clamp(pos.y, 0.5, WORLD_HEIGHT - 0.5);
-      position = { x: px, y: py };
+      const zoneId = typeof pos.zoneId === 'string' && pos.zoneId ? pos.zoneId : undefined;
+      position = zoneId ? { x: px, y: py, zoneId } : { x: px, y: py };
     }
     const maxHealth = Number(value?.maxHealth) || 100;
+    const ghost = Boolean(value?.ghost);
+    const ghostTarget = normalizeGhostTarget(value?.ghostTarget);
+    const ghostSinceValue = Number(value?.ghostSince);
+    const ghostSince = Number.isFinite(ghostSinceValue) && ghostSinceValue > 0 ? ghostSinceValue : null;
     let health = Number(value?.health);
-    if (!Number.isFinite(health) || health <= 0) {
+    if (!Number.isFinite(health)) {
+      health = ghost ? 0 : maxHealth;
+    } else if (ghost) {
+      health = clamp(health, 0, maxHealth);
+    } else if (health <= 0) {
       health = maxHealth;
     } else {
       health = clamp(health, 1, maxHealth);
@@ -4436,6 +4784,9 @@ function buildProfileCache(entries) {
       pvpOptIn,
       pvpCooldownUntil,
       pvpLastCombatAt,
+      ghost,
+      ghostTarget,
+      ghostSince,
       account:
         accountRecord
           ? {
@@ -4497,6 +4848,7 @@ async function loadProfiles() {
 }
 
 function serializeProfileRecord(value) {
+  const ghostTarget = normalizeGhostTarget(value?.ghostTarget);
   const record = {
     xp: cloneXP(value?.xp),
     maxHealth: Number(value?.maxHealth) || 100,
@@ -4509,7 +4861,14 @@ function serializeProfileRecord(value) {
     createdAt: Number(value?.createdAt) || undefined,
     position:
       value?.position && typeof value.position.x === 'number' && typeof value.position.y === 'number'
-        ? { x: Number(value.position.x), y: Number(value.position.y) }
+        ? {
+            x: Number(value.position.x),
+            y: Number(value.position.y),
+            zoneId:
+              typeof value.position.zoneId === 'string' && value.position.zoneId
+                ? value.position.zoneId
+                : undefined,
+          }
         : undefined,
     health:
       typeof value?.health === 'number'
@@ -4518,7 +4877,13 @@ function serializeProfileRecord(value) {
     pvpOptIn: Boolean(value?.pvpOptIn),
     pvpCooldownUntil: Math.max(0, Number(value?.pvpCooldownUntil) || 0),
     pvpLastCombatAt: Math.max(0, Number(value?.pvpLastCombatAt) || 0),
+    ghost: Boolean(value?.ghost),
+    ghostSince: value?.ghostSince ? Math.max(0, Number(value.ghostSince) || 0) : undefined,
   };
+
+  if (ghostTarget) {
+    record.ghostTarget = { ...ghostTarget };
+  }
 
   if (value?.inventory) {
     record.inventory = {
@@ -4845,13 +5210,18 @@ function sendInitialState(player, options = {}) {
       bonuses: player.bonuses,
       health: player.health,
       maxHealth: player.maxHealth,
-  zoneId: player.zoneId || DEFAULT_ZONE_ID,
+      zoneId: player.zoneId || DEFAULT_ZONE_ID,
       momentum: serializeMomentum(player, Date.now()),
       levelId: player.levelId || null,
       levelExit: youLevel?.exit ?? null,
       levelName: youLevel?.name ?? null,
       levelDifficulty: youLevel?.difficulty ?? null,
       levelColor: youLevel?.color ?? null,
+      ghost: Boolean(player.isGhost),
+      ghostTarget: player.ghostTarget
+        ? { x: player.ghostTarget.x, y: player.ghostTarget.y, radius: player.ghostTarget.radius, zoneId: player.ghostTarget.zoneId }
+        : null,
+      ghostSince: player.ghostSince || null,
     },
   });
 }

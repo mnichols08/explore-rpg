@@ -61,6 +61,45 @@ template.innerHTML = `
       color: rgba(148, 163, 184, 0.78);
     }
 
+    .ghost-hint {
+      position: absolute;
+      top: var(--hud-gap);
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.55rem 1.1rem;
+      border-radius: 0.85rem;
+      background: rgba(76, 29, 149, 0.32);
+      border: 1px solid rgba(196, 181, 253, 0.45);
+      box-shadow: 0 1.2rem 2.1rem rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(10px);
+      display: grid;
+      gap: 0.25rem;
+      max-width: min(520px, 80vw);
+      text-align: center;
+      pointer-events: none;
+      letter-spacing: 0.05em;
+      color: #ede9fe;
+      font-size: 0.74rem;
+    }
+
+    .ghost-hint[hidden] {
+      display: none;
+    }
+
+    .ghost-hint strong {
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      color: #c4b5fd;
+      text-transform: uppercase;
+    }
+
+    .ghost-hint span {
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      color: rgba(224, 231, 255, 0.88);
+      text-transform: none;
+    }
+
     .hud-layout {
       flex: 1;
       display: flex;
@@ -2015,6 +2054,10 @@ template.innerHTML = `
   <canvas data-webgl-canvas></canvas>
   <canvas data-main-canvas></canvas>
   <div class="hud">
+    <div class="ghost-hint" data-ghost-hint hidden>
+      <strong>Ghost Form</strong>
+      <span data-ghost-message>Reach the shrine to revive.</span>
+    </div>
     <div class="hud-layout">
       <div class="hud-row top-row">
         <div class="top-left" data-draggable-panel="stats" data-panel-title="Character Stats">
@@ -2862,6 +2905,8 @@ class GameApp extends HTMLElement {
   this.bankWithdrawButton = this.shadowRoot.querySelector('[data-bank-withdraw]');
   this.bankSellButton = this.shadowRoot.querySelector('[data-bank-sell]');
   this.bankFeedbackEl = this.shadowRoot.querySelector('[data-bank-feedback]');
+  this.ghostHintEl = this.shadowRoot.querySelector('[data-ghost-hint]');
+  this.ghostHintMessageEl = this.shadowRoot.querySelector('[data-ghost-message]');
   this.controlHintsToggleButton = this.shadowRoot.querySelector('[data-control-hints-toggle]');
     this.gearPanel = this.shadowRoot.querySelector('[data-gear-panel]');
     this.gearFeedbackEl = this.shadowRoot.querySelector('[data-gear-feedback]');
@@ -3108,6 +3153,8 @@ class GameApp extends HTMLElement {
     this._loadControlHintsPreference();
     this._setupDraggablePanels();
     this._minimapWorldRef = null;
+    this.localGhost = { active: false, target: null, since: null };
+    this.lastGhostBlockedAt = 0;
   }
 
   connectedCallback() {
@@ -3497,6 +3544,7 @@ class GameApp extends HTMLElement {
         this.localBonuses = data.you.bonuses;
         this.localHealth = { health: data.you.health ?? 100, maxHealth: data.you.maxHealth ?? 100 };
         this.localMomentum = data.you.momentum || null;
+        this.localGhost = this._extractGhostState(data.you);
         this._applyLevelInfoFromPayload(data.you);
         this.statPanel.data = {
           stats: this.localStats,
@@ -3507,6 +3555,10 @@ class GameApp extends HTMLElement {
         };
         this._updateCompactStatus();
         this._syncCompactOverlayVisibility();
+        this._updateGhostHint();
+        if (typeof this.lastSafeZoneState === 'boolean') {
+          this._updateBankButtons(this.lastSafeZoneState);
+        }
         this.chargeMeter.actionName = 'Idle';
         this._maybeStartOnboardingFlow();
       } else if (data.type === 'state') {
@@ -3548,6 +3600,7 @@ class GameApp extends HTMLElement {
           this.localBonuses = me.bonuses;
           this.localHealth = { health: me.health, maxHealth: me.maxHealth };
           this.localMomentum = me.momentum || null;
+          this.localGhost = this._extractGhostState(me);
           this.statPanel.data = {
             stats: this.localStats,
             bonuses: this.localBonuses,
@@ -3562,6 +3615,10 @@ class GameApp extends HTMLElement {
           }
           this._updateCompactStatus();
           this._syncCompactOverlayVisibility();
+          this._updateGhostHint();
+          if (typeof this.lastSafeZoneState === 'boolean') {
+            this._updateBankButtons(this.lastSafeZoneState);
+          }
           const ratio = me.chargeRatio ?? 0;
           if (!this.activeAction) {
             this.chargeMeter.value = ratio;
@@ -3697,6 +3754,8 @@ class GameApp extends HTMLElement {
         } else if (data.event === 'change') {
           this._showTransientMessage(`Entered ${label}${difficulty}.`, 3600);
         }
+      } else if (data.type === 'ghost-event') {
+        this._handleGhostEvent(data);
       } else if (data.type === 'disconnect') {
         this.players.delete(data.id);
       }
@@ -4772,6 +4831,16 @@ class GameApp extends HTMLElement {
     });
   }
 
+  _normalizeGhostTarget(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const x = Number(raw.x);
+    const y = Number(raw.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const radius = Math.max(0, Number(raw.radius) || 0);
+    const zoneId = typeof raw.zoneId === 'string' && raw.zoneId ? raw.zoneId : null;
+    return { x, y, radius, zoneId };
+  }
+
   _normalizePlayerState(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const id = typeof raw.id === 'string' ? raw.id : raw.id != null ? String(raw.id) : null;
@@ -4791,18 +4860,33 @@ class GameApp extends HTMLElement {
       ? Number(raw.actionAim.y)
       : null;
     const hasActionAim = Number.isFinite(actionAimX) && Number.isFinite(actionAimY);
+    const ghostTarget = this._normalizeGhostTarget(raw.ghostTarget);
+    const ghostSince = Number.isFinite(raw.ghostSince) ? Number(raw.ghostSince) : null;
     const actionAim = hasActionAim ? this._normalize({ x: actionAimX, y: actionAimY }) : null;
     return {
       ...raw,
       id,
-  zoneId,
+      zoneId,
       aimX,
       aimY,
       aim,
       actionAimX: hasActionAim ? actionAimX : null,
       actionAimY: hasActionAim ? actionAimY : null,
       actionAim,
+      ghost: Boolean(raw.ghost),
+      ghostTarget,
+      ghostSince,
     };
+  }
+
+  _extractGhostState(payload) {
+    if (!payload) {
+      return { active: false, target: null, since: null };
+    }
+    const active = Boolean(payload.ghost);
+    const target = this._normalizeGhostTarget(payload.ghostTarget);
+    const since = Number.isFinite(payload.ghostSince) ? Number(payload.ghostSince) : null;
+    return { active, target, since };
   }
 
   _normalizeOreNode(node) {
@@ -6201,6 +6285,37 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _updateGhostHint() {
+    if (!this.ghostHintEl) return;
+    const ghost = this.localGhost || { active: false };
+    if (!ghost.active) {
+      this.ghostHintEl.hidden = true;
+      return;
+    }
+    let detail = 'Reach the shrine to reclaim your body.';
+    const target = ghost.target;
+    if (target) {
+      const local = this.players?.get?.(this.youId);
+      const sameZone = local && (local.zoneId || null) === (target.zoneId || local.zoneId || null);
+      if (local && sameZone) {
+        const distance = Math.hypot((Number(local.x) || 0) - target.x, (Number(local.y) || 0) - target.y);
+        if (Number.isFinite(distance)) {
+          detail = `Shrine nearby — ${distance.toFixed(1)}m away.`;
+        }
+      } else if (target.zoneId) {
+        let zoneLabel = target.zoneId;
+        if (this.safeZones instanceof Map && this.safeZones.has(target.zoneId)) {
+          zoneLabel = this.safeZones.get(target.zoneId)?.name || zoneLabel;
+        }
+        detail = `Travel to the shrine in ${zoneLabel}.`;
+      }
+    }
+    if (this.ghostHintMessageEl) {
+      this.ghostHintMessageEl.textContent = detail;
+    }
+    this.ghostHintEl.hidden = false;
+  }
+
   _shouldAutoCollapseHud() {
     const rectWidth = this.viewportWidth || (typeof this.getBoundingClientRect === 'function' ? this.getBoundingClientRect().width : 0);
     const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
@@ -6910,6 +7025,52 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _handleGhostEvent(data) {
+    if (!data) return;
+    const event = data.event;
+    if (!event) return;
+    if (event === 'transformed') {
+      this.localGhost = {
+        active: true,
+        target: this._normalizeGhostTarget(data.shrine),
+        since: Number.isFinite(data.since) ? Number(data.since) : Date.now(),
+      };
+      if (this.localHealth) {
+        this.localHealth = { ...this.localHealth, health: 0 };
+      }
+      this._showTransientMessage('You have fallen—travel as a ghost to reach the shrine.', 5200);
+      this.audio.ensureContext();
+      this.audio.onEffect({ type: 'spell' }, true);
+    } else if (event === 'objective') {
+      const current = this.localGhost || { active: false, since: null };
+      const nextTarget = this._normalizeGhostTarget(data.shrine);
+      this.localGhost = {
+        active: current.active || Boolean(nextTarget),
+        target: nextTarget,
+        since: current.since ?? (Number.isFinite(data.since) ? Number(data.since) : Date.now()),
+      };
+      if (nextTarget) {
+        this._showTransientMessage('Shrine located—head there to revive.', 3600);
+      }
+    } else if (event === 'revived') {
+      this.localGhost = { active: false, target: null, since: null };
+      if (this.localHealth) {
+        this.localHealth = { ...this.localHealth, health: this.localHealth.maxHealth ?? this.localHealth.health };
+      }
+      this._showTransientMessage('You are restored to life!', 4200);
+      this.audio.ensureContext();
+      this.audio.onEffect({ type: 'melee' }, true);
+    } else if (event === 'blocked') {
+      this._showGhostBlocked(data.reason || 'blocked');
+      return;
+    }
+    this._updateGhostHint();
+    if (typeof this.lastSafeZoneState === 'boolean') {
+      this._updateBankButtons(this.lastSafeZoneState);
+    }
+    this._updateCompactStatus();
+  }
+
   _attemptPortalInteraction() {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
     const local = this.players.get(this.youId);
@@ -7578,6 +7739,36 @@ class GameApp extends HTMLElement {
         this._messageTimer = null;
       }, duration);
     }
+  }
+
+  _showGhostBlocked(reason = 'blocked') {
+    const now = typeof performance !== 'undefined' && performance?.now ? performance.now() : Date.now();
+    if (now - (this.lastGhostBlockedAt || 0) < 600) return;
+    this.lastGhostBlockedAt = now;
+    let message;
+    switch (reason) {
+      case 'no-combat':
+      case 'combat':
+        message = 'Spirits cannot fight—reach the shrine to revive.';
+        break;
+      case 'no-gather':
+      case 'no-loot':
+      case 'gather':
+        message = 'Ghosts cannot gather or loot.';
+        break;
+      case 'no-bank':
+      case 'bank':
+        message = 'Ghosts cannot use the bank.';
+        break;
+      case 'no-portal':
+      case 'portal':
+        message = 'Shrine-bound spirits cannot use portals.';
+        break;
+      default:
+        message = 'Only the living may interact.';
+        break;
+    }
+    this._showTransientMessage(message, 2400);
   }
 
   _isPlayerInSafeZone(player) {
