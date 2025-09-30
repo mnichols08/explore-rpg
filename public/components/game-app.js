@@ -3648,6 +3648,10 @@ class GameApp extends HTMLElement {
   this.tradingMaxPrice = TRADING_POST_MAX_PRICE;
   this.tradingMaxPerPlayer = TRADING_POST_MAX_PER_PLAYER;
   this.tradingFeedbackTimer = null;
+    this._syncTradingCountdownTicker(false);
+    this.tradingCountdownFrame = null;
+    this.tradingCountdownLastTick = 0;
+    this._boundTradingCountdownTick = (timestamp) => this._handleTradingCountdownTick(timestamp);
   this.safeZones = new Map();
   this.activeZoneId = 'frontier';
   this.activeZoneLabel = 'Frontier';
@@ -3682,6 +3686,9 @@ class GameApp extends HTMLElement {
   this.localMovementLockUntil = 0;
   this.localMovementSlowUntil = 0;
   this.localMovementSlowFactor = 1;
+    this.tradingCountdownFrame = null;
+    this.tradingCountdownLastTick = 0;
+    this._boundTradingCountdownTick = (timestamp) => this._handleTradingCountdownTick(timestamp);
     this.pointerButtons = 0;
     this.knownEffects = new Set();
     this.profileId = null;
@@ -5977,9 +5984,11 @@ class GameApp extends HTMLElement {
       li.className = 'empty';
       li.textContent = 'No listings yet. Post one to open the market!';
       this.tradingListEl.append(li);
+      this._syncTradingCountdownTicker(false);
       return;
     }
     const availableCurrency = Math.max(0, Math.floor(Number(this.inventory?.currency) || 0));
+    const now = Date.now();
     for (const listing of entries) {
       const li = document.createElement('li');
       li.dataset.tradingListingId = listing.id;
@@ -6003,8 +6012,9 @@ class GameApp extends HTMLElement {
       const sellerSpan = document.createElement('span');
       sellerSpan.textContent = listing.owned ? 'Seller: You' : `Seller: ${listing.sellerName}`;
       const expiresSpan = document.createElement('span');
+      expiresSpan.dataset.tradingExpires = listing.id;
       expiresSpan.textContent = listing.expiresAt
-        ? `Expires in ${this._formatTradingRemaining(listing.expiresAt)}`
+        ? `Expires in ${this._formatTradingRemaining(listing.expiresAt, now)}`
         : 'Active';
       meta.append(sellerSpan, expiresSpan);
       li.append(meta);
@@ -6038,6 +6048,73 @@ class GameApp extends HTMLElement {
 
       this.tradingListEl.append(li);
     }
+    this._updateTradingCountdownDisplay(true);
+    this._syncTradingCountdownTicker(true);
+  }
+
+  _updateTradingCountdownDisplay(force = false) {
+    if (!this.tradingListEl) return;
+    const nodes = this.tradingListEl.querySelectorAll('[data-trading-expires]');
+    if (!nodes.length) {
+      if (force) {
+        this._syncTradingCountdownTicker(false);
+      }
+      return;
+    }
+    const now = Date.now();
+    for (const node of nodes) {
+      const listingId = node.dataset.tradingExpires;
+      const listing = listingId ? this.tradingListings.get(listingId) : null;
+      if (!listing || !listing.expiresAt) {
+        node.textContent = 'Active';
+        continue;
+      }
+      const remaining = Math.max(0, Number(listing.expiresAt) - now);
+      if (remaining <= 0) {
+        node.textContent = 'Expired';
+        continue;
+      }
+      node.textContent = `Expires in ${this._formatTradingRemaining(listing.expiresAt, now)}`;
+    }
+    if (force) {
+      this.tradingCountdownLastTick = 0;
+    }
+  }
+
+  _handleTradingCountdownTick(timestamp) {
+    if (!this.tradingListEl) {
+      this._syncTradingCountdownTicker(false);
+      return;
+    }
+    const hasListings = this.tradingListEl.querySelector('[data-trading-expires]');
+    if (!hasListings) {
+      this._syncTradingCountdownTicker(false);
+      return;
+    }
+    const now = Number(timestamp);
+    const last = this.tradingCountdownLastTick || 0;
+    if (!Number.isFinite(now) || now < last) {
+      this.tradingCountdownLastTick = now && Number.isFinite(now) ? now : 0;
+      this._updateTradingCountdownDisplay(true);
+    } else if (now - last >= 500) {
+      this.tradingCountdownLastTick = now;
+      this._updateTradingCountdownDisplay();
+    }
+    this.tradingCountdownFrame = requestAnimationFrame(this._boundTradingCountdownTick);
+  }
+
+  _syncTradingCountdownTicker(shouldRun) {
+    if (!shouldRun) {
+      if (this.tradingCountdownFrame !== null) {
+        cancelAnimationFrame(this.tradingCountdownFrame);
+        this.tradingCountdownFrame = null;
+      }
+      this.tradingCountdownLastTick = 0;
+      return;
+    }
+    if (this.tradingCountdownFrame !== null) return;
+    this.tradingCountdownLastTick = 0;
+    this.tradingCountdownFrame = requestAnimationFrame(this._boundTradingCountdownTick);
   }
 
   _updateTradingFormOptions() {
