@@ -63,6 +63,12 @@ const CHARGE_RANGE_SCALE = {
   ranged: 0.5,
   spell: 0,
 };
+const ACTION_MOVEMENT_TUNING = {
+  melee: { chargeSlow: 0, recoveryLockMs: 220, recoverySlowMs: 420, recoverySlow: 0.45 },
+  ranged: { chargeSlow: 0.4, recoveryLockMs: 140, recoverySlowMs: 300, recoverySlow: 0.6 },
+  spell: { chargeSlow: 0.3, recoveryLockMs: 160, recoverySlowMs: 360, recoverySlow: 0.55 },
+  default: { chargeSlow: 0.5, recoveryLockMs: 120, recoverySlowMs: 260, recoverySlow: 0.7 },
+};
 const CHAT_LIFETIME_MS = 6000;
 const CHAT_MAX_LENGTH = 140;
 const ORE_TYPES = [
@@ -1181,6 +1187,9 @@ function createPlayer(connection, requestedProfileId) {
     baseMaxHealth,
     lastUpdate: timestamp,
     action: null,
+    movementLockedUntil: 0,
+    movementSlowUntil: 0,
+    movementSlowFactor: 1,
     xp,
     stats: baseStats(),
     bonuses: {},
@@ -3677,11 +3686,40 @@ initializeLevels();
 initializeZonePortals();
 initializeOreNodes();
 
-function resolveMovement(player, dt) {
+function resolveMovement(player, dt, now) {
+  const nowMs = typeof now === 'number' ? now : Date.now();
+
+  if (player.movementLockedUntil && player.movementLockedUntil <= nowMs) {
+    player.movementLockedUntil = 0;
+  }
+  if (player.movementSlowUntil && player.movementSlowUntil <= nowMs) {
+    player.movementSlowUntil = 0;
+    player.movementSlowFactor = 1;
+  }
+
   const direction = normalizeVector(player.move);
   const stacks = ensureMomentum(player).stacks || 0;
   const speedMultiplier = 1 + stacks * MOMENTUM_SPEED_SCALE;
-  const speed = (4 + player.stats.dexterity * 0.12) * speedMultiplier;
+  let speed = (4 + player.stats.dexterity * 0.12) * speedMultiplier;
+  let movementMultiplier = 1;
+
+  if (player.movementLockedUntil && player.movementLockedUntil > nowMs) {
+    movementMultiplier = 0;
+  } else {
+    if (player.action && typeof player.action.movementSlowFactor === 'number') {
+      movementMultiplier = Math.min(movementMultiplier, clamp(player.action.movementSlowFactor, 0, 1));
+    }
+    if (player.movementSlowUntil && player.movementSlowUntil > nowMs) {
+      const slowFactor = clamp(
+        Number.isFinite(player.movementSlowFactor) ? player.movementSlowFactor : 1,
+        0,
+        1
+      );
+      movementMultiplier = Math.min(movementMultiplier, slowFactor);
+    }
+  }
+
+  speed *= Math.max(0, movementMultiplier);
   const dx = direction.x * speed * dt;
   const dy = direction.y * speed * dt;
   const candidateX = player.x + dx;
@@ -3713,6 +3751,9 @@ function damagePlayer(target, amount) {
     target.levelReturn = null;
     resetMomentum(target);
     target.action = null;
+  target.movementLockedUntil = 0;
+  target.movementSlowUntil = 0;
+  target.movementSlowFactor = 1;
     target.isGhost = true;
     target.ghostSince = Date.now();
     let destinationZone = target.zoneId || determineZoneForPosition(target.x, target.y)?.id || DEFAULT_ZONE_ID;
@@ -3798,6 +3839,10 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     return;
   }
   const now = Date.now();
+  const actionMeta = player.action;
+  const movementProfile = ACTION_MOVEMENT_TUNING[actionType] || ACTION_MOVEMENT_TUNING.default;
+  const originX = actionMeta?.origin?.x ?? player.x;
+  const originY = actionMeta?.origin?.y ?? player.y;
   ensureEquipment(player);
   const bonuses = player.bonuses || computeBonuses(player);
   const baseChargeCap = clamp(bonuses.maxCharge, 0.5, 5);
@@ -3874,8 +3919,8 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     id: `fx${effectCounter++}`,
     type: actionType,
     owner: player.id,
-    x: player.x,
-    y: player.y,
+    x: originX,
+    y: originY,
     aim,
     range,
     length: range,
@@ -4019,6 +4064,24 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
       applyStats(player);
       syncProfile(player);
     }
+
+    if (Number.isFinite(movementProfile?.recoveryLockMs) && movementProfile.recoveryLockMs > 0) {
+      player.movementLockedUntil = Math.max(
+        player.movementLockedUntil || 0,
+        now + movementProfile.recoveryLockMs
+      );
+    }
+    if (Number.isFinite(movementProfile?.recoverySlowMs) && movementProfile.recoverySlowMs > 0) {
+      player.movementSlowUntil = Math.max(
+        player.movementSlowUntil || 0,
+        now + movementProfile.recoverySlowMs
+      );
+      player.movementSlowFactor = clamp(
+        typeof movementProfile.recoverySlow === 'number' ? movementProfile.recoverySlow : 1,
+        0,
+        1
+      );
+    }
   }
 }
 
@@ -4039,7 +4102,7 @@ function gameTick(now, dt) {
   updateLoot(now);
   for (const player of clients.values()) {
     decayMomentum(player, now);
-    resolveMovement(player, dt);
+  resolveMovement(player, dt, now);
     if (!player.levelId) {
       updatePlayerZone(player);
     }
@@ -4247,12 +4310,25 @@ function handleMessage(player, message) {
       return;
     }
     if (payload.phase === 'start') {
+      const now = Date.now();
       const aim = normalizeVector({ x: payload.aimX ?? player.aim.x, y: payload.aimY ?? player.aim.y });
+      const movementProfile = ACTION_MOVEMENT_TUNING[payload.action] || ACTION_MOVEMENT_TUNING.default;
+      const chargeSlow = clamp(
+        typeof movementProfile?.chargeSlow === 'number' ? movementProfile.chargeSlow : 1,
+        0,
+        1
+      );
       player.action = {
         kind: payload.action,
-        startedAt: Date.now(),
+        startedAt: now,
         aim,
+        movementSlowFactor: chargeSlow,
+        origin: { x: player.x, y: player.y },
       };
+      if (chargeSlow === 0) {
+        player.move.x = 0;
+        player.move.y = 0;
+      }
     } else if (payload.phase === 'cancel') {
       player.action = null;
     } else if (payload.phase === 'release' && player.action) {

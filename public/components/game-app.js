@@ -3249,6 +3249,12 @@ const ENEMY_STYLE = {
 };
 
 const CHARGE_TIME_BONUS = 0.75;
+const ACTION_MOVEMENT_TUNING = {
+  melee: { chargeSlow: 0, recoveryLockMs: 220, recoverySlowMs: 420, recoverySlow: 0.45 },
+  ranged: { chargeSlow: 0.4, recoveryLockMs: 140, recoverySlowMs: 300, recoverySlow: 0.6 },
+  spell: { chargeSlow: 0.3, recoveryLockMs: 160, recoverySlowMs: 360, recoverySlow: 0.55 },
+  default: { chargeSlow: 0.5, recoveryLockMs: 120, recoverySlowMs: 260, recoverySlow: 0.7 },
+};
 const CHARGE_GLOW_STYLE = {
   melee: { fill: 'rgba(239, 68, 68, 0.35)', stroke: 'rgba(248, 113, 113, 0.9)' },
   ranged: { fill: 'rgba(249, 115, 22, 0.32)', stroke: 'rgba(251, 191, 36, 0.95)' },
@@ -3672,6 +3678,10 @@ class GameApp extends HTMLElement {
     this.activeAction = null;
     this.actionStart = 0;
     this.activeActionAim = null;
+  this.actionMovementProfile = null;
+  this.localMovementLockUntil = 0;
+  this.localMovementSlowUntil = 0;
+  this.localMovementSlowFactor = 1;
     this.pointerButtons = 0;
     this.knownEffects = new Set();
     this.profileId = null;
@@ -5186,6 +5196,38 @@ class GameApp extends HTMLElement {
       moveX /= magnitude;
       moveY /= magnitude;
     }
+    const now = Date.now();
+    if (this.localMovementLockUntil && this.localMovementLockUntil <= now) {
+      this.localMovementLockUntil = 0;
+    }
+    if (this.localMovementSlowUntil && this.localMovementSlowUntil <= now) {
+      this.localMovementSlowUntil = 0;
+      this.localMovementSlowFactor = 1;
+    }
+
+    let movementMultiplier = 1;
+    if (this.localMovementLockUntil && this.localMovementLockUntil > now) {
+      movementMultiplier = 0;
+    } else {
+      if (this.activeAction) {
+        const profile = this.actionMovementProfile || ACTION_MOVEMENT_TUNING[this.activeAction] || ACTION_MOVEMENT_TUNING.default;
+        if (profile && profile.chargeSlow !== undefined) {
+          const chargeSlow = Math.max(0, Math.min(1, typeof profile.chargeSlow === 'number' ? profile.chargeSlow : 1));
+          movementMultiplier = Math.min(movementMultiplier, chargeSlow);
+        }
+      }
+      if (this.localMovementSlowUntil && this.localMovementSlowUntil > now) {
+        const slowFactor = Math.max(
+          0,
+          Math.min(1, typeof this.localMovementSlowFactor === 'number' ? this.localMovementSlowFactor : 1)
+        );
+        movementMultiplier = Math.min(movementMultiplier, slowFactor);
+      }
+    }
+
+    moveX *= movementMultiplier;
+    moveY *= movementMultiplier;
+
     if (Math.abs(moveX) < 0.02) moveX = 0;
     if (Math.abs(moveY) < 0.02) moveY = 0;
 
@@ -9615,6 +9657,7 @@ class GameApp extends HTMLElement {
     this.activeAction = kind;
     this.actionStart = Date.now();
     this.activeActionAim = this._normalize(this.pointerAim || { x: 1, y: 0 });
+    this.actionMovementProfile = ACTION_MOVEMENT_TUNING[kind] || ACTION_MOVEMENT_TUNING.default;
   this.chargeMeter.actionName = this._resolveActionLabel(kind);
     this.socket.send(
       JSON.stringify({
@@ -9631,6 +9674,7 @@ class GameApp extends HTMLElement {
     if (!this.activeAction) return;
     const kind = this.activeAction;
     const now = Date.now();
+    const movementProfile = this.actionMovementProfile || ACTION_MOVEMENT_TUNING[kind] || ACTION_MOVEMENT_TUNING.default;
     const baseCharge = this.localBonuses?.maxCharge ?? 0.5;
     const clampedBase = Math.max(0.5, Math.min(5, baseCharge));
     const maxDuration = Math.max(0.1, (clampedBase + CHARGE_TIME_BONUS) * 1000);
@@ -9649,8 +9693,20 @@ class GameApp extends HTMLElement {
         phase: 'release',
       })
     );
+    if (movementProfile?.recoveryLockMs > 0) {
+      this.localMovementLockUntil = Math.max(this.localMovementLockUntil || 0, now + movementProfile.recoveryLockMs);
+    }
+    if (movementProfile?.recoverySlowMs > 0) {
+      this.localMovementSlowUntil = Math.max(this.localMovementSlowUntil || 0, now + movementProfile.recoverySlowMs);
+      const slowFactor = Math.max(0, Math.min(1, typeof movementProfile.recoverySlow === 'number' ? movementProfile.recoverySlow : 1));
+      this.localMovementSlowFactor = Math.min(
+        Math.max(0, Math.min(1, this.localMovementSlowFactor ?? 1)),
+        slowFactor
+      );
+    }
     this.activeAction = null;
     this.activeActionAim = null;
+    this.actionMovementProfile = null;
     this.chargeMeter.actionName = 'Idle';
     this.chargeMeter.value = 0;
   }
@@ -9674,6 +9730,7 @@ class GameApp extends HTMLElement {
     );
     this.activeAction = null;
     this.activeActionAim = null;
+    this.actionMovementProfile = null;
     this.chargeMeter.actionName = 'Idle';
     this.chargeMeter.value = 0;
   }
@@ -9744,6 +9801,10 @@ class GameApp extends HTMLElement {
     this.activeAction = null;
     this.actionStart = 0;
   this.activeActionAim = null;
+    this.actionMovementProfile = null;
+    this.localMovementLockUntil = 0;
+    this.localMovementSlowUntil = 0;
+    this.localMovementSlowFactor = 1;
     this.pointerButtons = 0;
     this.spellKeyActive = false;
     this.chargeMeter.actionName = 'Idle';
