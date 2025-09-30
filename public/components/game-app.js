@@ -896,7 +896,7 @@ template.innerHTML = `
       color: rgba(226, 232, 240, 0.85);
     }
 
-    .identity-card input {
+    .identity-card input:not([type="checkbox"]) {
       all: unset;
       padding: 0.55rem 0.75rem;
       background: rgba(30, 41, 59, 0.85);
@@ -909,8 +909,13 @@ template.innerHTML = `
       box-sizing: border-box;
     }
 
-    .identity-card input::placeholder {
+    .identity-card input:not([type="checkbox"])::placeholder {
       color: rgba(148, 163, 184, 0.6);
+    }
+
+    .identity-card input.invalid {
+      border-color: rgba(248, 113, 113, 0.7);
+      box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.35);
     }
 
     .identity-feedback {
@@ -957,6 +962,13 @@ template.innerHTML = `
       transform: translateY(1px);
     }
 
+    .identity-card button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      pointer-events: none;
+      filter: grayscale(0.2);
+    }
+
     .identity-secondary {
       all: unset;
       cursor: pointer;
@@ -975,6 +987,152 @@ template.innerHTML = `
     .account-card {
       text-align: left;
       gap: 0.65rem;
+    }
+
+    .auth-card {
+      text-align: left;
+      gap: 0.8rem;
+    }
+
+    .auth-card h3 {
+      text-align: center;
+      color: #bfdbfe;
+    }
+
+    .auth-tabs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem;
+      background: rgba(15, 23, 42, 0.55);
+      padding: 0.3rem;
+      border-radius: 0.7rem;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .auth-tabs button {
+      all: unset;
+      cursor: pointer;
+      text-align: center;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.6rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: rgba(191, 219, 254, 0.75);
+      transition: background 150ms ease, color 150ms ease, transform 120ms ease;
+    }
+
+    .auth-tabs button[aria-selected="true"] {
+      background: linear-gradient(120deg, rgba(59, 130, 246, 0.75), rgba(129, 140, 248, 0.75));
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    .auth-tabs button:active {
+      transform: translateY(1px);
+    }
+
+    .auth-card .identity-feedback {
+      min-height: 1.1rem;
+      text-align: center;
+    }
+
+    .auth-field {
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .auth-field label {
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.75);
+    }
+
+    .password-input-wrapper {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .password-toggle {
+      all: unset;
+      cursor: pointer;
+      padding: 0.45rem 0.6rem;
+      border-radius: 0.55rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(30, 41, 59, 0.8);
+      color: rgba(191, 219, 254, 0.85);
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: background 150ms ease, border 150ms ease;
+    }
+
+    .password-toggle:hover {
+      background: rgba(51, 65, 85, 0.85);
+      border-color: rgba(148, 163, 184, 0.6);
+    }
+
+    .password-toggle:active {
+      transform: translateY(1px);
+    }
+
+    .auth-remember {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      font-size: 0.78rem;
+      color: rgba(203, 213, 225, 0.85);
+      line-height: 1.4;
+    }
+
+    .auth-checkbox {
+      appearance: none;
+      width: 1rem;
+      height: 1rem;
+      border-radius: 0.3rem;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(30, 41, 59, 0.85);
+      display: grid;
+      place-items: center;
+      transition: border 150ms ease, background 150ms ease, box-shadow 150ms ease;
+    }
+
+    .auth-checkbox::after {
+      content: "";
+      width: 0.45rem;
+      height: 0.45rem;
+      border-radius: 0.2rem;
+      background: transparent;
+      transition: background 150ms ease;
+    }
+
+    .auth-checkbox:checked {
+      border-color: rgba(91, 196, 255, 0.9);
+      background: linear-gradient(120deg, rgba(56, 189, 248, 0.9), rgba(96, 165, 250, 0.9));
+      box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
+    }
+
+    .auth-checkbox:checked::after {
+      background: rgba(15, 23, 42, 0.92);
+    }
+
+    .auth-checkbox:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.8);
+      outline-offset: 2px;
+    }
+
+    .auth-checkbox:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      background: rgba(30, 41, 59, 0.55);
+      border-color: rgba(71, 85, 105, 0.6);
+    }
+
+    .auth-card .actions {
+      margin-top: 0.2rem;
     }
 
     .character-card {
@@ -3015,14 +3173,37 @@ template.innerHTML = `
   </div>
   <div class="identity-overlay" hidden data-auth-overlay>
     <div class="identity-card auth-card">
-      <h3>Hero Account</h3>
+      <h3 data-auth-title>Welcome Back</h3>
+      <div class="auth-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-auth-mode="login">Sign In</button>
+        <button type="button" role="tab" aria-selected="false" data-auth-mode="register">Create Account</button>
+      </div>
       <p data-auth-description>Sign in or create an account to continue your adventure.</p>
-      <input type="text" placeholder="Account name" data-auth-account />
-      <input type="password" placeholder="Password" data-auth-password />
+      <div class="auth-field">
+        <label for="auth-account-input">Account Name</label>
+        <input id="auth-account-input" type="text" autocomplete="username" placeholder="Account name" data-auth-account />
+      </div>
+      <div class="auth-field">
+        <label for="auth-password-input">Password</label>
+        <div class="password-input-wrapper">
+          <input id="auth-password-input" type="password" autocomplete="current-password" placeholder="Password" data-auth-password />
+          <button type="button" class="password-toggle" data-auth-password-toggle aria-label="Show password">Show</button>
+        </div>
+      </div>
+      <div class="auth-field" data-auth-confirm-container hidden>
+        <label for="auth-confirm-input">Confirm Password</label>
+        <div class="password-input-wrapper">
+          <input id="auth-confirm-input" type="password" autocomplete="new-password" placeholder="Confirm password" data-auth-confirm />
+          <button type="button" class="password-toggle" data-auth-confirm-toggle aria-label="Show password confirmation">Show</button>
+        </div>
+      </div>
+      <label class="auth-remember">
+        <input type="checkbox" class="auth-checkbox" data-auth-remember checked />
+        <span>Stay signed in on this device</span>
+      </label>
       <p class="identity-feedback" data-auth-feedback></p>
       <div class="actions">
-        <button type="button" class="primary" data-auth-login>Sign In</button>
-        <button type="button" data-auth-register>Create Account</button>
+        <button type="button" class="primary" data-auth-submit>Sign In</button>
         <button type="button" data-auth-cancel>Cancel</button>
       </div>
       <button type="button" class="identity-secondary" data-auth-legacy>Use Hero ID instead</button>
@@ -3334,6 +3515,7 @@ const EFFECT_VARIANT_COLORS = {
 const PROFILE_STORAGE_KEY = 'explore-rpg-profile-id';
 const ACCOUNT_STORAGE_KEY = 'explore-rpg-account-name';
 const SESSION_STORAGE_KEY = 'explore-rpg-session-token';
+const SESSION_REMEMBER_KEY = 'explore-rpg-session-remember';
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 const ACCOUNT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$/;
@@ -3534,14 +3716,20 @@ class GameApp extends HTMLElement {
   this.adminPanelButton = this.shadowRoot.querySelector('[data-admin-panel]');
   this.settingsPanelButton = this.shadowRoot.querySelector('[data-settings-panel]');
   this.authOverlay = this.shadowRoot.querySelector('[data-auth-overlay]');
+  this.authTitleEl = this.shadowRoot.querySelector('[data-auth-title]');
   this.authDescriptionEl = this.shadowRoot.querySelector('[data-auth-description]');
   this.authAccountInput = this.shadowRoot.querySelector('[data-auth-account]');
   this.authPasswordInput = this.shadowRoot.querySelector('[data-auth-password]');
+  this.authConfirmContainer = this.shadowRoot.querySelector('[data-auth-confirm-container]');
+  this.authConfirmInput = this.shadowRoot.querySelector('[data-auth-confirm]');
   this.authFeedbackEl = this.shadowRoot.querySelector('[data-auth-feedback]');
-  this.authLoginButton = this.shadowRoot.querySelector('[data-auth-login]');
-  this.authRegisterButton = this.shadowRoot.querySelector('[data-auth-register]');
+  this.authModeButtons = Array.from(this.shadowRoot.querySelectorAll('[data-auth-mode]'));
+  this.authSubmitButton = this.shadowRoot.querySelector('[data-auth-submit]');
   this.authCancelButton = this.shadowRoot.querySelector('[data-auth-cancel]');
   this.authLegacyButton = this.shadowRoot.querySelector('[data-auth-legacy]');
+  this.authPasswordToggle = this.shadowRoot.querySelector('[data-auth-password-toggle]');
+  this.authConfirmToggle = this.shadowRoot.querySelector('[data-auth-confirm-toggle]');
+  this.authRememberCheckbox = this.shadowRoot.querySelector('[data-auth-remember]');
   this.characterOverlay = this.shadowRoot.querySelector('[data-character-overlay]');
   this.characterDescriptionEl = this.shadowRoot.querySelector('[data-character-description]');
   this.characterListEl = this.shadowRoot.querySelector('[data-character-list]');
@@ -3808,6 +3996,12 @@ class GameApp extends HTMLElement {
     passwordMinLength: PASSWORD_MIN_LENGTH,
     passwordMaxLength: PASSWORD_MAX_LENGTH,
   };
+    this.authMode = 'login';
+    this.rememberSession = true;
+    this._authPasswordVisible = false;
+    this._authConfirmVisible = false;
+  this._authFeedbackVariant = 'info';
+    this.authPendingAction = null;
     this.characterOptions = {
       list: [],
       canCreate: true,
@@ -3894,10 +4088,16 @@ class GameApp extends HTMLElement {
     this._handleMinimapDragCancel = this._handleMinimapDragCancel.bind(this);
   this._handleCopyHeroId = this._handleCopyHeroId.bind(this);
   this._handleNewHeroRequest = this._handleNewHeroRequest.bind(this);
+  this._handleAuthSubmit = this._handleAuthSubmit.bind(this);
   this._handleAuthLogin = this._handleAuthLogin.bind(this);
   this._handleAuthRegister = this._handleAuthRegister.bind(this);
   this._handleAuthCancel = this._handleAuthCancel.bind(this);
   this._handleAuthInputKeydown = this._handleAuthInputKeydown.bind(this);
+  this._handleAuthFieldInput = this._handleAuthFieldInput.bind(this);
+  this._handleAuthModeClick = this._handleAuthModeClick.bind(this);
+  this._handleAuthPasswordToggle = this._handleAuthPasswordToggle.bind(this);
+  this._handleAuthConfirmToggle = this._handleAuthConfirmToggle.bind(this);
+  this._handleAuthRememberChange = this._handleAuthRememberChange.bind(this);
   this._handleAuthLegacy = this._handleAuthLegacy.bind(this);
   this._handleLegacyLoad = this._handleLegacyLoad.bind(this);
   this._handleLegacyBack = this._handleLegacyBack.bind(this);
@@ -3990,11 +4190,22 @@ class GameApp extends HTMLElement {
     this.signOutButton?.addEventListener('click', this._handleSignOut);
     this.copyHeroButton?.addEventListener('click', this._handleCopyHeroId);
     this.newHeroButton?.addEventListener('click', this._handleNewHeroRequest);
-    this.authLoginButton?.addEventListener('click', this._handleAuthLogin);
-    this.authRegisterButton?.addEventListener('click', this._handleAuthRegister);
+    if (Array.isArray(this.authModeButtons)) {
+      for (const button of this.authModeButtons) {
+        button?.addEventListener('click', this._handleAuthModeClick);
+      }
+    }
+    this.authSubmitButton?.addEventListener('click', this._handleAuthSubmit);
     this.authCancelButton?.addEventListener('click', this._handleAuthCancel);
     this.authAccountInput?.addEventListener('keydown', this._handleAuthInputKeydown);
     this.authPasswordInput?.addEventListener('keydown', this._handleAuthInputKeydown);
+    this.authConfirmInput?.addEventListener('keydown', this._handleAuthInputKeydown);
+    this.authAccountInput?.addEventListener('input', this._handleAuthFieldInput);
+    this.authPasswordInput?.addEventListener('input', this._handleAuthFieldInput);
+    this.authConfirmInput?.addEventListener('input', this._handleAuthFieldInput);
+    this.authPasswordToggle?.addEventListener('click', this._handleAuthPasswordToggle);
+    this.authConfirmToggle?.addEventListener('click', this._handleAuthConfirmToggle);
+    this.authRememberCheckbox?.addEventListener('change', this._handleAuthRememberChange);
     this.authLegacyButton?.addEventListener('click', this._handleAuthLegacy);
     this.characterListEl?.addEventListener('click', this._handleCharacterListClick);
     this.characterCreateButton?.addEventListener('click', this._handleCharacterCreate);
@@ -4102,11 +4313,22 @@ class GameApp extends HTMLElement {
   this.signOutButton?.removeEventListener('click', this._handleSignOut);
   this.copyHeroButton?.removeEventListener('click', this._handleCopyHeroId);
   this.newHeroButton?.removeEventListener('click', this._handleNewHeroRequest);
-  this.authLoginButton?.removeEventListener('click', this._handleAuthLogin);
-  this.authRegisterButton?.removeEventListener('click', this._handleAuthRegister);
+  if (Array.isArray(this.authModeButtons)) {
+    for (const button of this.authModeButtons) {
+      button?.removeEventListener('click', this._handleAuthModeClick);
+    }
+  }
+  this.authSubmitButton?.removeEventListener('click', this._handleAuthSubmit);
   this.authCancelButton?.removeEventListener('click', this._handleAuthCancel);
   this.authAccountInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
   this.authPasswordInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
+  this.authConfirmInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
+  this.authAccountInput?.removeEventListener('input', this._handleAuthFieldInput);
+  this.authPasswordInput?.removeEventListener('input', this._handleAuthFieldInput);
+  this.authConfirmInput?.removeEventListener('input', this._handleAuthFieldInput);
+  this.authPasswordToggle?.removeEventListener('click', this._handleAuthPasswordToggle);
+  this.authConfirmToggle?.removeEventListener('click', this._handleAuthConfirmToggle);
+  this.authRememberCheckbox?.removeEventListener('change', this._handleAuthRememberChange);
   this.authLegacyButton?.removeEventListener('click', this._handleAuthLegacy);
   this.characterListEl?.removeEventListener('click', this._handleCharacterListClick);
   this.characterCreateButton?.removeEventListener('click', this._handleCharacterCreate);
@@ -4226,15 +4448,29 @@ class GameApp extends HTMLElement {
     let storedProfileId = null;
     let storedAccount = null;
     let storedSession = null;
+    let storedRemember = null;
     try {
       const storage = window.localStorage;
       storedProfileId = storage?.getItem(PROFILE_STORAGE_KEY) ?? null;
       storedAccount = storage?.getItem(ACCOUNT_STORAGE_KEY) ?? null;
       storedSession = storage?.getItem(SESSION_STORAGE_KEY) ?? null;
+      storedRemember = storage?.getItem(SESSION_REMEMBER_KEY) ?? null;
     } catch (err) {
       storedProfileId = null;
       storedAccount = null;
       storedSession = null;
+      storedRemember = null;
+    }
+    if (storedRemember != null) {
+      const normalized = String(storedRemember).toLowerCase();
+      this.rememberSession = normalized !== '0' && normalized !== 'false';
+    } else {
+      this.rememberSession = true;
+    }
+    this._syncRememberPreferenceUI();
+    if (!this.rememberSession && storedSession) {
+      storedSession = null;
+      this._clearStoredSessionToken();
     }
     this.accountName = storedAccount || null;
     this.sessionToken = storedSession || null;
@@ -4668,7 +4904,7 @@ class GameApp extends HTMLElement {
           this.messageEl.hidden = false;
         }
         if (!this.sessionToken) {
-          this._showAuthOverlay(this.accountName || '');
+          this._showAuthOverlay({ account: this.accountName || '', mode: 'login' });
         }
       }
     };
@@ -10037,21 +10273,45 @@ class GameApp extends HTMLElement {
     }
   }
 
-  _showAuthOverlay(presetAccount = this.accountName || '') {
+  _showAuthOverlay(options = this.accountName || '') {
     if (!this.authOverlay) return;
+    let presetAccount = this.accountName || '';
+    let desiredMode = this.authMode || 'login';
+    if (typeof options === 'string' || options == null) {
+      presetAccount = typeof options === 'string' ? options : presetAccount;
+    } else if (typeof options === 'object') {
+      if (Object.prototype.hasOwnProperty.call(options, 'account')) {
+        presetAccount = options.account ?? presetAccount;
+      }
+      if (typeof options.mode === 'string') {
+        desiredMode = options.mode;
+      }
+    }
     this._hideIdentityOverlay();
     this._hideLegacyOverlay();
     this._hideCharacterOverlay(true);
+    this._setAuthMode(desiredMode, { resetErrors: true });
+  this.authPendingAction = null;
     this.authOverlay.hidden = false;
     this.authPending = false;
     this.legacyPending = false;
     this._setAuthFormDisabled(false);
     this._clearAuthForm(presetAccount);
-    this._updateAuthDescription();
+    this._syncRememberPreferenceUI();
     requestAnimationFrame(() => {
-      const target = this.authAccountInput || this.authPasswordInput;
-      target?.focus();
-      target?.select?.();
+      let target = null;
+      if (this.authMode === 'register') {
+        target = !this.authAccountInput?.value ? this.authAccountInput : this.authPasswordInput;
+      } else {
+        target = this.authAccountInput?.value ? this.authPasswordInput : this.authAccountInput;
+      }
+      target = target || this.authAccountInput || this.authPasswordInput;
+      try {
+        target?.focus({ preventScroll: true });
+        target?.select?.();
+      } catch (err) {
+        target?.focus?.();
+      }
     });
   }
 
@@ -10061,6 +10321,8 @@ class GameApp extends HTMLElement {
     this._clearAuthForm(this.accountName || '');
     this.authAccountInput?.blur();
     this.authPasswordInput?.blur();
+    this.authConfirmInput?.blur();
+    this.authPendingAction = null;
   }
 
   _showCharacterOverlay(payload = {}) {
@@ -10282,7 +10544,7 @@ class GameApp extends HTMLElement {
         // ignore close errors
       }
     } else {
-      this._showAuthOverlay(this.accountName || '');
+      this._showAuthOverlay({ account: this.accountName || '', mode: 'login' });
     }
   }
 
@@ -10293,6 +10555,13 @@ class GameApp extends HTMLElement {
     if (this.authPasswordInput) {
       this.authPasswordInput.value = '';
     }
+    if (this.authConfirmInput) {
+      this.authConfirmInput.value = '';
+    }
+    this._markAuthFieldInvalid(this.authAccountInput, false);
+    this._markAuthFieldInvalid(this.authPasswordInput, false);
+    this._markAuthFieldInvalid(this.authConfirmInput, false);
+    this._resetAuthVisibility();
     this._setAuthFeedback('', 'info');
   }
 
@@ -10303,11 +10572,28 @@ class GameApp extends HTMLElement {
     if (this.authPasswordInput) {
       this.authPasswordInput.disabled = Boolean(disabled);
     }
-    if (this.authLoginButton) {
-      this.authLoginButton.disabled = Boolean(disabled);
+    if (this.authConfirmInput) {
+      this.authConfirmInput.disabled = Boolean(disabled);
     }
-    if (this.authRegisterButton) {
-      this.authRegisterButton.disabled = Boolean(disabled);
+    if (Array.isArray(this.authModeButtons)) {
+      for (const button of this.authModeButtons) {
+        if (button) {
+          button.disabled = Boolean(disabled);
+          button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        }
+      }
+    }
+    if (this.authSubmitButton) {
+      this.authSubmitButton.disabled = Boolean(disabled);
+    }
+    if (this.authPasswordToggle) {
+      this.authPasswordToggle.disabled = Boolean(disabled);
+    }
+    if (this.authConfirmToggle) {
+      this.authConfirmToggle.disabled = Boolean(disabled);
+    }
+    if (this.authRememberCheckbox) {
+      this.authRememberCheckbox.disabled = Boolean(disabled);
     }
     if (this.authLegacyButton) {
       this.authLegacyButton.disabled = Boolean(disabled);
@@ -10320,35 +10606,213 @@ class GameApp extends HTMLElement {
     const color =
       variant === 'success' ? '#bbf7d0' : variant === 'error' ? '#fca5a5' : '#bae6fd';
     this.authFeedbackEl.style.color = color;
+    this._authFeedbackVariant = variant;
   }
 
   _updateAuthDescription() {
     if (!this.authDescriptionEl) return;
     const min = Number(this.authPolicy?.passwordMinLength) || PASSWORD_MIN_LENGTH;
     const max = Number(this.authPolicy?.passwordMaxLength) || PASSWORD_MAX_LENGTH;
-    this.authDescriptionEl.textContent = `Sign in or create an account to continue your adventure. Passwords must be ${min}-${max} characters.`;
+    let message;
+    if (this.authMode === 'register') {
+      message = `Create a new account to begin your adventure. Passwords must be ${min}-${max} characters and match below.`;
+    } else {
+      message = `Sign in to resume your journey. Passwords must be ${min}-${max} characters.`;
+    }
+    this.authDescriptionEl.textContent = message;
+  }
+
+  _setAuthMode(mode = 'login', options = {}) {
+    const next = mode === 'register' ? 'register' : 'login';
+    const previous = this.authMode;
+    const force = Boolean(options?.force);
+    const resetErrors = Boolean(options?.resetErrors);
+    if (previous !== next || force) {
+      this.authMode = next;
+      if (Array.isArray(this.authModeButtons)) {
+        for (const button of this.authModeButtons) {
+          if (!button) continue;
+          const active = button.dataset?.authMode === next;
+          button.classList.toggle('active', active);
+          button.setAttribute('aria-selected', active ? 'true' : 'false');
+        }
+      }
+      if (this.authTitleEl) {
+        this.authTitleEl.textContent = next === 'register' ? 'Create Account' : 'Welcome Back';
+      }
+      if (this.authSubmitButton) {
+        this.authSubmitButton.textContent = next === 'register' ? 'Create Account' : 'Sign In';
+      }
+      if (this.authPasswordInput) {
+        const autocomplete = next === 'register' ? 'new-password' : 'current-password';
+        this.authPasswordInput.setAttribute('autocomplete', autocomplete);
+      }
+      if (this.authConfirmInput) {
+        const confirmAuto = next === 'register' ? 'new-password' : 'off';
+        this.authConfirmInput.setAttribute('autocomplete', confirmAuto);
+      }
+      if (this.authConfirmContainer) {
+        const hidden = next !== 'register';
+        this.authConfirmContainer.hidden = hidden;
+        this.authConfirmContainer.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+      }
+      if (previous !== next) {
+        this._resetAuthVisibility();
+      }
+    }
+    if (resetErrors) {
+      this._setAuthFeedback('', 'info');
+      this._markAuthFieldInvalid(this.authAccountInput, false);
+      this._markAuthFieldInvalid(this.authPasswordInput, false);
+      this._markAuthFieldInvalid(this.authConfirmInput, false);
+    }
+    if (next !== 'register') {
+      this._markAuthFieldInvalid(this.authConfirmInput, false);
+    }
+    this._updateAuthDescription();
+  }
+
+  _syncRememberPreferenceUI() {
+    if (!this.authRememberCheckbox) return;
+    this.authRememberCheckbox.checked = Boolean(this.rememberSession);
+    this.authRememberCheckbox.setAttribute('aria-checked', this.rememberSession ? 'true' : 'false');
+  }
+
+  _persistRememberPreference(enabled) {
+    try {
+      window.localStorage?.setItem(SESSION_REMEMBER_KEY, enabled ? '1' : '0');
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
+
+  _resetAuthVisibility() {
+    this._authPasswordVisible = false;
+    this._authConfirmVisible = false;
+    if (this.authPasswordInput) {
+      this.authPasswordInput.type = 'password';
+    }
+    if (this.authConfirmInput) {
+      this.authConfirmInput.type = 'password';
+    }
+    if (this.authPasswordToggle) {
+      this.authPasswordToggle.textContent = 'Show';
+      this.authPasswordToggle.setAttribute('aria-label', 'Show password');
+      this.authPasswordToggle.setAttribute('aria-pressed', 'false');
+    }
+    if (this.authConfirmToggle) {
+      this.authConfirmToggle.textContent = 'Show';
+      this.authConfirmToggle.setAttribute('aria-label', 'Show password confirmation');
+      this.authConfirmToggle.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  _markAuthFieldInvalid(field, invalid) {
+    if (!field) return;
+    if (invalid) {
+      field.classList.add('invalid');
+      field.setAttribute('aria-invalid', 'true');
+    } else {
+      field.classList.remove('invalid');
+      field.removeAttribute('aria-invalid');
+    }
+  }
+
+  _handleAuthFieldInput(event) {
+    if (!event?.target) return;
+    this._markAuthFieldInvalid(event.target, false);
+    if (this._authFeedbackVariant === 'error' && this.authFeedbackEl?.textContent) {
+      this._setAuthFeedback('', 'info');
+    }
+  }
+
+  _handleAuthModeClick(event) {
+    event?.preventDefault?.();
+    const button = event?.currentTarget;
+    if (!button || button.disabled) return;
+    const mode = button.dataset?.authMode;
+    if (!mode) return;
+    this._setAuthMode(mode, { resetErrors: true });
+  }
+
+  _handleAuthPasswordToggle(event) {
+    event?.preventDefault?.();
+    if (!this.authPasswordInput || !this.authPasswordToggle) return;
+    this._authPasswordVisible = !this._authPasswordVisible;
+    this.authPasswordInput.type = this._authPasswordVisible ? 'text' : 'password';
+    this.authPasswordToggle.textContent = this._authPasswordVisible ? 'Hide' : 'Show';
+    this.authPasswordToggle.setAttribute('aria-label', this._authPasswordVisible ? 'Hide password' : 'Show password');
+    this.authPasswordToggle.setAttribute('aria-pressed', this._authPasswordVisible ? 'true' : 'false');
+    try {
+      this.authPasswordInput.focus({ preventScroll: true });
+    } catch (err) {
+      this.authPasswordInput.focus();
+    }
+  }
+
+  _handleAuthConfirmToggle(event) {
+    event?.preventDefault?.();
+    if (!this.authConfirmInput || !this.authConfirmToggle) return;
+    this._authConfirmVisible = !this._authConfirmVisible;
+    this.authConfirmInput.type = this._authConfirmVisible ? 'text' : 'password';
+    this.authConfirmToggle.textContent = this._authConfirmVisible ? 'Hide' : 'Show';
+    this.authConfirmToggle.setAttribute('aria-label', this._authConfirmVisible ? 'Hide password confirmation' : 'Show password confirmation');
+    this.authConfirmToggle.setAttribute('aria-pressed', this._authConfirmVisible ? 'true' : 'false');
+    try {
+      this.authConfirmInput.focus({ preventScroll: true });
+    } catch (err) {
+      this.authConfirmInput.focus();
+    }
+  }
+
+  _handleAuthSubmit(event) {
+    event?.preventDefault?.();
+    if (this.authMode === 'register') {
+      this._handleAuthRegister(event);
+    } else {
+      this._handleAuthLogin(event);
+    }
+  }
+
+  _handleAuthRememberChange(event) {
+    const checked = event?.target?.checked !== false;
+    this.rememberSession = Boolean(checked);
+    this._persistRememberPreference(this.rememberSession);
+    if (!this.rememberSession) {
+      this._clearStoredSessionToken();
+    } else if (this.sessionToken) {
+      this._persistSessionToken(this.sessionToken);
+    }
+    this._syncRememberPreferenceUI();
   }
 
   _handleAuthLogin(event) {
     event?.preventDefault?.();
+    this._setAuthMode('login');
     if (this.authPending) return;
+    this._markAuthFieldInvalid(this.authAccountInput, false);
+    this._markAuthFieldInvalid(this.authPasswordInput, false);
     const account = this.authAccountInput?.value?.trim?.() || '';
     const password = this.authPasswordInput?.value || '';
     if (!account) {
       this._setAuthFeedback('Enter your account name to continue.', 'error');
+      this._markAuthFieldInvalid(this.authAccountInput, true);
       this.authAccountInput?.focus();
       return;
     }
     if (!password) {
       this._setAuthFeedback('Enter your password to sign in.', 'error');
+      this._markAuthFieldInvalid(this.authPasswordInput, true);
       this.authPasswordInput?.focus();
       return;
     }
     this.authPending = true;
+    this.authPendingAction = 'login';
     this._setAuthFormDisabled(true);
     this._setAuthFeedback('Signing in...', 'info');
     if (!this._sendAuthMessage('login', { account, password })) {
       this.authPending = false;
+      this.authPendingAction = null;
       this._setAuthFormDisabled(false);
       this._setAuthFeedback('Unable to contact the server. Please try again.', 'error');
     }
@@ -10356,16 +10820,23 @@ class GameApp extends HTMLElement {
 
   _handleAuthRegister(event) {
     event?.preventDefault?.();
+    this._setAuthMode('register');
     if (this.authPending) return;
+    this._markAuthFieldInvalid(this.authAccountInput, false);
+    this._markAuthFieldInvalid(this.authPasswordInput, false);
+    this._markAuthFieldInvalid(this.authConfirmInput, false);
     const account = this.authAccountInput?.value?.trim?.() || '';
     const password = this.authPasswordInput?.value || '';
+    const confirm = this.authConfirmInput?.value || '';
     if (!account) {
       this._setAuthFeedback('Choose an account name to register.', 'error');
+      this._markAuthFieldInvalid(this.authAccountInput, true);
       this.authAccountInput?.focus();
       return;
     }
     if (!ACCOUNT_NAME_PATTERN.test(account)) {
       this._setAuthFeedback('Account names use letters, numbers, underscores, or hyphens (3-32 chars).', 'error');
+      this._markAuthFieldInvalid(this.authAccountInput, true);
       this.authAccountInput?.focus();
       return;
     }
@@ -10373,14 +10844,24 @@ class GameApp extends HTMLElement {
     const max = Number(this.authPolicy?.passwordMaxLength) || PASSWORD_MAX_LENGTH;
     if (password.length < min || password.length > max) {
       this._setAuthFeedback(`Password must be ${min}-${max} characters.`, 'error');
+      this._markAuthFieldInvalid(this.authPasswordInput, true);
       this.authPasswordInput?.focus();
       return;
     }
+    if (password !== confirm) {
+      this._setAuthFeedback('Passwords must match.', 'error');
+      this._markAuthFieldInvalid(this.authPasswordInput, true);
+      this._markAuthFieldInvalid(this.authConfirmInput, true);
+      this.authConfirmInput?.focus();
+      return;
+    }
     this.authPending = true;
+    this.authPendingAction = 'register';
     this._setAuthFormDisabled(true);
     this._setAuthFeedback('Creating account...', 'info');
     if (!this._sendAuthMessage('register', { account, password })) {
       this.authPending = false;
+      this.authPendingAction = null;
       this._setAuthFormDisabled(false);
       this._setAuthFeedback('Unable to reach the server. Please retry shortly.', 'error');
     }
@@ -10396,7 +10877,7 @@ class GameApp extends HTMLElement {
     if (!event) return;
     if (event.key === 'Enter') {
       event.preventDefault();
-      this._handleAuthLogin();
+      this._handleAuthSubmit(event);
     } else if (event.key === 'Escape') {
       event.preventDefault();
       this._handleAuthCancel();
@@ -10477,7 +10958,7 @@ class GameApp extends HTMLElement {
     event?.preventDefault?.();
     if (this.legacyPending) return;
     this._hideLegacyOverlay();
-    this._showAuthOverlay(this.accountName || '');
+    this._showAuthOverlay({ account: this.accountName || '', mode: 'login' });
   }
 
   _handleLegacyInputKeydown(event) {
@@ -10715,7 +11196,7 @@ class GameApp extends HTMLElement {
       this._updateSignOutVisibility();
       this._hideAccountOverlay(true);
       this._hideLegacyOverlay();
-      this._showAuthOverlay(this.accountName || '');
+      this._showAuthOverlay({ account: this.accountName || '', mode: 'login' });
       this._showTransientMessage('Signed out.', 3200);
     }
   }
@@ -10765,6 +11246,10 @@ class GameApp extends HTMLElement {
 
   _persistSessionToken(token) {
     if (!token) {
+      this._clearStoredSessionToken();
+      return;
+    }
+    if (!this.rememberSession) {
       this._clearStoredSessionToken();
       return;
     }
@@ -11343,6 +11828,7 @@ class GameApp extends HTMLElement {
       this.authPending = false;
       this.legacyPending = false;
       this.characterPending = false;
+      this.authPendingAction = null;
       this._setAuthFormDisabled(false);
       this._setLegacyFormDisabled(false);
       this._showCharacterOverlay(data);
@@ -11364,7 +11850,7 @@ class GameApp extends HTMLElement {
       this._setLegacyFormDisabled(false);
       this._setAuthFeedback('', 'info');
       this._setLegacyFeedback('', 'info');
-      this._showAuthOverlay(this.accountName || '');
+    this._showAuthOverlay({ account: this.accountName || '', mode: 'login' });
       this._hideCharacterOverlay();
   this._hideIdentityOverlay();
       this._hideLegacyOverlay();
@@ -11380,6 +11866,8 @@ class GameApp extends HTMLElement {
       const message = data?.message || 'Authentication failed.';
       this.authPending = false;
       this.legacyPending = false;
+      const lastMode = this.authPendingAction || this.authMode || 'login';
+      this.authPendingAction = null;
       if (field === 'character') {
         this.characterPending = false;
         this._setCharacterFormDisabled(false);
@@ -11399,10 +11887,18 @@ class GameApp extends HTMLElement {
         this.legacyInput?.focus();
       } else {
         const preset = this.authAccountInput?.value?.trim?.() || this.accountName || '';
-        this._showAuthOverlay(preset);
+        this._showAuthOverlay({ account: preset, mode: lastMode });
+        this._setAuthMode(lastMode, { resetErrors: false, force: true });
         this._setAuthFeedback(message, 'error');
         if (field === 'password') {
+          this._markAuthFieldInvalid(this.authPasswordInput, true);
+          if (lastMode === 'register') {
+            this._markAuthFieldInvalid(this.authConfirmInput, true);
+          }
           this.authPasswordInput?.focus();
+        } else if (field === 'account') {
+          this._markAuthFieldInvalid(this.authAccountInput, true);
+          this.authAccountInput?.focus();
         } else {
           this.authAccountInput?.focus();
         }
@@ -11418,7 +11914,7 @@ class GameApp extends HTMLElement {
       this._updateSignOutVisibility();
       this._hideIdentityOverlay();
       this._hideCharacterOverlay();
-      this._showAuthOverlay(this.accountName || '');
+      this._showAuthOverlay({ account: this.accountName || '', mode: 'login' });
       this._showTransientMessage(data.reason || 'Disconnected by server.', 4200);
       return;
     }
@@ -11435,7 +11931,7 @@ class GameApp extends HTMLElement {
       this._updateSignOutVisibility();
       this._hideIdentityOverlay();
       this._hideCharacterOverlay();
-      this._showAuthOverlay(this.accountName || '');
+      this._showAuthOverlay({ account: this.accountName || '', mode: 'login' });
       this._showTransientMessage(data.reason || 'Connection rejected.', 4200);
     }
   }
