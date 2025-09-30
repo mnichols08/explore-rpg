@@ -173,6 +173,28 @@ const SHOP_GEAR_PRICES = {
   },
 };
 
+const SHOP_GEAR_SELLBACK_RATIO = 0.5;
+const SHOP_ORE_BONUS_MULTIPLIER = 1;
+
+const FACILITY_TYPES = {
+  SHRINE: 'shrine',
+  BANK: 'bank',
+  SHOP: 'shop',
+  TRADING: 'trading',
+};
+
+const TRADING_POST_MAX_LISTINGS = 160;
+const TRADING_POST_MAX_PER_PLAYER = 8;
+const TRADING_POST_FEE = 0.05;
+const TRADING_POST_MAX_PRICE = 250000;
+const TRADING_POST_MAX_STACK = 250;
+const TRADING_POST_LISTING_LIFETIME_MS = 1000 * 60 * 60 * 24;
+
+const TRADE_DISTANCE_THRESHOLD = 2.4;
+const TRADE_STATIONARY_THRESHOLD = 0.12;
+const TRADE_REQUEST_TIMEOUT_MS = 15000;
+const TRADE_LOCK_TIMEOUT_MS = 45000;
+
 const PASSWORD_ITERATIONS = 210000;
 const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_DERIVED_BITS = 256;
@@ -546,6 +568,13 @@ let oreNodeCounter = 1;
 let lootCounter = 1;
 const zoneStates = new Map();
 const zoneSafeZones = new Map();
+
+const tradingPostListings = new Map();
+let nextListingId = 1;
+const activeTrades = new Map();
+const playerTradeMap = new Map();
+const pendingTradeRequests = new Map();
+let nextTradeId = 1;
 
 const world = {
   width: WORLD_WIDTH,
@@ -1911,6 +1940,10 @@ function ensureSafeZoneFacilities(zoneState) {
     facilities.shop || findFacilityPosition(center, zoneState, (Math.PI * 3) / 4, SAFE_ZONE_RADIUS * 0.6, FACILITY_INTERACT_RADIUS),
     FACILITY_INTERACT_RADIUS
   );
+  facilities.trading = normalizeFacilitySpot(
+    facilities.trading || findFacilityPosition(center, zoneState, (Math.PI * 5) / 4, SAFE_ZONE_RADIUS * 0.65, FACILITY_INTERACT_RADIUS),
+    FACILITY_INTERACT_RADIUS
+  );
   zoneState.safeZone = {
     ...zoneState.safeZone,
     x: center.x,
@@ -1971,6 +2004,37 @@ function carveZoneSanctuary(zoneState) {
       const worldY = ty + 0.5;
       if (Math.hypot(worldX - centerX, worldY - centerY) <= SAFE_ZONE_RADIUS * 0.85) {
         row[tx] = 'glyph';
+      }
+    }
+  }
+
+  const facilities = zoneState.safeZone?.facilities || {};
+  const facilityMarks = [
+    { spot: facilities.shrine, tile: 'ember', radiusScale: 0.8 },
+    { spot: facilities.bank, tile: 'sand', radiusScale: 0.65 },
+    { spot: facilities.shop, tile: 'forest', radiusScale: 0.65 },
+    { spot: facilities.trading, tile: 'rock', radiusScale: 0.65 },
+  ];
+  for (const { spot, tile, radiusScale } of facilityMarks) {
+    if (!spot || !tile) continue;
+    const fx = Number(spot.x);
+    const fy = Number(spot.y);
+    if (!Number.isFinite(fx) || !Number.isFinite(fy)) continue;
+    const radius = Math.max(0.4, (Number(spot.radius) || FACILITY_INTERACT_RADIUS) * (radiusScale || 0.6));
+    const tilesRadius = Math.ceil(radius + 1);
+    const radiusSq = radius * radius;
+    for (let dy = -tilesRadius; dy <= tilesRadius; dy += 1) {
+      const ty = clamp(Math.floor(fy) + dy, bounds.minY, bounds.maxY);
+      const row = world.tiles[ty];
+      if (!row) continue;
+      for (let dx = -tilesRadius; dx <= tilesRadius; dx += 1) {
+        const tx = clamp(Math.floor(fx) + dx, bounds.minX, bounds.maxX);
+        const wx = tx + 0.5;
+        const wy = ty + 0.5;
+        const distSq = (wx - fx) * (wx - fx) + (wy - fy) * (wy - fy);
+        if (distSq <= radiusSq) {
+          row[tx] = tile;
+        }
       }
     }
   }
@@ -2168,6 +2232,15 @@ function serializeFacilitySpot(facility) {
   };
 }
 
+function serializeFacilityWithType(facility, type) {
+  const spot = serializeFacilitySpot(facility);
+  if (!spot) return null;
+  return {
+    ...spot,
+    type,
+  };
+}
+
 function normalizeGhostTarget(value) {
   if (!value) return null;
   const x = Number(value.x);
@@ -2277,9 +2350,10 @@ function serializeZone(zoneStateOrDef) {
     y: safe?.y ?? null,
     radius: SAFE_ZONE_RADIUS,
     facilities: {
-      shrine: serializeFacilitySpot(safe?.facilities?.shrine),
-      bank: serializeFacilitySpot(safe?.facilities?.bank),
-      shop: serializeFacilitySpot(safe?.facilities?.shop),
+      shrine: serializeFacilityWithType(safe?.facilities?.shrine, FACILITY_TYPES.SHRINE),
+      bank: serializeFacilityWithType(safe?.facilities?.bank, FACILITY_TYPES.BANK),
+      shop: serializeFacilityWithType(safe?.facilities?.shop, FACILITY_TYPES.SHOP),
+      trading: serializeFacilityWithType(safe?.facilities?.trading, FACILITY_TYPES.TRADING),
     },
   };
 }
@@ -2292,11 +2366,34 @@ function serializeSafeZonePayload(zoneId) {
     y: safe.y,
     radius: SAFE_ZONE_RADIUS,
     facilities: {
-      shrine: serializeFacilitySpot(safe.facilities?.shrine),
-      bank: serializeFacilitySpot(safe.facilities?.bank),
-      shop: serializeFacilitySpot(safe.facilities?.shop),
+      shrine: serializeFacilityWithType(safe.facilities?.shrine, FACILITY_TYPES.SHRINE),
+      bank: serializeFacilityWithType(safe.facilities?.bank, FACILITY_TYPES.BANK),
+      shop: serializeFacilityWithType(safe.facilities?.shop, FACILITY_TYPES.SHOP),
+      trading: serializeFacilityWithType(safe.facilities?.trading, FACILITY_TYPES.TRADING),
     },
   };
+}
+
+function getFacilitySpotForZone(zoneId, facilityType) {
+  if (!facilityType) return null;
+  const safe = getSafeZoneLocation(zoneId);
+  if (!safe || !safe.facilities) return null;
+  return safe.facilities[facilityType] || null;
+}
+
+function getFacilitySpotForPlayer(player, facilityType) {
+  if (!player || player.levelId) return null;
+  const zoneId = player.zoneId || determineZoneForPosition(player.x, player.y)?.id || DEFAULT_ZONE_ID;
+  return getFacilitySpotForZone(zoneId, facilityType);
+}
+
+function isPlayerWithinFacility(player, facilityType, extraRadius = 0) {
+  const spot = getFacilitySpotForPlayer(player, facilityType);
+  if (!spot) return false;
+  const radius = Math.max(0.5, Number(spot.radius) || FACILITY_INTERACT_RADIUS) + extraRadius;
+  const dx = player.x - spot.x;
+  const dy = player.y - spot.y;
+  return dx * dx + dy * dy <= radius * radius;
 }
 
 function getSafeZoneLocation(zoneId = DEFAULT_ZONE_ID) {
@@ -2460,6 +2557,19 @@ function getItemDefinition(id) {
 function getProgressionForSlot(slot) {
   if (!slot) return [];
   return GEAR_PROGRESSIONS[slot] || [];
+}
+
+function getShopPriceForGear(gearId) {
+  if (!gearId) return null;
+  for (const prices of Object.values(SHOP_GEAR_PRICES)) {
+    if (prices && Object.prototype.hasOwnProperty.call(prices, gearId)) {
+      const value = Number(prices[gearId]);
+      if (Number.isFinite(value) && value > 0) {
+        return Math.floor(value);
+      }
+    }
+  }
+  return null;
 }
 
 function ensureGearData(source) {
@@ -2715,6 +2825,24 @@ function equipItem(player, slot, itemId, broadcastUpdate = true, suppressMessage
   return { ok: true, slot, itemId: def.id };
 }
 
+function equipBestAvailableForSlot(player, slot) {
+  if (!EQUIPMENT_SLOTS.includes(slot)) return;
+  const gear = ensureGear(player);
+  const equipment = ensureEquipment(player);
+  let fallback = STARTING_EQUIPMENT[slot] || null;
+  const progression = getProgressionForSlot(slot);
+  for (let i = progression.length - 1; i >= 0; i -= 1) {
+    const candidate = progression[i];
+    if (gear.owned.has(candidate)) {
+      fallback = candidate;
+      break;
+    }
+  }
+  const def = fallback ? getItemDefinition(fallback) : null;
+  equipment[slot] = def ? def.id : null;
+  applyStats(player);
+}
+
 function createMomentumState() {
   return {
     stacks: 0,
@@ -2863,17 +2991,34 @@ function withdrawAllFromBank(player) {
   };
 }
 
-function sellInventoryOres(player) {
+function sellInventoryOres(player, { oreId = null, amount = null } = {}) {
   const soldItems = {};
   let totalCurrency = 0;
-  for (const [key, value] of Object.entries(player.inventory.items || {})) {
+  if (!player?.inventory?.items) {
+    return { items: soldItems, currency: 0, action: 'sell' };
+  }
+  const targetEntries = oreId ? [[oreId, player.inventory.items[oreId] || 0]] : Object.entries(player.inventory.items);
+  let remaining = amount != null ? Math.max(0, Math.floor(Number(amount) || 0)) : null;
+  for (const [key, value] of targetEntries) {
+    if (remaining !== null && remaining <= 0) break;
     const ore = getOreType(key);
     if (!ore?.value) continue;
-    const amount = Math.max(0, Math.floor(Number(value) || 0));
-    if (!amount) continue;
-    totalCurrency += amount * ore.value;
-    soldItems[key] = (soldItems[key] || 0) + amount;
-    delete player.inventory.items[key];
+    const available = Math.max(0, Math.floor(Number(value) || 0));
+    if (!available) continue;
+    const sellAmount = remaining != null ? Math.min(available, remaining) : available;
+    if (!sellAmount) continue;
+    const pricePerUnit = Math.max(1, Math.round(ore.value * SHOP_ORE_BONUS_MULTIPLIER));
+    totalCurrency += sellAmount * pricePerUnit;
+    soldItems[key] = (soldItems[key] || 0) + sellAmount;
+    const leftover = available - sellAmount;
+    if (leftover > 0) {
+      player.inventory.items[key] = leftover;
+    } else {
+      delete player.inventory.items[key];
+    }
+    if (remaining != null) {
+      remaining -= sellAmount;
+    }
   }
   if (totalCurrency > 0) {
     player.inventory.currency = Math.max(0, Math.floor(Number(player.inventory.currency) || 0)) + totalCurrency;
@@ -2882,6 +3027,87 @@ function sellInventoryOres(player) {
     items: soldItems,
     currency: totalCurrency,
     action: 'sell',
+  };
+}
+
+function sellOwnedGear(player, gearId) {
+  const def = getItemDefinition(gearId);
+  if (!player || !def) {
+    return { ok: false, message: 'Unknown item.' };
+  }
+  const gear = ensureGear(player);
+  if (!gear.owned.has(def.id)) {
+    return { ok: false, message: 'You do not own that equipment.' };
+  }
+  if (STARTING_GEAR_SET.has(def.id)) {
+    return { ok: false, message: 'Starter gear cannot be sold.' };
+  }
+  const price = getShopPriceForGear(def.id);
+  const sellPrice = Math.max(10, Math.round((price || 0) * SHOP_GEAR_SELLBACK_RATIO)) || Math.max(10, Math.round((def.damageMultiplier || 1) * 40));
+  gear.owned.delete(def.id);
+  const equipment = ensureEquipment(player);
+  if (equipment[def.slot] === def.id) {
+    equipBestAvailableForSlot(player, def.slot);
+  }
+  player.inventory.currency = Math.max(0, Math.floor(Number(player.inventory.currency) || 0)) + sellPrice;
+  return {
+    ok: true,
+    currency: sellPrice,
+    slot: def.slot,
+    itemId: def.id,
+  };
+}
+
+function buildShopCatalog(player) {
+  const gear = ensureGear(player);
+  const equipment = ensureEquipment(player);
+  const gearOffers = [];
+  const sellback = [];
+  const seen = new Set();
+  for (const slot of EQUIPMENT_SLOTS) {
+    const progression = getProgressionForSlot(slot);
+    for (const id of progression) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const def = getItemDefinition(id);
+      const price = getShopPriceForGear(id);
+      if (!def || !price) continue;
+      const owned = gear.owned.has(id);
+      gearOffers.push({
+        id,
+        slot,
+        label: def.label,
+        price,
+        owned,
+      });
+      if (owned && !STARTING_GEAR_SET.has(id)) {
+        const sellPrice = Math.max(10, Math.round(price * SHOP_GEAR_SELLBACK_RATIO));
+        sellback.push({
+          id,
+          slot,
+          label: def.label,
+          price: sellPrice,
+          equipped: equipment?.[slot] === id,
+        });
+      }
+    }
+  }
+
+  const ore = ORE_TYPES.map((oreDef) => {
+    const unitPrice = Math.max(1, Math.round(oreDef.value * SHOP_ORE_BONUS_MULTIPLIER));
+    const amount = Math.max(0, Math.floor(Number(player?.inventory?.items?.[oreDef.id]) || 0));
+    return {
+      id: oreDef.id,
+      label: oreDef.label,
+      price: unitPrice,
+      amount,
+    };
+  });
+
+  return {
+    gear: gearOffers,
+    sellback,
+    ore,
   };
 }
 
@@ -2897,15 +3123,15 @@ function handleBankOperation(player, action) {
   if (!player?.bank || !player?.inventory) {
     return { ok: false, action, message: 'Bank unavailable.' };
   }
-  const normalizedAction = action === 'deposit' || action === 'withdraw' || action === 'sell' ? action : null;
+  const normalizedAction = action === 'deposit' || action === 'withdraw' ? action : null;
   if (!normalizedAction) {
     return { ok: false, action, message: 'Unknown bank action.' };
   }
   if (player.isGhost) {
     return { ok: false, action: normalizedAction, message: 'Restless spirits cannot access the bank.' };
   }
-  if (!playerInSafeZone(player)) {
-    return { ok: false, action, message: 'You must stand in the bank safe zone.' };
+  if (!isPlayerWithinFacility(player, FACILITY_TYPES.BANK)) {
+    return { ok: false, action, message: 'Step inside the bank to manage your vault.' };
   }
 
   let result;
@@ -2913,8 +3139,6 @@ function handleBankOperation(player, action) {
     result = depositAllToBank(player);
   } else if (normalizedAction === 'withdraw') {
     result = withdrawAllFromBank(player);
-  } else if (normalizedAction === 'sell') {
-    result = sellInventoryOres(player);
   }
 
   const movedCurrency = Math.max(0, Number(result?.currency) || 0);
@@ -2924,11 +3148,8 @@ function handleBankOperation(player, action) {
 
   let message;
   if (!changed) {
-    if (normalizedAction === 'sell') message = 'No ores available to sell.';
-    else if (normalizedAction === 'withdraw') message = 'Your bank is empty.';
+    if (normalizedAction === 'withdraw') message = 'Your bank is empty.';
     else message = 'Nothing to deposit.';
-  } else if (normalizedAction === 'sell') {
-    message = `Sold ${totalItems.toLocaleString()} ore for ${movedCurrency.toLocaleString()} coins.`;
   } else if (normalizedAction === 'deposit') {
     message = `Deposited ${totalItems.toLocaleString()} items and ${movedCurrency.toLocaleString()} coins.`;
   } else if (normalizedAction === 'withdraw') {
