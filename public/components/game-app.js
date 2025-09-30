@@ -977,6 +977,92 @@ template.innerHTML = `
       gap: 0.65rem;
     }
 
+    .character-card {
+      text-align: left;
+      gap: 0.75rem;
+      max-width: 420px;
+    }
+
+    .character-scroll {
+      max-height: 240px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+      display: grid;
+    }
+
+    .character-list {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .character-option {
+      all: unset;
+      display: grid;
+      gap: 0.2rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 0.65rem;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(30, 41, 59, 0.75);
+      cursor: pointer;
+      transition: border 120ms ease, background 120ms ease, transform 120ms ease;
+    }
+
+    .character-option:hover,
+    .character-option:focus-visible {
+      border-color: rgba(148, 163, 184, 0.6);
+      background: rgba(30, 41, 59, 0.95);
+      outline: 2px solid rgba(59, 130, 246, 0.4);
+      outline-offset: 2px;
+    }
+
+    .character-option[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .character-option[data-active='true'] {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+    }
+
+    .character-option[data-banned='true'] {
+      border-color: rgba(248, 113, 113, 0.75);
+      background: rgba(248, 113, 113, 0.12);
+    }
+
+    .character-option > .character-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    .character-option > .character-meta {
+      font-size: 0.72rem;
+      color: rgba(148, 163, 184, 0.85);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .character-option > .character-meta span {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.18);
+    }
+
+    .character-empty {
+      font-size: 0.82rem;
+      color: rgba(148, 163, 184, 0.82);
+      padding: 1rem 0.25rem;
+      text-align: center;
+    }
+
+    .character-actions {
+      margin-top: 0.25rem;
+    }
+
     .onboarding-feedback {
       min-height: 1rem;
       font-size: 0.76rem;
@@ -2942,6 +3028,20 @@ template.innerHTML = `
       <button type="button" class="identity-secondary" data-auth-legacy>Use Hero ID instead</button>
     </div>
   </div>
+  <div class="identity-overlay" hidden data-character-overlay>
+    <div class="identity-card character-card">
+      <h3>Select Your Hero</h3>
+      <p data-character-description>Choose an existing hero or forge a new one.</p>
+      <div class="character-scroll">
+        <div class="character-list" data-character-list></div>
+      </div>
+      <p class="identity-feedback" data-character-feedback></p>
+      <div class="actions character-actions">
+        <button type="button" class="primary" data-character-create>Create New Hero</button>
+        <button type="button" data-character-cancel>Sign Out</button>
+      </div>
+    </div>
+  </div>
   <div class="identity-overlay" hidden data-legacy-overlay>
     <div class="identity-card legacy-card">
       <h3>Hero ID Login</h3>
@@ -3442,6 +3542,12 @@ class GameApp extends HTMLElement {
   this.authRegisterButton = this.shadowRoot.querySelector('[data-auth-register]');
   this.authCancelButton = this.shadowRoot.querySelector('[data-auth-cancel]');
   this.authLegacyButton = this.shadowRoot.querySelector('[data-auth-legacy]');
+  this.characterOverlay = this.shadowRoot.querySelector('[data-character-overlay]');
+  this.characterDescriptionEl = this.shadowRoot.querySelector('[data-character-description]');
+  this.characterListEl = this.shadowRoot.querySelector('[data-character-list]');
+  this.characterFeedbackEl = this.shadowRoot.querySelector('[data-character-feedback]');
+  this.characterCreateButton = this.shadowRoot.querySelector('[data-character-create]');
+  this.characterCancelButton = this.shadowRoot.querySelector('[data-character-cancel]');
   this.legacyOverlay = this.shadowRoot.querySelector('[data-legacy-overlay]');
   this.legacyInput = this.shadowRoot.querySelector('[data-legacy-input]');
   this.legacyFeedbackEl = this.shadowRoot.querySelector('[data-legacy-feedback]');
@@ -3582,6 +3688,9 @@ class GameApp extends HTMLElement {
   this._handleTouchUiToggle = this._handleTouchUiToggle.bind(this);
   this._handleTouchUiPointerEnd = this._handleTouchUiPointerEnd.bind(this);
   this._handleGearPanelClick = this._handleGearPanelClick.bind(this);
+  this._handleCharacterListClick = this._handleCharacterListClick.bind(this);
+  this._handleCharacterCreate = this._handleCharacterCreate.bind(this);
+  this._handleCharacterCancel = this._handleCharacterCancel.bind(this);
 
     if (this.tradingNoteEl) {
       const feePercent = Math.round(TRADING_POST_FEE * 100);
@@ -3699,6 +3808,14 @@ class GameApp extends HTMLElement {
     passwordMinLength: PASSWORD_MIN_LENGTH,
     passwordMaxLength: PASSWORD_MAX_LENGTH,
   };
+    this.characterOptions = {
+      list: [],
+      canCreate: true,
+      maxProfiles: 5,
+      activeProfileId: null,
+      context: null,
+    };
+    this.characterPending = false;
   this.authPending = false;
   this.legacyPending = false;
   this.accountPending = false;
@@ -3879,6 +3996,9 @@ class GameApp extends HTMLElement {
     this.authAccountInput?.addEventListener('keydown', this._handleAuthInputKeydown);
     this.authPasswordInput?.addEventListener('keydown', this._handleAuthInputKeydown);
     this.authLegacyButton?.addEventListener('click', this._handleAuthLegacy);
+    this.characterListEl?.addEventListener('click', this._handleCharacterListClick);
+    this.characterCreateButton?.addEventListener('click', this._handleCharacterCreate);
+    this.characterCancelButton?.addEventListener('click', this._handleCharacterCancel);
     this.legacyLoadButton?.addEventListener('click', this._handleLegacyLoad);
     this.legacyBackButton?.addEventListener('click', this._handleLegacyBack);
     this.legacyInput?.addEventListener('keydown', this._handleLegacyInputKeydown);
@@ -3988,6 +4108,9 @@ class GameApp extends HTMLElement {
   this.authAccountInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
   this.authPasswordInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
   this.authLegacyButton?.removeEventListener('click', this._handleAuthLegacy);
+  this.characterListEl?.removeEventListener('click', this._handleCharacterListClick);
+  this.characterCreateButton?.removeEventListener('click', this._handleCharacterCreate);
+  this.characterCancelButton?.removeEventListener('click', this._handleCharacterCancel);
   this.legacyLoadButton?.removeEventListener('click', this._handleLegacyLoad);
   this.legacyBackButton?.removeEventListener('click', this._handleLegacyBack);
   this.legacyInput?.removeEventListener('keydown', this._handleLegacyInputKeydown);
@@ -4164,6 +4287,7 @@ class GameApp extends HTMLElement {
         this.legacyPending = false;
         this.accountPending = false;
   this.legacyProfileWarningShown = false;
+  this.characterPending = false;
         this._setAuthFormDisabled(false);
         this._setLegacyFormDisabled(false);
         this._setAccountFormDisabled(false);
@@ -4172,6 +4296,7 @@ class GameApp extends HTMLElement {
         this._setAccountFeedback('', 'info');
         this._hideAuthOverlay();
         this._hideLegacyOverlay();
+        this._hideCharacterOverlay();
 
         if (this.messageEl) {
           if (this.messageEl.textContent === 'Sign in to continue your adventure.') {
@@ -4515,6 +4640,7 @@ class GameApp extends HTMLElement {
       this._exitChatMode();
       this.chats.clear();
       this._hideAccountOverlay(true);
+  this._hideCharacterOverlay(true);
       this.authPending = false;
       this.legacyPending = false;
       this._setAuthFormDisabled(false);
@@ -9915,6 +10041,7 @@ class GameApp extends HTMLElement {
     if (!this.authOverlay) return;
     this._hideIdentityOverlay();
     this._hideLegacyOverlay();
+    this._hideCharacterOverlay(true);
     this.authOverlay.hidden = false;
     this.authPending = false;
     this.legacyPending = false;
@@ -9934,6 +10061,229 @@ class GameApp extends HTMLElement {
     this._clearAuthForm(this.accountName || '');
     this.authAccountInput?.blur();
     this.authPasswordInput?.blur();
+  }
+
+  _showCharacterOverlay(payload = {}) {
+    if (!this.characterOverlay) return;
+    this._hideAuthOverlay();
+    this._hideLegacyOverlay();
+    this._hideAccountOverlay(true);
+
+    const characters = Array.isArray(payload?.characters) ? payload.characters : [];
+    const limits = payload?.limits || {};
+    const maxProfiles = Math.max(1, Number(limits.maxProfiles) || this.characterOptions.maxProfiles || 5);
+    const activeProfileId = typeof payload?.account?.activeProfileId === 'string' ? payload.account.activeProfileId : null;
+    const canCreate = payload?.canCreate === false ? false : characters.length < maxProfiles;
+    const context = typeof payload?.context === 'string' ? payload.context : null;
+
+    if (typeof payload?.account?.name === 'string' && payload.account.name.trim()) {
+      this.accountName = payload.account.name.trim();
+      this._persistAccountName(this.accountName);
+      this._updateAccountDisplay();
+      this._updateSignOutVisibility();
+    }
+
+    if (typeof payload?.sessionToken === 'string' && payload.sessionToken.length) {
+      this.sessionToken = payload.sessionToken;
+      this._persistSessionToken(payload.sessionToken);
+      this._clearStoredProfileId();
+    }
+
+    this.characterOptions = {
+      list: characters,
+      canCreate,
+      maxProfiles,
+      activeProfileId,
+      context,
+    };
+    this.characterPending = false;
+
+    if (this.characterDescriptionEl) {
+      const heroCount = characters.length;
+      const limitText = maxProfiles ? `You can keep up to ${maxProfiles} heroes.` : '';
+      let message;
+      if (context === 'register') {
+        message = heroCount ? 'Pick a hero to continue your new adventure.' : 'Create your first hero to begin.';
+      } else if (context === 'session') {
+        message = heroCount ? 'Choose which hero to resume your journey.' : 'Create a hero to continue.';
+      } else {
+        message = heroCount ? 'Pick a hero or forge a new one to continue.' : 'Create a hero to begin your adventure.';
+      }
+      this.characterDescriptionEl.textContent = limitText ? `${message} ${limitText}` : message;
+    }
+
+    if (this.characterCreateButton) {
+      this.characterCreateButton.textContent = canCreate ? 'Create New Hero' : 'Hero Slots Full';
+      this.characterCreateButton.disabled = !canCreate;
+    }
+
+    this._renderCharacterList();
+    this._setCharacterFeedback('', 'info');
+    this._setCharacterFormDisabled(false);
+
+    this.characterOverlay.hidden = false;
+
+    requestAnimationFrame(() => {
+      const focusTarget = this.characterListEl?.querySelector('[data-character-id]:not([disabled])');
+      if (focusTarget) {
+        focusTarget.focus({ preventScroll: true });
+      } else if (this.characterCreateButton && !this.characterCreateButton.disabled) {
+        this.characterCreateButton.focus({ preventScroll: true });
+      } else {
+        this.characterCancelButton?.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  _hideCharacterOverlay(keepState = false) {
+    if (!this.characterOverlay) return;
+    this.characterOverlay.hidden = true;
+    if (!keepState) {
+      this.characterOptions = {
+        list: [],
+        canCreate: true,
+        maxProfiles: this.characterOptions.maxProfiles || 5,
+        activeProfileId: null,
+        context: null,
+      };
+      this.characterPending = false;
+      if (this.characterListEl) {
+        this.characterListEl.innerHTML = '';
+      }
+    }
+  }
+
+  _setCharacterFormDisabled(disabled) {
+    const disableAll = Boolean(disabled);
+    if (this.characterListEl) {
+      const buttons = this.characterListEl.querySelectorAll('[data-character-id]');
+      buttons.forEach((button) => {
+        if (disableAll) {
+          button.disabled = true;
+        } else {
+          const banned = button.dataset.banned === 'true';
+          button.disabled = banned;
+        }
+      });
+    }
+    if (this.characterCreateButton) {
+      this.characterCreateButton.disabled = disableAll || !this.characterOptions.canCreate;
+    }
+    if (this.characterCancelButton) {
+      this.characterCancelButton.disabled = disableAll;
+    }
+  }
+
+  _setCharacterFeedback(message, variant = 'info') {
+    if (!this.characterFeedbackEl) return;
+    this.characterFeedbackEl.textContent = message || '';
+    const color =
+      variant === 'success' ? '#bbf7d0' : variant === 'error' ? '#fca5a5' : '#bae6fd';
+    this.characterFeedbackEl.style.color = color;
+  }
+
+  _renderCharacterList() {
+    if (!this.characterListEl) return;
+    const characters = Array.isArray(this.characterOptions?.list) ? this.characterOptions.list : [];
+    if (!characters.length) {
+      this.characterListEl.innerHTML = '<div class="character-empty">No heroes yet. Create one to begin.</div>';
+      return;
+    }
+    const activeId = this.characterOptions?.activeProfileId || null;
+    const html = characters
+      .map((character) => this._renderCharacterListItem(character, activeId))
+      .filter(Boolean)
+      .join('');
+    this.characterListEl.innerHTML = html || '<div class="character-empty">No heroes available.</div>';
+  }
+
+  _renderCharacterListItem(character, activeId) {
+    const id = typeof character?.id === 'string' ? character.id : '';
+    if (!id) return '';
+    const displayName = character?.name ? this._escapeHtml(character.name) : 'Unnamed Hero';
+    const banned = Boolean(character?.banned);
+    const isActive = activeId && activeId === id;
+    const metaChips = [];
+    if (banned) {
+      metaChips.push('Banned');
+    }
+    if (character?.tutorialCompleted) {
+      metaChips.push('Tutorial complete');
+    } else {
+      metaChips.push('Needs tutorial');
+    }
+    const lastSeen = Number(character?.lastSeen);
+    const createdAt = Number(character?.createdAt);
+    if (Number.isFinite(lastSeen) && lastSeen > 0) {
+      metaChips.push(`Last played ${this._formatRelativeTime(lastSeen)}`);
+    } else if (Number.isFinite(createdAt) && createdAt > 0) {
+      metaChips.push(`Created ${this._formatRelativeTime(createdAt)}`);
+    } else {
+      metaChips.push('Ready to explore');
+    }
+    const metaHtml = metaChips
+      .map((chip) => `<span>${this._escapeHtml(chip)}</span>`)
+      .join('');
+    const disabledAttr = banned ? ' disabled' : '';
+    const bannedAttr = banned ? ' data-banned="true"' : '';
+    const activeAttr = isActive ? 'true' : 'false';
+    return `<button type="button" class="character-option" data-character-id="${this._escapeHtml(id)}" data-active="${activeAttr}"${bannedAttr}${disabledAttr}><span class="character-name">${displayName}</span><div class="character-meta">${metaHtml}</div></button>`;
+  }
+
+  _handleCharacterListClick(event) {
+    const button = event?.target?.closest?.('[data-character-id]');
+    if (!button || !this.characterListEl?.contains(button)) return;
+    if (button.disabled) return;
+    event.preventDefault?.();
+    const profileId = button.dataset.characterId;
+    if (!profileId || this.characterPending) return;
+    this._selectCharacter(profileId);
+  }
+
+  _selectCharacter(profileId) {
+    if (!profileId || this.characterPending) return;
+    this.characterPending = true;
+    this._setCharacterFormDisabled(true);
+    this._setCharacterFeedback('Loading hero...', 'info');
+    if (!this._sendAuthMessage('select-profile', { profileId })) {
+      this.characterPending = false;
+      this._setCharacterFormDisabled(false);
+      this._setCharacterFeedback('Unable to contact the server. Please try again.', 'error');
+    }
+  }
+
+  _handleCharacterCreate(event) {
+    event?.preventDefault?.();
+    if (this.characterPending || !this.characterOptions?.canCreate) return;
+    this.characterPending = true;
+    this._setCharacterFormDisabled(true);
+    this._setCharacterFeedback('Forging a new hero...', 'info');
+    if (!this._sendAuthMessage('create-profile')) {
+      this.characterPending = false;
+      this._setCharacterFormDisabled(false);
+      this._setCharacterFeedback('Unable to contact the server. Please try again.', 'error');
+    }
+  }
+
+  _handleCharacterCancel(event) {
+    event?.preventDefault?.();
+    if (this.characterPending) return;
+    this.characterPending = false;
+    this._setCharacterFormDisabled(true);
+    this._setCharacterFeedback('Signing out...', 'info');
+    this.expectingLogout = true;
+    this.sessionToken = null;
+    this._clearStoredSessionToken();
+    this._hideCharacterOverlay(true);
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      try {
+        this.socket.close();
+      } catch (err) {
+        // ignore close errors
+      }
+    } else {
+      this._showAuthOverlay(this.accountName || '');
+    }
   }
 
   _clearAuthForm(presetAccount = this.accountName || '') {
@@ -10989,6 +11339,15 @@ class GameApp extends HTMLElement {
   _handleControlEvent(data) {
     const { event } = data || {};
     if (!event) return;
+    if (event === 'character-select') {
+      this.authPending = false;
+      this.legacyPending = false;
+      this.characterPending = false;
+      this._setAuthFormDisabled(false);
+      this._setLegacyFormDisabled(false);
+      this._showCharacterOverlay(data);
+      return;
+    }
     if (event === 'auth-required') {
       const policy = data?.policy || {};
       this.authPolicy = {
@@ -11006,6 +11365,7 @@ class GameApp extends HTMLElement {
       this._setAuthFeedback('', 'info');
       this._setLegacyFeedback('', 'info');
       this._showAuthOverlay(this.accountName || '');
+      this._hideCharacterOverlay();
   this._hideIdentityOverlay();
       this._hideLegacyOverlay();
       this._hideAccountOverlay(false);
@@ -11020,6 +11380,17 @@ class GameApp extends HTMLElement {
       const message = data?.message || 'Authentication failed.';
       this.authPending = false;
       this.legacyPending = false;
+      if (field === 'character') {
+        this.characterPending = false;
+        this._setCharacterFormDisabled(false);
+        if (Array.isArray(data?.characters)) {
+          this._showCharacterOverlay(data);
+        } else {
+          this._setCharacterFeedback('', 'info');
+        }
+        this._setCharacterFeedback(message, 'error');
+        return;
+      }
       this._setAuthFormDisabled(false);
       this._setLegacyFormDisabled(false);
       if (field === 'profile') {
@@ -11046,6 +11417,7 @@ class GameApp extends HTMLElement {
       this._clearStoredSessionToken();
       this._updateSignOutVisibility();
       this._hideIdentityOverlay();
+      this._hideCharacterOverlay();
       this._showAuthOverlay(this.accountName || '');
       this._showTransientMessage(data.reason || 'Disconnected by server.', 4200);
       return;
@@ -11062,6 +11434,7 @@ class GameApp extends HTMLElement {
       this._clearStoredSessionToken();
       this._updateSignOutVisibility();
       this._hideIdentityOverlay();
+      this._hideCharacterOverlay();
       this._showAuthOverlay(this.accountName || '');
       this._showTransientMessage(data.reason || 'Connection rejected.', 4200);
     }
@@ -11133,6 +11506,33 @@ class GameApp extends HTMLElement {
     } catch (err) {
       return String(Math.floor(value));
     }
+  }
+
+  _formatRelativeTime(timestamp) {
+    const value = Number(timestamp);
+    if (!Number.isFinite(value) || value <= 0) return 'Just now';
+    const diff = Date.now() - value;
+    if (diff <= 0) return 'Just now';
+    const seconds = Math.floor(diff / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) {
+      return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 48) {
+      return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.floor(hours / 24);
+    if (days < 90) {
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+    const months = Math.floor(days / 30);
+    if (months < 24) {
+      return `${months} mo${months === 1 ? '' : 's'} ago`;
+    }
+    const years = Math.max(1, Math.floor(days / 365));
+    return `${years} yr${years === 1 ? '' : 's'} ago`;
   }
 
   _renderAdminProfiles() {

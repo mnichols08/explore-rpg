@@ -208,6 +208,7 @@ const PASSWORD_DERIVED_BITS = 256;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 const ACCOUNT_NAME_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$/;
+const ACCOUNT_MAX_PROFILES = 5;
 
 const textEncoder = new TextEncoder();
 
@@ -243,6 +244,39 @@ function sanitizeAccountName(value) {
 
 function accountKey(value) {
   return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
+function ensureAccountProfileSet(account) {
+  if (!account) return new Set();
+  if (account.profileIds instanceof Set) return account.profileIds;
+  const candidates = [];
+  if (Array.isArray(account.profileIds)) {
+    candidates.push(...account.profileIds);
+  }
+  if (account.profileId && typeof account.profileId === 'string') {
+    candidates.push(account.profileId);
+  }
+  const normalized = new Set(
+    candidates
+      .map((id) => normalizeProfileId(id))
+      .filter((id) => typeof id === 'string' && id.length > 0)
+  );
+  account.profileIds = normalized;
+  return normalized;
+}
+
+function getAccountProfileIds(account) {
+  return Array.from(ensureAccountProfileSet(account));
+}
+
+function addAccountProfileId(account, profileId) {
+  const normalized = normalizeProfileId(profileId);
+  if (!account || !normalized) return;
+  const set = ensureAccountProfileSet(account);
+  if (!set.has(normalized)) {
+    set.add(normalized);
+  }
+  accountsByProfile.set(normalized, account);
 }
 
 async function derivePasswordHash(password, saltBuffer, iterations = PASSWORD_ITERATIONS) {
@@ -316,8 +350,17 @@ function getAccountByName(name) {
 }
 
 function getAccountByProfileId(profileId) {
-  if (!profileId) return null;
-  return accountsByProfile.get(profileId) || null;
+  const normalized = normalizeProfileId(profileId);
+  if (!normalized) return null;
+  const direct = accountsByProfile.get(normalized);
+  if (direct) return direct;
+  for (const account of accountsByName.values()) {
+    if (ensureAccountProfileSet(account).has(normalized)) {
+      accountsByProfile.set(normalized, account);
+      return account;
+    }
+  }
+  return null;
 }
 
 function removeAccountNameIndex(account) {
@@ -329,11 +372,22 @@ function removeAccountNameIndex(account) {
 }
 
 function registerAccountRecord(account) {
-  if (!account?.profileId || !account?.accountName) return;
+  if (!account?.accountName) return;
   const key = accountKey(account.accountName);
   if (!key) return;
   accountsByName.set(key, account);
-  accountsByProfile.set(account.profileId, account);
+  const profileIds = ensureAccountProfileSet(account);
+  if (account.profileId && typeof account.profileId === 'string') {
+    const normalized = normalizeProfileId(account.profileId);
+    if (normalized) {
+      profileIds.add(normalized);
+    }
+  }
+  for (const profileId of profileIds) {
+    if (profileId) {
+      accountsByProfile.set(profileId, account);
+    }
+  }
   if (account.sessionHash) {
     sessionLookup.set(account.sessionHash, account);
   }
@@ -363,17 +417,31 @@ function clearAccountSession(account) {
 }
 
 function persistAccountRecord(account) {
-  if (!account?.profileId) return;
-  mutateProfileRecord(account.profileId, (record) => {
-    if (!record) return;
-    record.account = {
-      name: account.accountName,
-      passwordHash: account.passwordHash,
-      salt: account.salt,
-      iterations: account.iterations,
-      sessionHash: account.sessionHash || null,
-    };
-  });
+  if (!account?.accountName) return;
+  const profileIds = getAccountProfileIds(account);
+  if (!profileIds.length && account.profileId) {
+    const normalized = normalizeProfileId(account.profileId);
+    if (normalized) {
+      profileIds.push(normalized);
+    }
+  }
+  const uniqueProfileIds = Array.from(new Set(profileIds.filter(Boolean)));
+  if (!uniqueProfileIds.length) return;
+  const lastProfileId = account.profileId ? normalizeProfileId(account.profileId) : null;
+  for (const profileId of uniqueProfileIds) {
+    mutateProfileRecord(profileId, (record) => {
+      if (!record) return;
+      record.account = {
+        name: account.accountName,
+        passwordHash: account.passwordHash,
+        salt: account.salt,
+        iterations: account.iterations,
+        sessionHash: account.sessionHash || null,
+        profileIds: uniqueProfileIds,
+        lastProfileId,
+      };
+    });
+  }
 }
 
 async function verifyAccountPassword(account, password) {
@@ -4551,6 +4619,7 @@ async function handlePlayerAuthMessage(player, payload) {
       account.passwordHash = passwordHash;
       account.salt = saltValue;
       account.iterations = PASSWORD_ITERATIONS;
+  addAccountProfileId(account, player.profileId);
 
       const sessionToken = issueSessionToken(account);
       registerAccountRecord(account);
@@ -4570,6 +4639,7 @@ async function handlePlayerAuthMessage(player, payload) {
     const newAccount = {
       accountName,
       profileId: player.profileId,
+      profileIds: new Set([player.profileId]),
       passwordHash,
       salt: saltValue,
       iterations: PASSWORD_ITERATIONS,
@@ -5420,26 +5490,57 @@ function buildProfileCache(entries) {
       const accountName = sanitizeAccountName(loginData.name);
       const passwordHash = typeof loginData.passwordHash === 'string' ? loginData.passwordHash : null;
       const saltValue = typeof loginData.salt === 'string' ? loginData.salt : null;
-      const iterationsValue = Number(loginData.iterations) || PASSWORD_ITERATIONS;
+      const iterationsValue = Math.max(1, Math.floor(Number(loginData.iterations) || PASSWORD_ITERATIONS));
       const sessionHashValue = typeof loginData.sessionHash === 'string' ? loginData.sessionHash : null;
-      if (accountName && passwordHash && saltValue) {
-        accountRecord = {
-          accountName,
-          profileId: normalized,
-          passwordHash,
-          salt: saltValue,
-          iterations: Math.max(1, Math.floor(iterationsValue)),
-          sessionHash: sessionHashValue || null,
-        };
-        const nameKey = accountKey(accountName);
-        if (nameKey && !accountNameMap.has(nameKey)) {
+      const storedProfileIds = Array.isArray(loginData.profileIds) ? loginData.profileIds : [];
+      const lastProfileIdValue =
+        normalizeProfileId(loginData.lastProfileId) || normalizeProfileId(loginData.profileId) || null;
+      const nameKey = accountKey(accountName);
+      if (accountName && passwordHash && saltValue && nameKey) {
+        accountRecord = accountNameMap.get(nameKey) || null;
+        if (!accountRecord) {
+          accountRecord = {
+            accountName,
+            passwordHash,
+            salt: saltValue,
+            iterations: iterationsValue,
+            sessionHash: sessionHashValue || null,
+            profileId: lastProfileIdValue || normalized,
+            profileIds: new Set(),
+          };
           accountNameMap.set(nameKey, accountRecord);
+        } else {
+          if (!accountRecord.passwordHash && passwordHash) {
+            accountRecord.passwordHash = passwordHash;
+          }
+          if (!accountRecord.salt && saltValue) {
+            accountRecord.salt = saltValue;
+          }
+          accountRecord.iterations = Math.max(iterationsValue, Math.max(1, Math.floor(accountRecord.iterations || PASSWORD_ITERATIONS)));
+          if (sessionHashValue) {
+            accountRecord.sessionHash = sessionHashValue;
+          }
+          if (lastProfileIdValue) {
+            accountRecord.profileId = lastProfileIdValue;
+          } else if (!accountRecord.profileId) {
+            accountRecord.profileId = normalized;
+          }
         }
-        if (!accountProfileMap.has(normalized)) {
-          accountProfileMap.set(normalized, accountRecord);
+
+        const profileSet = ensureAccountProfileSet(accountRecord);
+        profileSet.add(normalized);
+        for (const storedProfileId of storedProfileIds) {
+          const normalizedStored = normalizeProfileId(storedProfileId);
+          if (normalizedStored) {
+            profileSet.add(normalizedStored);
+          }
         }
+        accountProfileMap.set(normalized, accountRecord);
         if (accountRecord.sessionHash && !sessionMap.has(accountRecord.sessionHash)) {
           sessionMap.set(accountRecord.sessionHash, accountRecord);
+        }
+        if (sessionHashValue && !sessionMap.has(sessionHashValue)) {
+          sessionMap.set(sessionHashValue, accountRecord);
         }
       }
     }
@@ -5474,10 +5575,21 @@ function buildProfileCache(entries) {
               salt: accountRecord.salt,
               iterations: accountRecord.iterations,
               sessionHash: accountRecord.sessionHash || null,
+              profileIds: Array.from(accountRecord.profileIds || []),
+              lastProfileId: accountRecord.profileId || null,
             }
           : undefined,
     });
   }
+
+  for (const account of accountNameMap.values()) {
+    for (const profileId of ensureAccountProfileSet(account)) {
+      if (profileId && map.has(profileId)) {
+        accountProfileMap.set(profileId, account);
+      }
+    }
+  }
+
   return {
     map,
     nextPlayerId: maxAliasIndex + 1,
@@ -5611,6 +5723,35 @@ function serializeProfileRecord(value) {
       };
       if (sessionHashValue) {
         record.account.sessionHash = sessionHashValue;
+      }
+      const profileIdsSource = value.account.profileIds;
+      const normalizedProfileIds = new Set();
+      if (Array.isArray(profileIdsSource)) {
+        for (const profileId of profileIdsSource) {
+          const normalized = normalizeProfileId(profileId);
+          if (normalized) {
+            normalizedProfileIds.add(normalized);
+          }
+        }
+      } else if (profileIdsSource instanceof Set) {
+        for (const profileId of profileIdsSource) {
+          const normalized = normalizeProfileId(profileId);
+          if (normalized) {
+            normalizedProfileIds.add(normalized);
+          }
+        }
+      }
+      const fallbackProfileId = normalizeProfileId(value.account.profileId);
+      if (fallbackProfileId) {
+        normalizedProfileIds.add(fallbackProfileId);
+      }
+      if (normalizedProfileIds.size) {
+        record.account.profileIds = Array.from(normalizedProfileIds);
+      }
+      const lastProfileId =
+        normalizeProfileId(value.account.lastProfileId) || fallbackProfileId || null;
+      if (lastProfileId) {
+        record.account.lastProfileId = lastProfileId;
       }
     }
   }
@@ -5915,8 +6056,21 @@ function completePlayerAttachment(connection, result, accountRecord, sessionToke
 
   const player = result.player;
   connection.awaitingAuth = false;
+  connection.awaitingCharacter = false;
+  connection.pendingAccount = null;
+  connection.pendingSessionToken = null;
+  connection.characterContext = null;
   connection.player = player;
   player.accountName = accountRecord?.accountName || player.accountName || null;
+
+  if (accountRecord) {
+    addAccountProfileId(accountRecord, player.profileId);
+    const normalizedProfileId = normalizeProfileId(player.profileId);
+    if (normalizedProfileId) {
+      accountRecord.profileId = normalizedProfileId;
+    }
+    registerAccountRecord(accountRecord);
+  }
 
   clients.set(player.id, player);
 
@@ -5941,9 +6095,63 @@ function completePlayerAttachment(connection, result, accountRecord, sessionToke
   });
 }
 
+function buildAccountCharacterSummaries(account) {
+  if (!account) return [];
+  const summaries = [];
+  const seen = new Set();
+  for (const profileId of getAccountProfileIds(account)) {
+    if (!profileId || seen.has(profileId)) continue;
+    seen.add(profileId);
+    const record = profiles.get(profileId);
+    if (!record) continue;
+    summaries.push({
+      id: profileId,
+      name: record?.name || null,
+      createdAt: Number(record?.createdAt) || null,
+      lastSeen: Number(record?.lastSeen) || null,
+      tutorialCompleted: Boolean(record?.tutorialCompleted),
+      banned: Boolean(record?.banned),
+      xp: cloneXP(record?.xp),
+      maxHealth: Number(record?.maxHealth) || 100,
+    });
+  }
+  summaries.sort((a, b) => {
+    const left = a.createdAt || 0;
+    const right = b.createdAt || 0;
+    if (left === right) return a.id.localeCompare(b.id);
+    return left - right;
+  });
+  return summaries;
+}
+
+function sendCharacterSelectionPrompt(connection, account, sessionToken, options = {}) {
+  if (!connection?.alive || !account) return;
+  const characters = buildAccountCharacterSummaries(account);
+  const normalizedActiveId = account.profileId ? normalizeProfileId(account.profileId) : null;
+  const canCreate = characters.length < ACCOUNT_MAX_PROFILES;
+  sendControlEvent(connection, 'character-select', {
+    account: {
+      name: account.accountName,
+      hasPassword: Boolean(account.passwordHash),
+      activeProfileId: normalizedActiveId || null,
+    },
+    characters,
+    sessionToken: sessionToken || null,
+    canCreate,
+    limits: {
+      maxProfiles: ACCOUNT_MAX_PROFILES,
+    },
+    ...options,
+  });
+}
+
 function startAuthenticationFlow(connection) {
   if (!connection) return;
   connection.awaitingAuth = true;
+  connection.awaitingCharacter = false;
+  connection.pendingAccount = null;
+  connection.pendingSessionToken = null;
+  connection.characterContext = null;
   connection.player = null;
   connection.onClose = () => {};
   connection.onMessage = (message) => {
@@ -6001,18 +6209,14 @@ async function handleAuthenticationMessage(connection, rawMessage) {
       respondError('Incorrect password.', 'password');
       return;
     }
-    const result = createPlayer(connection, account.profileId);
-    if (!result || result.error) {
-      if (result?.error === 'banned') {
-        rejectConnection(connection, 'You are banned from this server.');
-      } else {
-        respondError('Unable to load hero profile.');
-      }
-      return;
-    }
     const sessionToken = issueSessionToken(account);
+    connection.pendingAccount = account;
+    connection.pendingSessionToken = sessionToken;
+    connection.awaitingCharacter = true;
+    connection.characterContext = 'login';
+    registerAccountRecord(account);
     persistAccountRecord(account);
-    completePlayerAttachment(connection, result, account, sessionToken, false);
+    sendCharacterSelectionPrompt(connection, account, sessionToken, { context: 'login' });
     return;
   }
 
@@ -6036,23 +6240,93 @@ async function handleAuthenticationMessage(connection, rawMessage) {
     const passwordHash = bufferToBase64(derived);
     const saltValue = bufferToBase64(saltBuffer);
 
-    const result = createPlayer(connection, null);
-    if (!result || result.error) {
-      respondError('Unable to create hero profile.');
-      return;
-    }
     const accountRecord = {
       accountName,
-      profileId: result.profileId,
+      profileId: null,
+      profileIds: new Set(),
       passwordHash,
       salt: saltValue,
       iterations: PASSWORD_ITERATIONS,
       sessionHash: null,
     };
+
     registerAccountRecord(accountRecord);
     const sessionToken = issueSessionToken(accountRecord);
+    connection.pendingAccount = accountRecord;
+    connection.pendingSessionToken = sessionToken;
+    connection.awaitingCharacter = true;
+    connection.characterContext = 'register';
     persistAccountRecord(accountRecord);
-    completePlayerAttachment(connection, result, accountRecord, sessionToken, false);
+    sendCharacterSelectionPrompt(connection, accountRecord, sessionToken, { context: 'register' });
+    return;
+  }
+
+  if (action === 'select-profile') {
+    if (!connection.awaitingCharacter || !connection.pendingAccount) {
+      respondError('Sign in again to pick a hero.', 'character');
+      return;
+    }
+    const account = connection.pendingAccount;
+    const requestedProfileId = normalizeProfileId(payload.profileId);
+    if (!requestedProfileId) {
+      respondError('Choose a hero to continue.', 'character');
+      return;
+    }
+    if (!ensureAccountProfileSet(account).has(requestedProfileId)) {
+      respondError('That hero is not linked to your account.', 'character');
+      return;
+    }
+    const result = createPlayer(connection, requestedProfileId);
+    if (!result || result.error) {
+      if (result?.error === 'banned') {
+        respondError('That hero is currently banned from this server.', 'character');
+      } else {
+        respondError('Unable to load hero profile.', 'character');
+      }
+      return;
+    }
+    account.profileId = requestedProfileId;
+    addAccountProfileId(account, requestedProfileId);
+    registerAccountRecord(account);
+    const sessionToken = connection.pendingSessionToken || issueSessionToken(account);
+    if (!connection.pendingSessionToken) {
+      connection.pendingSessionToken = sessionToken;
+    }
+    persistAccountRecord(account);
+    completePlayerAttachment(connection, result, account, sessionToken, false);
+    return;
+  }
+
+  if (action === 'create-profile') {
+    if (!connection.awaitingCharacter || !connection.pendingAccount) {
+      respondError('Sign in again to create a hero.', 'character');
+      return;
+    }
+    const account = connection.pendingAccount;
+    const profileSet = ensureAccountProfileSet(account);
+    if (profileSet.size >= ACCOUNT_MAX_PROFILES) {
+      respondError(`You can only have ${ACCOUNT_MAX_PROFILES} heroes on this account.`, 'character');
+      return;
+    }
+    const result = createPlayer(connection, null);
+    if (!result || result.error) {
+      if (result?.error === 'banned') {
+        respondError('Unable to create hero profile at this time.', 'character');
+      } else {
+        respondError('Unable to create hero profile.', 'character');
+      }
+      return;
+    }
+    const newProfileId = result.profileId;
+    account.profileId = newProfileId;
+    addAccountProfileId(account, newProfileId);
+    registerAccountRecord(account);
+    const sessionToken = connection.pendingSessionToken || issueSessionToken(account);
+    if (!connection.pendingSessionToken) {
+      connection.pendingSessionToken = sessionToken;
+    }
+    persistAccountRecord(account);
+    completePlayerAttachment(connection, result, account, sessionToken, false);
     return;
   }
 
@@ -6079,7 +6353,10 @@ async function handleAuthenticationMessage(connection, rawMessage) {
     let sessionToken = null;
     let legacyProfile = false;
     if (account) {
+      addAccountProfileId(account, result.profileId);
+      account.profileId = result.profileId;
       sessionToken = issueSessionToken(account);
+      registerAccountRecord(account);
       persistAccountRecord(account);
     } else {
       legacyProfile = true;
@@ -6129,18 +6406,37 @@ function startServer() {
     if (sessionTokenParam) {
       const account = resumeSession(sessionTokenParam);
       if (account) {
-        const result = createPlayer(connection, account.profileId);
-        if (!result || result.error) {
-          if (result?.error === 'banned') {
-            rejectConnection(connection, 'You are banned from this server.');
-          } else {
-            rejectConnection(connection, 'Unable to create hero profile.');
+        const preferredProfileId = normalizeProfileId(account.profileId);
+        if (preferredProfileId) {
+          const result = createPlayer(connection, preferredProfileId);
+          if (result && !result.error) {
+            const freshSessionToken = issueSessionToken(account);
+            registerAccountRecord(account);
+            persistAccountRecord(account);
+            completePlayerAttachment(connection, result, account, freshSessionToken, false);
+            return;
           }
-          return;
         }
+
         const freshSessionToken = issueSessionToken(account);
+        registerAccountRecord(account);
         persistAccountRecord(account);
-        completePlayerAttachment(connection, result, account, freshSessionToken, false);
+        connection.awaitingAuth = true;
+        connection.awaitingCharacter = true;
+        connection.pendingAccount = account;
+        connection.pendingSessionToken = freshSessionToken;
+        connection.characterContext = 'session';
+        connection.player = null;
+        connection.onClose = () => {};
+        connection.onMessage = (message) => {
+          Promise.resolve(handleAuthenticationMessage(connection, message)).catch((err) => {
+            console.error('Authentication handler error:', err);
+            sendControlEvent(connection, 'auth-error', {
+              message: 'Unexpected error. Please try again.',
+            });
+          });
+        };
+        sendCharacterSelectionPrompt(connection, account, freshSessionToken, { context: 'session' });
         return;
       }
     }
@@ -6156,7 +6452,10 @@ function startServer() {
       let sessionToken = null;
       let legacyProfile = false;
       if (account) {
+        addAccountProfileId(account, result.profileId);
+        account.profileId = result.profileId;
         sessionToken = issueSessionToken(account);
+        registerAccountRecord(account);
         persistAccountRecord(account);
       } else {
         legacyProfile = true;
