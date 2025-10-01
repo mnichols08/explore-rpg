@@ -3854,6 +3854,7 @@ class GameApp extends HTMLElement {
     }
     this.panelDragEntries = [];
     this.panelZCounter = 32;
+  this._pendingTerrainUpdates = [];
     this._panelsRestored = false;
     this._handleChatInputKeydown = this._handleChatInputKeydown.bind(this);
     this._submitChatMessage = this._submitChatMessage.bind(this);
@@ -4582,6 +4583,10 @@ class GameApp extends HTMLElement {
         }
 
         this.world = data.world;
+        if (this._pendingTerrainUpdates && this._pendingTerrainUpdates.length) {
+          this._applyTerrainUpdates({ updates: this._pendingTerrainUpdates });
+          this._pendingTerrainUpdates = [];
+        }
         this._ingestLevels(data.levels);
         this._prepareMinimap(true);
         this._ingestPortals(data.portals);
@@ -4638,6 +4643,15 @@ class GameApp extends HTMLElement {
         }
         this.chargeMeter.actionName = 'Idle';
         this._maybeStartOnboardingFlow();
+      } else if (data.type === 'terrain-update') {
+        this._applyTerrainUpdates(data);
+      } else if (data.type === 'level-update') {
+        if (data.level) {
+          this._applyLevelUpdate(data.level);
+        }
+        if (Array.isArray(data.levels)) {
+          this._ingestLevels(data.levels);
+        }
       } else if (data.type === 'state') {
         if (Array.isArray(data.levels)) {
           this._ingestLevels(data.levels);
@@ -8653,6 +8667,65 @@ class GameApp extends HTMLElement {
     }
   }
 
+  _applyTerrainUpdates(payload) {
+    const updates = Array.isArray(payload?.updates) ? payload.updates : [];
+    if (!updates.length) {
+      return;
+    }
+    if (!this.world || !Array.isArray(this.world.tiles)) {
+      if (!this._pendingTerrainUpdates) {
+        this._pendingTerrainUpdates = [];
+      }
+      this._pendingTerrainUpdates.push(
+        ...updates.map((update) => ({
+          x: Math.floor(Number(update?.x)),
+          y: Math.floor(Number(update?.y)),
+          tile: update?.tile,
+        }))
+      );
+      return;
+    }
+
+    const width = Number(this.world.width) || (this.world.tiles[0]?.length ?? 0);
+    const height = Number(this.world.height) || this.world.tiles.length;
+    const nextRows = this.world.tiles.slice();
+    const touched = new Map();
+
+    for (const update of updates) {
+      const x = Math.floor(Number(update?.x));
+      const y = Math.floor(Number(update?.y));
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (y < 0 || (height && y >= height)) continue;
+      if (x < 0 || (width && x >= width)) continue;
+      let row = touched.get(y);
+      if (!row) {
+        const baseRow = Array.isArray(nextRows[y]) ? nextRows[y].slice() : new Array(width).fill('water');
+        row = baseRow;
+        touched.set(y, row);
+        nextRows[y] = row;
+      }
+      row[x] = update?.tile ?? null;
+    }
+
+    if (!touched.size) return;
+
+    this.world = {
+      ...this.world,
+      tiles: nextRows,
+    };
+    this._minimapWorldRef = null;
+    this.minimapBase = null;
+  }
+
+  _applyLevelUpdate(level) {
+    const normalized = this._normalizeLevel(level);
+    if (!normalized) return;
+    const map = this.levels instanceof Map ? new Map(this.levels) : new Map();
+    map.set(normalized.id, normalized);
+    this.levels = map;
+    this.minimapBase = null;
+  }
+
   _normalizeLevel(level) {
     if (!level || !level.id) return null;
     const toPoint = (point) => {
@@ -8676,6 +8749,7 @@ class GameApp extends HTMLElement {
       name: level.name || level.id,
       difficulty: level.difficulty || '',
       color: level.color || DEFAULT_PORTAL_COLOR,
+      generation: Number.isFinite(level.generation) ? Number(level.generation) : null,
       origin: toPoint(level.origin),
       size: Math.max(0, Number(level.size) || 0),
       bounds: toBounds(level.bounds),
@@ -9065,6 +9139,9 @@ class GameApp extends HTMLElement {
       if (info.difficulty) {
         segments.push(info.difficulty);
       }
+      if (Number.isFinite(info.generation)) {
+        segments.push(`Depth ${info.generation}`);
+      }
       accent = info.color || DEFAULT_PORTAL_COLOR;
     } else {
       segments.push('Overworld');
@@ -9096,6 +9173,7 @@ class GameApp extends HTMLElement {
         name: you?.levelName || 'Stronghold',
         difficulty: you?.levelDifficulty || 'Challenge',
         color: you?.levelColor || DEFAULT_PORTAL_COLOR,
+        generation: Number.isFinite(you?.levelGeneration) ? Number(you.levelGeneration) : null,
       };
       this.currentLevelId = levelId;
       this.currentLevelExit = exit && typeof exit === 'object'
@@ -9117,8 +9195,17 @@ class GameApp extends HTMLElement {
     if (!this.zoneIndicatorEl) return;
     this._updateMinimapLabel(info);
     if (info) {
-  const detail = info.difficulty ? `${info.name} • ${info.difficulty}` : info.name;
-      this.zoneIndicatorEl.textContent = detail || info.id || 'Stronghold';
+      const segments = [];
+      const label = info.name || info.id || 'Stronghold';
+      segments.push(label);
+      if (info.difficulty) {
+        segments.push(info.difficulty);
+      }
+      if (Number.isFinite(info.generation)) {
+        segments.push(`Depth ${info.generation}`);
+      }
+      const detail = segments.join(' • ');
+      this.zoneIndicatorEl.textContent = detail || label;
       const accent = info.color || DEFAULT_PORTAL_COLOR;
       this.zoneIndicatorEl.style.color = accent;
       this.zoneStatusEl?.classList.add('level');
@@ -9193,6 +9280,7 @@ class GameApp extends HTMLElement {
         name: levelPayload.name || 'Stronghold',
         difficulty: levelPayload.difficulty || 'Challenge',
         color: levelPayload.color || DEFAULT_PORTAL_COLOR,
+        generation: Number.isFinite(levelPayload.generation) ? Number(levelPayload.generation) : null,
       };
       this.currentLevelId = info.id;
       this.currentLevelExit = levelPayload.exit && typeof levelPayload.exit === 'object'
@@ -9203,7 +9291,14 @@ class GameApp extends HTMLElement {
       this._updateLevelStatus(info);
       this.audio.ensureContext();
       this.audio.onEffect({ type: 'spell' }, true);
-  this._showLevelBanner(`Entering ${info.name}${info.difficulty ? ` • ${info.difficulty}` : ''}`, info.color);
+      const parts = [`Entering ${info.name}`];
+      if (info.difficulty) {
+        parts.push(info.difficulty);
+      }
+      if (Number.isFinite(info.generation)) {
+        parts.push(`Depth ${info.generation}`);
+      }
+      this._showLevelBanner(parts.join(' • '), info.color);
     } else if (event === 'exit') {
       this.currentLevelId = null;
       this.currentLevelExit = null;

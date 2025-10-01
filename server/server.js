@@ -799,6 +799,8 @@ const LEVEL_TEMPLATES = [
   },
 ];
 
+const LEVEL_TEMPLATE_MAP = new Map(LEVEL_TEMPLATES.map((template) => [template.id, template]));
+
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
@@ -852,92 +854,105 @@ function generateTerrain(width, height, seed) {
   return tiles;
 }
 
-function carveLevelTemplate(template) {
+function carveLevelTemplate(template, options = {}) {
   const interior = template.interior;
   const originX = clamp(Math.floor(interior.x), 0, WORLD_WIDTH - 2);
   const originY = clamp(Math.floor(interior.y), 0, WORLD_HEIGHT - 2);
   const size = Math.min(Math.max(10, Math.floor(interior.size)), Math.min(WORLD_WIDTH - originX, WORLD_HEIGHT - originY));
-  const rand = seededRandom((WORLD_SEED ^ hashString(template.id) ^ 0x9e3779b9) >>> 0);
+  const baseSeed = (WORLD_SEED ^ hashString(template.id) ^ 0x9e3779b9) >>> 0;
+  const mixSeed = Number.isFinite(options.seed) ? (options.seed >>> 0) : 0;
+  const effectiveSeed = (baseSeed ^ mixSeed) >>> 0 || 0x1a2b3c4d;
+  const rand = seededRandom(effectiveSeed);
   const floorTile = template.floorTile || 'ember';
   const accentTile = template.accentTile || floorTile;
   const wallTile = template.wallTile || 'rock';
   const hazardTile = template.hazardTile || null;
   const hazardDensity = Math.max(0, Math.min(0.45, Number(template.hazardDensity) || 0));
+  const wallChance = Math.max(0, Math.min(0.3, Number(template.wallDensity) || 0.14));
+  const accentSplash = Math.max(0, Math.min(1, Number(template.accentSplash) || 0.28));
 
+  const entryBaseX = template.entryOffset?.x ?? size / 2;
+  const entryBaseY = template.entryOffset?.y ?? 2;
+  const exitBaseX = template.exitOffset?.x ?? size / 2;
+  const exitBaseY = template.exitOffset?.y ?? size - 3;
   const entryOffset = {
-    x: clamp(Math.floor(template.entryOffset?.x ?? size / 2), 1, size - 2),
-    y: clamp(Math.floor(template.entryOffset?.y ?? 2), 1, size - 2),
+    x: clamp(Math.floor(entryBaseX + (rand() - 0.5) * Math.min(4, size / 3)), 1, size - 2),
+    y: clamp(Math.floor(entryBaseY + (rand() - 0.5) * Math.min(3, size / 4)), 1, size - 2),
   };
   const exitOffset = {
-    x: clamp(Math.floor(template.exitOffset?.x ?? size / 2), 1, size - 2),
-    y: clamp(Math.floor(template.exitOffset?.y ?? size - 3), 1, size - 2),
+    x: clamp(Math.floor(exitBaseX + (rand() - 0.5) * Math.min(4, size / 3)), 1, size - 2),
+    y: clamp(Math.floor(exitBaseY + (rand() - 0.5) * Math.min(3, size / 4)), 1, size - 2),
   };
 
   const entry = { x: originX + entryOffset.x + 0.5, y: originY + entryOffset.y + 0.5 };
   const exit = { x: originX + exitOffset.x + 0.5, y: originY + exitOffset.y + 0.5 };
   const midX = originX + size / 2;
   const midY = originY + size / 2;
+  const tileUpdates = [];
+
+  const setTile = (gx, gy, tile) => {
+    if (gy < 0 || gy >= WORLD_HEIGHT || gx < 0 || gx >= WORLD_WIDTH) return;
+    world.tiles[gy] = world.tiles[gy] || [];
+    const previous = world.tiles[gy][gx];
+    if (previous === tile) return;
+    world.tiles[gy][gx] = tile;
+    tileUpdates.push({ x: gx, y: gy, tile });
+  };
 
   for (let y = 0; y < size; y += 1) {
     const gy = originY + y;
     if (gy <= 0 || gy >= WORLD_HEIGHT) continue;
-    world.tiles[gy] = world.tiles[gy] || [];
     for (let x = 0; x < size; x += 1) {
       const gx = originX + x;
       if (gx <= 0 || gx >= WORLD_WIDTH) continue;
-      let tile = floorTile;
       const isBorder = x === 0 || y === 0 || x === size - 1 || y === size - 1;
       if (isBorder) {
-        world.tiles[gy][gx] = wallTile;
+        setTile(gx, gy, wallTile);
         continue;
       }
 
       const cellCenterX = gx + 0.5;
       const cellCenterY = gy + 0.5;
-      const radial = Math.hypot(cellCenterX - midX, cellCenterY - midY);
       const crossHighlight = Math.abs(gx - Math.round(midX)) <= 1 || Math.abs(gy - Math.round(midY)) <= 1;
-      if (crossHighlight && rand() < 0.85) {
-        tile = accentTile;
-      } else if (radial > size * 0.32 && rand() < 0.35) {
-        tile = accentTile;
+      const nearEntry = Math.abs(cellCenterX - entry.x) <= 1.5 && Math.abs(cellCenterY - entry.y) <= 1.5;
+      const nearExit = Math.abs(cellCenterX - exit.x) <= 1.5 && Math.abs(cellCenterY - exit.y) <= 1.5;
+
+      let tile = floorTile;
+      if (!nearEntry && !nearExit) {
+        if (hazardTile && rand() < hazardDensity) {
+          tile = hazardTile;
+        } else if (rand() < wallChance) {
+          tile = wallTile;
+        } else if (crossHighlight && rand() < 0.9) {
+          tile = accentTile;
+        } else if (rand() < accentSplash) {
+          tile = accentTile;
+        }
       }
 
-      const nearEntry = Math.abs(gx + 0.5 - entry.x) <= 1.5 && Math.abs(gy + 0.5 - entry.y) <= 1.5;
-      const nearExit = Math.abs(gx + 0.5 - exit.x) <= 1.5 && Math.abs(gy + 0.5 - exit.y) <= 1.5;
-
-      if (!nearEntry && !nearExit && hazardTile && rand() < hazardDensity) {
-        tile = hazardTile;
-      }
-
-      world.tiles[gy][gx] = tile;
+      setTile(gx, gy, tile);
     }
   }
 
-  // ensure entry/exit corridors are clear
   const entryGX = Math.floor(entry.x);
   const exitGX = Math.floor(exit.x);
   const entryGY = Math.floor(entry.y);
   const exitGY = Math.floor(exit.y);
-  if (world.tiles[entryGY]) {
-    world.tiles[entryGY][entryGX] = floorTile;
-  }
-  if (world.tiles[exitGY]) {
-    world.tiles[exitGY][exitGX] = floorTile;
-  }
+  setTile(entryGX, entryGY, floorTile);
+  setTile(exitGX, exitGY, floorTile);
 
   const corridorX = entryGX;
   const corridorStartY = Math.min(entryGY, exitGY);
   const corridorEndY = Math.max(entryGY, exitGY);
   for (let y = corridorStartY; y <= corridorEndY; y += 1) {
-    if (!world.tiles[y]) continue;
-    world.tiles[y][corridorX] = floorTile;
+    setTile(corridorX, y, floorTile);
     const leftX = corridorX - 1;
     const rightX = corridorX + 1;
-    if (world.tiles[y][leftX] !== wallTile) {
-      world.tiles[y][leftX] = accentTile;
+    if (world.tiles[y]?.[leftX] !== wallTile) {
+      setTile(leftX, y, accentTile);
     }
-    if (world.tiles[y][rightX] !== wallTile) {
-      world.tiles[y][rightX] = accentTile;
+    if (world.tiles[y]?.[rightX] !== wallTile) {
+      setTile(rightX, y, accentTile);
     }
   }
 
@@ -948,7 +963,7 @@ function carveLevelTemplate(template) {
     maxY: originY + size - 0.5,
   };
 
-  const spawnMargin = 2;
+  const spawnMargin = Math.max(2, Math.floor(size * 0.12));
   const spawnBox = {
     minX: originX + spawnMargin + 0.5,
     minY: originY + spawnMargin + 0.5,
@@ -956,8 +971,9 @@ function carveLevelTemplate(template) {
     maxY: originY + size - spawnMargin - 0.5,
   };
 
-  return {
+  const level = {
     id: template.id,
+    templateId: template.id,
     name: template.name,
     difficulty: template.difficulty,
     color: template.color,
@@ -975,7 +991,12 @@ function carveLevelTemplate(template) {
     floorTile,
     origin: { x: originX, y: originY },
     size,
+    seed: effectiveSeed,
+    generation: options.generation ?? 1,
   };
+  level.lastTiles = tileUpdates.slice();
+
+  return { level, tileUpdates };
 }
 
 function levelForCoordinate(x, y) {
@@ -1028,7 +1049,8 @@ function initializeLevels() {
   }
   world.portals = [];
   for (const template of LEVEL_TEMPLATES) {
-    const level = carveLevelTemplate(template);
+    const seed = Math.floor(Math.random() * 0xffffffff) >>> 0;
+    const { level } = carveLevelTemplate(template, { seed, generation: 1 });
     world.levels.set(level.id, level);
   }
   for (const level of world.levels.values()) {
@@ -3814,6 +3836,17 @@ function handleTradingPostMessage(player, payload) {
   sendTradingFailure(player, action || 'unknown', 'Unknown trading post action.');
 }
 
+function getPlayersInLevel(levelId) {
+  if (!levelId) return [];
+  const occupants = [];
+  for (const candidate of clients.values()) {
+    if (candidate.levelId === levelId) {
+      occupants.push(candidate);
+    }
+  }
+  return occupants;
+}
+
 function handlePortalEnter(player, portalId) {
   if (!player || !portalId) return;
   const portal = world.portals.find((p) => p.id === portalId);
@@ -3839,23 +3872,36 @@ function handlePortalEnter(player, portalId) {
   }
   const level = world.levels.get(portal.levelId);
   if (!level) return;
-  if (player.levelId && player.levelId !== level.id) return;
-  if (player.levelId === level.id) return;
+
+  let activeLevel = level;
+  const occupants = getPlayersInLevel(level.id);
+  if (occupants.length === 0) {
+    const regeneration = regenerateLevel(level.id, { reason: 'portal-enter' });
+    if (regeneration?.level) {
+      activeLevel = regeneration.level;
+    } else {
+      activeLevel = world.levels.get(level.id) || level;
+    }
+  }
+
+  if (player.levelId && player.levelId !== activeLevel.id) return;
+  if (player.levelId === activeLevel.id) return;
   player.levelReturn = { x: player.x, y: player.y, zoneId: player.zoneId || portalZoneId };
-  player.levelId = level.id;
-  player.x = level.entry.x;
-  player.y = level.entry.y;
+  player.levelId = activeLevel.id;
+  player.x = activeLevel.entry?.x ?? level.entry.x;
+  player.y = activeLevel.entry?.y ?? level.entry.y;
   player.action = null;
   resetPlayerMotion(player);
   sendTo(player, {
     type: 'portal-event',
     event: 'enter',
     level: {
-      id: level.id,
-      name: level.name,
-      difficulty: level.difficulty,
-      color: level.color,
-      exit: level.exit,
+      id: activeLevel.id,
+      name: activeLevel.name,
+      difficulty: activeLevel.difficulty,
+      color: activeLevel.color,
+      exit: activeLevel.exit,
+      generation: activeLevel.generation || 1,
     },
   });
   syncProfile(player);
@@ -3892,6 +3938,7 @@ function handlePortalExit(player) {
     level: {
       id: level.id,
       name: level.name,
+      generation: level.generation || 1,
     },
   });
   updatePlayerZone(player);
@@ -4476,6 +4523,106 @@ function broadcast(message) {
   }
 }
 
+function broadcastTerrainUpdate(updates, meta = {}) {
+  if (!Array.isArray(updates) || !updates.length) return;
+  const sanitized = updates
+    .map((update) => {
+      const x = Math.floor(Number(update?.x));
+      const y = Math.floor(Number(update?.y));
+      const tile = typeof update?.tile === 'string' ? update.tile : null;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return tile ? { x, y, tile } : { x, y, tile: tile ?? null };
+    })
+    .filter(Boolean);
+  if (!sanitized.length) return;
+  const payload = {
+    type: 'terrain-update',
+    updates: sanitized,
+  };
+  if (meta.levelId) {
+    payload.levelId = meta.levelId;
+  }
+  if (Number.isFinite(meta.generation)) {
+    payload.generation = meta.generation;
+  }
+  broadcast(payload);
+}
+
+function regenerateLevel(levelOrId, options = {}) {
+  const existing =
+    typeof levelOrId === 'string' ? world.levels.get(levelOrId) : levelOrId;
+  if (!existing) return null;
+
+  const templateId = existing.templateId || existing.id;
+  const template = LEVEL_TEMPLATE_MAP.get(templateId);
+  if (!template) return null;
+
+  const occupants = getPlayersInLevel(existing.id);
+  if (occupants.length && !options.force) {
+    return { level: existing, regenerated: false, occupants };
+  }
+
+  const seed =
+    Number.isFinite(options.seed) && options.seed >= 0
+      ? options.seed >>> 0
+      : ((Math.random() * 0xffffffff) ^ Date.now()) >>> 0;
+  const generation =
+    Number.isFinite(options.generation) && options.generation > 0
+      ? Math.floor(options.generation)
+      : (existing.generation || 0) + 1;
+
+  const { level: nextLevel, tileUpdates } = carveLevelTemplate(template, { seed, generation });
+  nextLevel.id = existing.id;
+  nextLevel.templateId = templateId;
+  nextLevel.portalId = existing.portalId;
+  nextLevel.entrance = existing.entrance ? { ...existing.entrance } : null;
+  nextLevel.spawnTimer = 0;
+  nextLevel.regeneratedAt = Date.now();
+  nextLevel.lastTiles = tileUpdates.slice();
+  world.levels.set(nextLevel.id, nextLevel);
+
+  world.enemies = world.enemies.filter((enemy) => enemy.levelId !== nextLevel.id);
+  world.effects = world.effects.filter((effect) => effect.levelId !== nextLevel.id);
+  world.chats = world.chats.filter((chat) => chat.levelId !== nextLevel.id);
+  world.loot = world.loot.filter((drop) => drop.levelId !== nextLevel.id);
+
+  const updates = tileUpdates.slice();
+  if (nextLevel.entrance) {
+    const portalX = Math.floor(nextLevel.entrance.x);
+    const portalY = Math.floor(nextLevel.entrance.y);
+    if (
+      Number.isFinite(portalX) &&
+      Number.isFinite(portalY) &&
+      portalX >= 0 &&
+      portalX < world.width &&
+      portalY >= 0 &&
+      portalY < world.height
+    ) {
+      const row = world.tiles[portalY];
+      if (row) {
+        const accent = nextLevel.accentTile || nextLevel.floorTile || row[portalX] || 'glyph';
+        if (row[portalX] !== accent) {
+          row[portalX] = accent;
+          updates.push({ x: portalX, y: portalY, tile: accent });
+        }
+      }
+    }
+  }
+
+  if (updates.length) {
+    broadcastTerrainUpdate(updates, { levelId: nextLevel.id, generation: nextLevel.generation });
+  }
+
+  broadcast({
+    type: 'level-update',
+    levelId: nextLevel.id,
+    generation: nextLevel.generation,
+    level: serializeLevel(nextLevel),
+  });
+
+  return { level: nextLevel, tileUpdates: updates, regenerated: true };
+}
+
 function sendTo(player, message) {
   player.connection.send(JSON.stringify(message));
 }
@@ -4573,6 +4720,7 @@ function gameTick(now, dt) {
       actionAimX: Number.isFinite(player.action?.aim?.x) ? player.action.aim.x : null,
       actionAimY: Number.isFinite(player.action?.aim?.y) ? player.action.aim.y : null,
       levelId: player.levelId || null,
+  levelGeneration: player.levelId ? world.levels.get(player.levelId)?.generation || null : null,
       momentum: serializeMomentum(player, now),
       pvpOptIn: Boolean(player.profileMeta?.pvpOptIn),
       pvpCooldownEndsAt: Number(player.profileMeta?.pvpCooldownUntil) || 0,
@@ -4647,6 +4795,9 @@ function gameTick(now, dt) {
       : null,
     safeZones: Array.from(zoneStates.values())
       .map((zone) => serializeZone(zone))
+      .filter(Boolean),
+    levels: Array.from(world.levels.values())
+      .map((level) => serializeLevel(level))
       .filter(Boolean),
     portals: world.portals.map((portal) => ({
       id: portal.id,
@@ -6109,6 +6260,7 @@ function serializeLevel(level) {
     name: level.name,
     difficulty: level.difficulty,
     color: level.color,
+    generation: Math.max(1, Number(level.generation) || 1),
     origin: toPoint(level.origin),
     size: Math.max(0, Number(level.size) || 0),
     bounds: toBounds(level.bounds),
@@ -6356,6 +6508,7 @@ function sendInitialState(player, options = {}) {
       levelName: youLevel?.name ?? null,
       levelDifficulty: youLevel?.difficulty ?? null,
       levelColor: youLevel?.color ?? null,
+  levelGeneration: youLevel?.generation ?? null,
       ghost: Boolean(player.isGhost),
       ghostTarget: player.ghostTarget
         ? { x: player.ghostTarget.x, y: player.ghostTarget.y, radius: player.ghostTarget.radius, zoneId: player.ghostTarget.zoneId }
