@@ -3190,13 +3190,6 @@ template.innerHTML = `
           <button type="button" class="password-toggle" data-auth-password-toggle aria-label="Show password">Show</button>
         </div>
       </div>
-      <div class="auth-field" data-auth-confirm-container hidden>
-        <label for="auth-confirm-input">Confirm Password</label>
-        <div class="password-input-wrapper">
-          <input id="auth-confirm-input" type="password" autocomplete="new-password" placeholder="Confirm password" data-auth-confirm />
-          <button type="button" class="password-toggle" data-auth-confirm-toggle aria-label="Show password confirmation">Show</button>
-        </div>
-      </div>
       <label class="auth-remember">
         <input type="checkbox" class="auth-checkbox" data-auth-remember checked />
         <span>Stay signed in on this device</span>
@@ -3719,15 +3712,12 @@ class GameApp extends HTMLElement {
   this.authDescriptionEl = this.shadowRoot.querySelector('[data-auth-description]');
   this.authAccountInput = this.shadowRoot.querySelector('[data-auth-account]');
   this.authPasswordInput = this.shadowRoot.querySelector('[data-auth-password]');
-  this.authConfirmContainer = this.shadowRoot.querySelector('[data-auth-confirm-container]');
-  this.authConfirmInput = this.shadowRoot.querySelector('[data-auth-confirm]');
   this.authFeedbackEl = this.shadowRoot.querySelector('[data-auth-feedback]');
   this.authModeButtons = Array.from(this.shadowRoot.querySelectorAll('[data-auth-mode]'));
   this.authSubmitButton = this.shadowRoot.querySelector('[data-auth-submit]');
   this.authCancelButton = this.shadowRoot.querySelector('[data-auth-cancel]');
   this.authLegacyButton = this.shadowRoot.querySelector('[data-auth-legacy]');
   this.authPasswordToggle = this.shadowRoot.querySelector('[data-auth-password-toggle]');
-  this.authConfirmToggle = this.shadowRoot.querySelector('[data-auth-confirm-toggle]');
   this.authRememberCheckbox = this.shadowRoot.querySelector('[data-auth-remember]');
   this.characterOverlay = this.shadowRoot.querySelector('[data-character-overlay]');
   this.characterDescriptionEl = this.shadowRoot.querySelector('[data-character-description]');
@@ -3997,8 +3987,7 @@ class GameApp extends HTMLElement {
   };
     this.authMode = 'login';
     this.rememberSession = true;
-    this._authPasswordVisible = false;
-    this._authConfirmVisible = false;
+  this._authPasswordVisible = false;
   this._authFeedbackVariant = 'info';
     this.authPendingAction = null;
     this.characterOptions = {
@@ -4095,7 +4084,6 @@ class GameApp extends HTMLElement {
   this._handleAuthFieldInput = this._handleAuthFieldInput.bind(this);
   this._handleAuthModeClick = this._handleAuthModeClick.bind(this);
   this._handleAuthPasswordToggle = this._handleAuthPasswordToggle.bind(this);
-  this._handleAuthConfirmToggle = this._handleAuthConfirmToggle.bind(this);
   this._handleAuthRememberChange = this._handleAuthRememberChange.bind(this);
   this._handleAuthLegacy = this._handleAuthLegacy.bind(this);
   this._handleLegacyLoad = this._handleLegacyLoad.bind(this);
@@ -4197,13 +4185,10 @@ class GameApp extends HTMLElement {
     this.authSubmitButton?.addEventListener('click', this._handleAuthSubmit);
     this.authCancelButton?.addEventListener('click', this._handleAuthCancel);
     this.authAccountInput?.addEventListener('keydown', this._handleAuthInputKeydown);
-    this.authPasswordInput?.addEventListener('keydown', this._handleAuthInputKeydown);
-    this.authConfirmInput?.addEventListener('keydown', this._handleAuthInputKeydown);
+  this.authPasswordInput?.addEventListener('keydown', this._handleAuthInputKeydown);
     this.authAccountInput?.addEventListener('input', this._handleAuthFieldInput);
-    this.authPasswordInput?.addEventListener('input', this._handleAuthFieldInput);
-    this.authConfirmInput?.addEventListener('input', this._handleAuthFieldInput);
-    this.authPasswordToggle?.addEventListener('click', this._handleAuthPasswordToggle);
-    this.authConfirmToggle?.addEventListener('click', this._handleAuthConfirmToggle);
+  this.authPasswordInput?.addEventListener('input', this._handleAuthFieldInput);
+  this.authPasswordToggle?.addEventListener('click', this._handleAuthPasswordToggle);
     this.authRememberCheckbox?.addEventListener('change', this._handleAuthRememberChange);
     this.authLegacyButton?.addEventListener('click', this._handleAuthLegacy);
     this.characterListEl?.addEventListener('click', this._handleCharacterListClick);
@@ -4320,12 +4305,9 @@ class GameApp extends HTMLElement {
   this.authCancelButton?.removeEventListener('click', this._handleAuthCancel);
   this.authAccountInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
   this.authPasswordInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
-  this.authConfirmInput?.removeEventListener('keydown', this._handleAuthInputKeydown);
   this.authAccountInput?.removeEventListener('input', this._handleAuthFieldInput);
   this.authPasswordInput?.removeEventListener('input', this._handleAuthFieldInput);
-  this.authConfirmInput?.removeEventListener('input', this._handleAuthFieldInput);
   this.authPasswordToggle?.removeEventListener('click', this._handleAuthPasswordToggle);
-  this.authConfirmToggle?.removeEventListener('click', this._handleAuthConfirmToggle);
   this.authRememberCheckbox?.removeEventListener('change', this._handleAuthRememberChange);
   this.authLegacyButton?.removeEventListener('click', this._handleAuthLegacy);
   this.characterListEl?.removeEventListener('click', this._handleCharacterListClick);
@@ -10412,7 +10394,6 @@ class GameApp extends HTMLElement {
     this._clearAuthForm(this.accountName || '');
     this.authAccountInput?.blur();
     this.authPasswordInput?.blur();
-    this.authConfirmInput?.blur();
     this.authPendingAction = null;
   }
 
@@ -10646,12 +10627,8 @@ class GameApp extends HTMLElement {
     if (this.authPasswordInput) {
       this.authPasswordInput.value = '';
     }
-    if (this.authConfirmInput) {
-      this.authConfirmInput.value = '';
-    }
     this._markAuthFieldInvalid(this.authAccountInput, false);
     this._markAuthFieldInvalid(this.authPasswordInput, false);
-    this._markAuthFieldInvalid(this.authConfirmInput, false);
     this._resetAuthVisibility();
     this._setAuthFeedback('', 'info');
   }
@@ -10662,9 +10639,6 @@ class GameApp extends HTMLElement {
     }
     if (this.authPasswordInput) {
       this.authPasswordInput.disabled = Boolean(disabled);
-    }
-    if (this.authConfirmInput) {
-      this.authConfirmInput.disabled = Boolean(disabled);
     }
     if (Array.isArray(this.authModeButtons)) {
       for (const button of this.authModeButtons) {
@@ -10679,9 +10653,6 @@ class GameApp extends HTMLElement {
     }
     if (this.authPasswordToggle) {
       this.authPasswordToggle.disabled = Boolean(disabled);
-    }
-    if (this.authConfirmToggle) {
-      this.authConfirmToggle.disabled = Boolean(disabled);
     }
     if (this.authRememberCheckbox) {
       this.authRememberCheckbox.disabled = Boolean(disabled);
@@ -10706,7 +10677,7 @@ class GameApp extends HTMLElement {
     const max = Number(this.authPolicy?.passwordMaxLength) || PASSWORD_MAX_LENGTH;
     let message;
     if (this.authMode === 'register') {
-      message = `Create a new account to begin your adventure. Passwords must be ${min}-${max} characters and match below.`;
+      message = `Create a new account to begin your adventure. Choose a password ${min}-${max} characters long.`;
     } else {
       message = `Sign in to resume your journey. Passwords must be ${min}-${max} characters.`;
     }
@@ -10738,15 +10709,6 @@ class GameApp extends HTMLElement {
         const autocomplete = next === 'register' ? 'new-password' : 'current-password';
         this.authPasswordInput.setAttribute('autocomplete', autocomplete);
       }
-      if (this.authConfirmInput) {
-        const confirmAuto = next === 'register' ? 'new-password' : 'off';
-        this.authConfirmInput.setAttribute('autocomplete', confirmAuto);
-      }
-      if (this.authConfirmContainer) {
-        const hidden = next !== 'register';
-        this.authConfirmContainer.hidden = hidden;
-        this.authConfirmContainer.setAttribute('aria-hidden', hidden ? 'true' : 'false');
-      }
       if (previous !== next) {
         this._resetAuthVisibility();
       }
@@ -10755,10 +10717,6 @@ class GameApp extends HTMLElement {
       this._setAuthFeedback('', 'info');
       this._markAuthFieldInvalid(this.authAccountInput, false);
       this._markAuthFieldInvalid(this.authPasswordInput, false);
-      this._markAuthFieldInvalid(this.authConfirmInput, false);
-    }
-    if (next !== 'register') {
-      this._markAuthFieldInvalid(this.authConfirmInput, false);
     }
     this._updateAuthDescription();
   }
@@ -10779,22 +10737,13 @@ class GameApp extends HTMLElement {
 
   _resetAuthVisibility() {
     this._authPasswordVisible = false;
-    this._authConfirmVisible = false;
     if (this.authPasswordInput) {
       this.authPasswordInput.type = 'password';
-    }
-    if (this.authConfirmInput) {
-      this.authConfirmInput.type = 'password';
     }
     if (this.authPasswordToggle) {
       this.authPasswordToggle.textContent = 'Show';
       this.authPasswordToggle.setAttribute('aria-label', 'Show password');
       this.authPasswordToggle.setAttribute('aria-pressed', 'false');
-    }
-    if (this.authConfirmToggle) {
-      this.authConfirmToggle.textContent = 'Show';
-      this.authConfirmToggle.setAttribute('aria-label', 'Show password confirmation');
-      this.authConfirmToggle.setAttribute('aria-pressed', 'false');
     }
   }
 
@@ -10838,21 +10787,6 @@ class GameApp extends HTMLElement {
       this.authPasswordInput.focus({ preventScroll: true });
     } catch (err) {
       this.authPasswordInput.focus();
-    }
-  }
-
-  _handleAuthConfirmToggle(event) {
-    event?.preventDefault?.();
-    if (!this.authConfirmInput || !this.authConfirmToggle) return;
-    this._authConfirmVisible = !this._authConfirmVisible;
-    this.authConfirmInput.type = this._authConfirmVisible ? 'text' : 'password';
-    this.authConfirmToggle.textContent = this._authConfirmVisible ? 'Hide' : 'Show';
-    this.authConfirmToggle.setAttribute('aria-label', this._authConfirmVisible ? 'Hide password confirmation' : 'Show password confirmation');
-    this.authConfirmToggle.setAttribute('aria-pressed', this._authConfirmVisible ? 'true' : 'false');
-    try {
-      this.authConfirmInput.focus({ preventScroll: true });
-    } catch (err) {
-      this.authConfirmInput.focus();
     }
   }
 
@@ -10915,10 +10849,8 @@ class GameApp extends HTMLElement {
     if (this.authPending) return;
     this._markAuthFieldInvalid(this.authAccountInput, false);
     this._markAuthFieldInvalid(this.authPasswordInput, false);
-    this._markAuthFieldInvalid(this.authConfirmInput, false);
     const account = this.authAccountInput?.value?.trim?.() || '';
     const password = this.authPasswordInput?.value || '';
-    const confirm = this.authConfirmInput?.value || '';
     if (!account) {
       this._setAuthFeedback('Choose an account name to register.', 'error');
       this._markAuthFieldInvalid(this.authAccountInput, true);
@@ -10937,13 +10869,6 @@ class GameApp extends HTMLElement {
       this._setAuthFeedback(`Password must be ${min}-${max} characters.`, 'error');
       this._markAuthFieldInvalid(this.authPasswordInput, true);
       this.authPasswordInput?.focus();
-      return;
-    }
-    if (password !== confirm) {
-      this._setAuthFeedback('Passwords must match.', 'error');
-      this._markAuthFieldInvalid(this.authPasswordInput, true);
-      this._markAuthFieldInvalid(this.authConfirmInput, true);
-      this.authConfirmInput?.focus();
       return;
     }
     this.authPending = true;
@@ -11968,9 +11893,6 @@ class GameApp extends HTMLElement {
         this._setAuthFeedback(message, 'error');
         if (field === 'password') {
           this._markAuthFieldInvalid(this.authPasswordInput, true);
-          if (lastMode === 'register') {
-            this._markAuthFieldInvalid(this.authConfirmInput, true);
-          }
           this.authPasswordInput?.focus();
         } else if (field === 'account') {
           this._markAuthFieldInvalid(this.authAccountInput, true);
