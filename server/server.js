@@ -4016,8 +4016,8 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   const now = Date.now();
   const actionMeta = player.action;
   const movementProfile = ACTION_MOVEMENT_TUNING[actionType] || ACTION_MOVEMENT_TUNING.default;
-  const originX = actionMeta?.origin?.x ?? player.x;
-  const originY = actionMeta?.origin?.y ?? player.y;
+  const originX = player.x;
+  const originY = player.y;
   ensureEquipment(player);
   const bonuses = player.bonuses || computeBonuses(player);
   const baseChargeCap = clamp(bonuses.maxCharge, 0.5, 5);
