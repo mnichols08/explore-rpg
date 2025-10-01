@@ -3245,6 +3245,166 @@ function buildShopCatalog(player) {
   };
 }
 
+function sendShopCatalog(player) {
+  if (!player) return;
+  const catalog = buildShopCatalog(player);
+  sendTo(player, {
+    type: 'shop',
+    action: 'catalog',
+    catalog,
+  });
+}
+
+function sendShopFailure(player, action, message) {
+  if (!player) return;
+  const normalizedAction = typeof action === 'string' && action.length > 0 ? action : 'unknown';
+  sendTo(player, {
+    type: 'shop',
+    action: normalizedAction,
+    ok: false,
+    message: message || 'Unable to complete shop action.',
+  });
+}
+
+function handleShopMessage(player, payload) {
+  if (!player) return;
+  const rawAction = typeof payload?.action === 'string' && payload.action.length > 0 ? payload.action : 'catalog';
+  const action = rawAction.toLowerCase();
+
+  const ensureCanUseShop = (failureMessage) => {
+    if (player.isGhost) {
+      sendShopFailure(player, rawAction, 'Restless spirits cannot barter with merchants.');
+      return false;
+    }
+    if (!isPlayerWithinFacility(player, FACILITY_TYPES.SHOP)) {
+      sendShopFailure(player, rawAction, failureMessage || 'Step inside the merchant\'s tent to trade.');
+      return false;
+    }
+    return true;
+  };
+
+  if (action === 'catalog') {
+    if (!ensureCanUseShop('Step inside the merchant\'s tent to browse the wares.')) return;
+    sendShopCatalog(player);
+    return;
+  }
+
+  if (!ensureCanUseShop()) return;
+
+  if (action === 'buy') {
+    const itemId = typeof payload.itemId === 'string' ? payload.itemId : null;
+    const def = itemId ? getItemDefinition(itemId) : null;
+    if (!def) {
+      sendShopFailure(player, rawAction, 'That item is not available for purchase.');
+      return;
+    }
+    const normalizedId = def.id;
+    const price = getShopPriceForGear(normalizedId);
+    if (!Number.isFinite(price) || price <= 0) {
+      sendShopFailure(player, rawAction, 'That item is not for sale.');
+      return;
+    }
+    const gear = ensureGear(player);
+    if (gear.owned.has(normalizedId)) {
+      sendShopFailure(player, rawAction, 'You already own that equipment.');
+      return;
+    }
+    const availableCurrency = Math.max(0, Math.floor(Number(player.inventory?.currency) || 0));
+    if (availableCurrency < price) {
+      const missing = price - availableCurrency;
+      sendShopFailure(
+        player,
+        rawAction,
+        `You need ${missing.toLocaleString()} more coin${missing === 1 ? '' : 's'} for that purchase.`
+      );
+      return;
+    }
+    player.inventory.currency = availableCurrency - price;
+    const unlocked = unlockGear(player, normalizedId, { autoEquip: false, silent: true });
+    if (!unlocked) {
+      player.inventory.currency = availableCurrency;
+      sendShopFailure(player, rawAction, 'Unable to unlock that equipment right now.');
+      return;
+    }
+    sendInventoryUpdate(player);
+    const label = def.label || def.name || normalizedId;
+    sendTo(player, {
+      type: 'shop',
+      action: rawAction,
+      ok: true,
+      itemId: normalizedId,
+      price,
+      message: `Purchased ${label} for ${price.toLocaleString()} coins.`,
+    });
+    return;
+  }
+
+  if (action === 'sell-gear') {
+    const itemId = typeof payload.itemId === 'string' ? payload.itemId : null;
+    if (!itemId) {
+      sendShopFailure(player, rawAction, 'Select an item to sell back.');
+      return;
+    }
+    const result = sellOwnedGear(player, itemId);
+    if (!result?.ok) {
+      sendShopFailure(player, rawAction, result?.message || 'Unable to sell that item.');
+      return;
+    }
+    sendInventoryUpdate(player);
+    const def = getItemDefinition(result.itemId);
+    const label = def?.label || def?.name || result.itemId;
+    const currency = Math.max(0, Math.floor(Number(result.currency) || 0));
+    sendTo(player, {
+      type: 'shop',
+      action: rawAction,
+      ok: true,
+      itemId: result.itemId,
+      currency,
+      message: `Sold ${label} for ${currency.toLocaleString()} coins.`,
+    });
+    return;
+  }
+
+  if (action === 'sell-ore') {
+    const oreId = typeof payload.oreId === 'string' ? payload.oreId : null;
+    const result = sellInventoryOres(player, oreId ? { oreId } : {});
+    const currency = Math.max(0, Math.floor(Number(result?.currency) || 0));
+    if (currency <= 0) {
+      sendShopFailure(player, rawAction, 'You have no ore to trade.');
+      return;
+    }
+    sendInventoryUpdate(player);
+    const soldItems = result?.items || {};
+    let detail = '';
+    const entries = Object.entries(soldItems).filter(([, qty]) => Math.max(0, Math.floor(Number(qty) || 0)) > 0);
+    if (entries.length === 1) {
+      const [soldId, qty] = entries[0];
+      const oreDef = getOreType(soldId);
+      const amount = Math.max(0, Math.floor(Number(qty) || 0));
+      const oreLabel = oreDef?.label || soldId;
+      detail = `${amount.toLocaleString()} ${oreLabel}`;
+    } else {
+      const total = entries.reduce((sum, [, qty]) => sum + Math.max(0, Math.floor(Number(qty) || 0)), 0);
+      detail = `${total.toLocaleString()} ore`; // plural handled below
+      if (total !== 1) {
+        detail += 's';
+      }
+    }
+    sendTo(player, {
+      type: 'shop',
+      action: rawAction,
+      ok: true,
+      oreId: oreId || null,
+      items: soldItems,
+      currency,
+      message: `Sold ${detail} for ${currency.toLocaleString()} coins.`,
+    });
+    return;
+  }
+
+  sendShopFailure(player, rawAction, 'Unknown shop action.');
+}
+
 function summarizeItemsCount(items) {
   let total = 0;
   for (const value of Object.values(items || {})) {
@@ -4661,6 +4821,8 @@ function handleMessage(player, message) {
       type: 'loot-collected',
       pickup: result.pickup,
     });
+  } else if (payload.type === 'shop') {
+    handleShopMessage(player, payload);
   } else if (payload.type === 'bank') {
     const action = typeof payload.action === 'string' ? payload.action.toLowerCase() : '';
     const result = handleBankOperation(player, action);
