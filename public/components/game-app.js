@@ -3239,10 +3239,9 @@ template.innerHTML = `
     <div class="identity-card account-card">
       <h3>Account Security</h3>
       <p>Set or update your password to log in from any device.</p>
-      <input type="text" placeholder="Account name" data-account-name />
-      <input type="password" placeholder="Current password (optional)" data-account-current />
-      <input type="password" placeholder="New password" data-account-password />
-      <input type="password" placeholder="Confirm new password" data-account-confirm />
+  <input type="text" placeholder="Account name" autocomplete="username" data-account-name />
+  <input type="password" placeholder="Current password (optional)" autocomplete="current-password" data-account-current />
+  <input type="password" placeholder="Password" autocomplete="new-password" data-account-password />
       <p class="identity-feedback" data-account-feedback></p>
       <div class="actions">
         <button type="button" class="primary" data-account-save>Save Password</button>
@@ -3745,7 +3744,6 @@ class GameApp extends HTMLElement {
   this.accountNameInput = this.shadowRoot.querySelector('[data-account-name]');
   this.accountCurrentInput = this.shadowRoot.querySelector('[data-account-current]');
   this.accountPasswordInput = this.shadowRoot.querySelector('[data-account-password]');
-  this.accountConfirmInput = this.shadowRoot.querySelector('[data-account-confirm]');
   this.accountFeedbackEl = this.shadowRoot.querySelector('[data-account-feedback]');
   this.accountSaveButton = this.shadowRoot.querySelector('[data-account-save]');
   this.accountCancelButton = this.shadowRoot.querySelector('[data-account-cancel]');
@@ -4218,8 +4216,7 @@ class GameApp extends HTMLElement {
     this.accountCancelButton?.addEventListener('click', this._handleAccountCancel);
     this.accountNameInput?.addEventListener('keydown', this._handleAccountInputKeydown);
     this.accountCurrentInput?.addEventListener('keydown', this._handleAccountInputKeydown);
-    this.accountPasswordInput?.addEventListener('keydown', this._handleAccountInputKeydown);
-    this.accountConfirmInput?.addEventListener('keydown', this._handleAccountInputKeydown);
+  this.accountPasswordInput?.addEventListener('keydown', this._handleAccountInputKeydown);
   this.heroNameSubmitButton?.addEventListener('click', this._handleHeroNameSubmit);
   this.heroNameCancelButton?.addEventListener('click', this._handleHeroNameCancel);
   this.heroNameInput?.addEventListener('keydown', this._handleHeroNameInputKeydown);
@@ -4342,7 +4339,6 @@ class GameApp extends HTMLElement {
   this.accountNameInput?.removeEventListener('keydown', this._handleAccountInputKeydown);
   this.accountCurrentInput?.removeEventListener('keydown', this._handleAccountInputKeydown);
   this.accountPasswordInput?.removeEventListener('keydown', this._handleAccountInputKeydown);
-  this.accountConfirmInput?.removeEventListener('keydown', this._handleAccountInputKeydown);
   this.heroNameSubmitButton?.removeEventListener('click', this._handleHeroNameSubmit);
   this.heroNameCancelButton?.removeEventListener('click', this._handleHeroNameCancel);
   this.heroNameInput?.removeEventListener('keydown', this._handleHeroNameInputKeydown);
@@ -11089,7 +11085,6 @@ class GameApp extends HTMLElement {
     this.accountNameInput?.blur();
     this.accountCurrentInput?.blur();
     this.accountPasswordInput?.blur();
-    this.accountConfirmInput?.blur();
   }
 
   _resetAccountForm() {
@@ -11101,9 +11096,6 @@ class GameApp extends HTMLElement {
     }
     if (this.accountPasswordInput) {
       this.accountPasswordInput.value = '';
-    }
-    if (this.accountConfirmInput) {
-      this.accountConfirmInput.value = '';
     }
     this._setAccountFeedback('', 'info');
   }
@@ -11127,9 +11119,6 @@ class GameApp extends HTMLElement {
     if (this.accountPasswordInput) {
       this.accountPasswordInput.disabled = blocked;
     }
-    if (this.accountConfirmInput) {
-      this.accountConfirmInput.disabled = blocked;
-    }
     if (this.accountSaveButton) {
       this.accountSaveButton.disabled = blocked;
     }
@@ -11152,8 +11141,7 @@ class GameApp extends HTMLElement {
     if (this.accountPending) return;
     const account = this.accountNameInput?.value?.trim?.() || '';
     const currentPassword = this.accountCurrentInput?.value || '';
-    const newPassword = this.accountPasswordInput?.value || '';
-    const confirmPassword = this.accountConfirmInput?.value || '';
+  const newPassword = this.accountPasswordInput?.value || '';
     if (!account) {
       this._setAccountFeedback('Account name is required.', 'error');
       this.accountNameInput?.focus();
@@ -11169,11 +11157,6 @@ class GameApp extends HTMLElement {
     if (newPassword.length < min || newPassword.length > max) {
       this._setAccountFeedback(`Password must be ${min}-${max} characters.`, 'error');
       this.accountPasswordInput?.focus();
-      return;
-    }
-    if (confirmPassword !== newPassword) {
-      this._setAccountFeedback('Confirm password does not match.', 'error');
-      this.accountConfirmInput?.focus();
       return;
     }
     const payload = {
@@ -11240,8 +11223,6 @@ class GameApp extends HTMLElement {
         this.accountCurrentInput?.focus();
       } else if (field === 'password') {
         this.accountPasswordInput?.focus();
-      } else if (field === 'confirmPassword') {
-        this.accountConfirmInput?.focus();
       }
       return;
     }
