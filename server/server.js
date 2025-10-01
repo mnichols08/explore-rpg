@@ -2305,6 +2305,22 @@ function updateZoneReturnPortal(zoneState) {
   portal.y = spot.y;
 }
 
+function collectZoneTerrainUpdates(zoneState) {
+  if (!zoneState) return [];
+  const bounds = normalizeZoneBounds(zoneState.bounds);
+  const updates = [];
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    const row = world.tiles[y];
+    if (!row) continue;
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      const tileValue = row[x];
+      const tile = typeof tileValue === 'string' ? tileValue : 'water';
+      updates.push({ x, y, tile });
+    }
+  }
+  return updates;
+}
+
 function regenerateZone(zoneId, force = false) {
   if (!zoneId || zoneId === DEFAULT_ZONE_ID) return;
   const state = zoneStates.get(zoneId);
@@ -2328,6 +2344,10 @@ function regenerateZone(zoneId, force = false) {
   updateZoneReturnPortal(state);
   world.enemies = world.enemies.filter((enemy) => enemy.levelId || enemy.zoneId !== zoneId);
   initializeOreNodes();
+  const updates = collectZoneTerrainUpdates(state);
+  if (updates.length) {
+    broadcastTerrainUpdate(updates, { zoneId, generation: state.generation });
+  }
 }
 
 function serializeFacilitySpot(facility) {
@@ -4541,6 +4561,9 @@ function broadcastTerrainUpdate(updates, meta = {}) {
   };
   if (meta.levelId) {
     payload.levelId = meta.levelId;
+  }
+  if (meta.zoneId) {
+    payload.zoneId = meta.zoneId;
   }
   if (Number.isFinite(meta.generation)) {
     payload.generation = meta.generation;
