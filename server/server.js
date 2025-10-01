@@ -69,6 +69,9 @@ const ACTION_MOVEMENT_TUNING = {
   spell: { chargeSlow: 0.3, recoveryLockMs: 160, recoverySlowMs: 360, recoverySlow: 0.55 },
   default: { chargeSlow: 0.5, recoveryLockMs: 120, recoverySlowMs: 260, recoverySlow: 0.7 },
 };
+const PLAYER_ACCELERATION = 18;
+const PLAYER_DECELERATION = 28;
+const PLAYER_VELOCITY_EPSILON = 0.02;
 const CHAT_LIFETIME_MS = 6000;
 const CHAT_MAX_LENGTH = 140;
 const ORE_TYPES = [
@@ -323,6 +326,11 @@ function base64ToBuffer(value) {
     return Buffer.from(String(value), 'base64');
   } catch (err) {
     return null;
+  }
+
+  if (momentumFromHits && !enemyKillThisAction) {
+    gainMomentum(player, now);
+    syncProfile(player);
   }
 }
 
@@ -1249,6 +1257,7 @@ function createPlayer(connection, requestedProfileId) {
     y: spawn.y,
     zoneId: spawnZone,
     move: { x: 0, y: 0 },
+    velocity: { x: 0, y: 0 },
     aim: { x: 1, y: 0 },
   health: startingHealth,
     maxHealth: baseMaxHealth,
@@ -2564,9 +2573,8 @@ function teleportPlayerToZone(player, zoneId, options = {}) {
   player.zoneId = targetZoneId;
   player.x = clamp(x, 0.5, world.width - 0.5);
   player.y = clamp(y, 0.5, world.height - 0.5);
-  player.move.x = 0;
-  player.move.y = 0;
   player.action = null;
+  resetPlayerMotion(player);
   if (player.isGhost) {
     player.health = 0;
     const shrineTarget = assignGhostObjective(player, targetZoneId);
@@ -2794,30 +2802,50 @@ function applyEnemySlow(enemy, factor, durationMs) {
   enemy.status.slowUntil = now + duration;
 }
 
-function applySpellImpact(player, spellItem, enemy, damageAmount, aim) {
-  if (!enemy) return false;
+function applySpellImpact(player, spellItem, enemy, damageAmount, aim, chargeRatio = 0) {
+  if (!enemy) {
+    return { killed: false, damageApplied: false, effectApplied: false };
+  }
   const config = spellItem?.spell || {};
   const effectType = config.effect || null;
   let killed = false;
+  let damageApplied = false;
+  let effectApplied = false;
+  const normalizedCharge = Math.max(0, Math.min(1, Number(chargeRatio) || 0));
   if (effectType === 'knockback') {
     if (config.magnitude) {
-      applyKnockbackEntity(enemy, config.magnitude, aim, enemy.levelId || null);
+      const magnitudeScale = 1 + normalizedCharge * 0.6;
+      const applied = applyKnockbackEntity(enemy, config.magnitude * magnitudeScale, aim, enemy.levelId || null);
+      effectApplied = effectApplied || applied;
     }
     if (damageAmount > 0) {
+      const before = enemy.health;
       killed = damageEnemy(enemy, damageAmount);
+      damageApplied = damageApplied || enemy.health < before;
     }
   } else if (effectType === 'burn') {
-    const total = damageAmount + Math.max(0, config.burnDamage || 0);
+    const burnScale = 1 + normalizedCharge * 0.5;
+    const total = damageAmount + Math.max(0, (config.burnDamage || 0) * burnScale);
+    const before = enemy.health;
     killed = damageEnemy(enemy, total);
+    damageApplied = damageApplied || enemy.health < before;
   } else if (effectType === 'slow') {
-    applyEnemySlow(enemy, config.slowFactor ?? 0.5, config.durationMs ?? 2400);
+    const slowFactor = clamp(config.slowFactor ?? 0.5, 0.2, 1);
+    const adjustedFactor = clamp(slowFactor * (1 - normalizedCharge * 0.35), 0.15, 1);
+    const duration = Math.max(300, (config.durationMs ?? 2400) * (1 + normalizedCharge * 0.6));
+    applyEnemySlow(enemy, adjustedFactor, duration);
+    effectApplied = true;
     if (damageAmount > 0) {
+      const before = enemy.health;
       killed = damageEnemy(enemy, damageAmount);
+      damageApplied = damageApplied || enemy.health < before;
     }
   } else if (effectType === 'chain') {
+    const before = enemy.health;
     killed = damageEnemy(enemy, damageAmount);
+    damageApplied = damageApplied || enemy.health < before;
     if (!killed) {
-      const radius = Math.max(0.5, Number(config.chainRadius) || 2.5);
+      const radius = Math.max(0.5, (Number(config.chainRadius) || 2.5) * (1 + normalizedCharge * 0.3));
       const scale = clamp(Number(config.chainScale) || 0.5, 0.1, 1);
       const playerLevel = player.levelId || null;
       let secondary = null;
@@ -2832,20 +2860,25 @@ function applySpellImpact(player, spellItem, enemy, damageAmount, aim) {
         }
       }
       if (secondary) {
-        const chainDamage = damageAmount * scale;
+        const chainDamage = damageAmount * scale * (1 + normalizedCharge * 0.4);
+        const secondaryBefore = secondary.health;
         const chainKilled = damageEnemy(secondary, chainDamage);
+        damageApplied = damageApplied || secondary.health < secondaryBefore;
         if (chainKilled) {
           awardKillXP(player, 'spell', secondary);
           handleEnemyDeath(secondary, player);
+          effectApplied = true;
         }
       }
     }
   } else {
     if (damageAmount > 0) {
+      const before = enemy.health;
       killed = damageEnemy(enemy, damageAmount);
+      damageApplied = damageApplied || enemy.health < before;
     }
   }
-  return killed;
+  return { killed, damageApplied, effectApplied };
 }
 
 function nextLockedGearId(player, slot) {
@@ -3443,7 +3476,7 @@ function handleTradingPostMessage(player, payload) {
     sendTradingFailure(player, action, 'Restless spirits cannot use the trading post.');
     return;
   }
-  if (!isPlayerWithinFacility(player, FACILITY_TYPES.TRADING)) {
+  if (!isPlayerWithinFacility(player, FACILITY_TYPES.TRADING, 0.75)) {
     sendTradingFailure(player, action, 'Step inside the trading hall to manage listings.');
     return;
   }
@@ -3652,9 +3685,8 @@ function handlePortalEnter(player, portalId) {
   player.levelId = level.id;
   player.x = level.entry.x;
   player.y = level.entry.y;
-  player.move.x = 0;
-  player.move.y = 0;
   player.action = null;
+  resetPlayerMotion(player);
   sendTo(player, {
     type: 'portal-event',
     event: 'enter',
@@ -3692,9 +3724,8 @@ function handlePortalExit(player) {
   player.x = clamp(destination.x, 0.5, world.width - 0.5);
   player.y = clamp(destination.y + 1.2, 0.5, world.height - 0.5);
   player.zoneId = returnZoneId;
-  player.move.x = 0;
-  player.move.y = 0;
   player.action = null;
+  resetPlayerMotion(player);
   sendTo(player, {
     type: 'portal-event',
     event: 'exit',
@@ -3749,6 +3780,29 @@ function walkable(x, y) {
   return TILE_WALKABLE.has(world.tiles[ty][tx]);
 }
 
+function ensurePlayerVelocity(player) {
+  if (!player.velocity) {
+    player.velocity = { x: 0, y: 0 };
+  } else {
+    if (!Number.isFinite(player.velocity.x)) player.velocity.x = 0;
+    if (!Number.isFinite(player.velocity.y)) player.velocity.y = 0;
+  }
+  return player.velocity;
+}
+
+function resetPlayerMotion(player, { keepInput = false } = {}) {
+  if (!player) return;
+  const velocity = ensurePlayerVelocity(player);
+  velocity.x = 0;
+  velocity.y = 0;
+  if (!keepInput) {
+    if (player.move) {
+      player.move.x = 0;
+      player.move.y = 0;
+    }
+  }
+}
+
 initializeZones();
 initializeLevels();
 initializeZonePortals();
@@ -3764,11 +3818,12 @@ function resolveMovement(player, dt, now) {
     player.movementSlowUntil = 0;
     player.movementSlowFactor = 1;
   }
+  ensurePlayerVelocity(player);
 
   const direction = normalizeVector(player.move);
   const stacks = ensureMomentum(player).stacks || 0;
   const speedMultiplier = 1 + stacks * MOMENTUM_SPEED_SCALE;
-  let speed = (4 + player.stats.dexterity * 0.12) * speedMultiplier;
+  const baseSpeed = (4 + player.stats.dexterity * 0.12) * speedMultiplier;
   let movementMultiplier = 1;
 
   if (player.movementLockedUntil && player.movementLockedUntil > nowMs) {
@@ -3787,17 +3842,70 @@ function resolveMovement(player, dt, now) {
     }
   }
 
-  speed *= Math.max(0, movementMultiplier);
-  const dx = direction.x * speed * dt;
-  const dy = direction.y * speed * dt;
+  const clampedDt = Math.max(0, Math.min(0.25, Number.isFinite(dt) ? dt : 0));
+  const velocity = player.velocity;
+  const maxSpeed = Math.max(0, baseSpeed * Math.max(0, movementMultiplier));
+  const hasInput = direction.x !== 0 || direction.y !== 0;
+  const accelStep = PLAYER_ACCELERATION * clampedDt;
+  const decelStep = PLAYER_DECELERATION * clampedDt;
+
+  const adjustAxis = (current, target) => {
+    const delta = target - current;
+    if (Math.abs(delta) <= PLAYER_VELOCITY_EPSILON) {
+      return target;
+    }
+    const accelerating = (Math.sign(delta) === Math.sign(target) && Math.abs(target) > Math.abs(current)) || current === 0;
+    const limit = accelerating ? accelStep : decelStep;
+    if (Math.abs(delta) <= limit) {
+      return target;
+    }
+    return current + Math.sign(delta) * limit;
+  };
+
+  const dampAxis = (current) => {
+    if (Math.abs(current) <= decelStep) {
+      return 0;
+    }
+    const next = current - Math.sign(current) * decelStep;
+    return Math.abs(next) <= PLAYER_VELOCITY_EPSILON ? 0 : next;
+  };
+
+  if (maxSpeed === 0) {
+    velocity.x = 0;
+    velocity.y = 0;
+  } else if (!hasInput) {
+    velocity.x = dampAxis(velocity.x);
+    velocity.y = dampAxis(velocity.y);
+  } else {
+    const targetVelX = direction.x * maxSpeed;
+    const targetVelY = direction.y * maxSpeed;
+    velocity.x = adjustAxis(velocity.x, targetVelX);
+    velocity.y = adjustAxis(velocity.y, targetVelY);
+    const mag = Math.hypot(velocity.x, velocity.y);
+    if (mag > maxSpeed && mag > 0) {
+      const scale = maxSpeed / mag;
+      velocity.x *= scale;
+      velocity.y *= scale;
+    }
+  }
+
+  if (Math.abs(velocity.x) < PLAYER_VELOCITY_EPSILON) velocity.x = 0;
+  if (Math.abs(velocity.y) < PLAYER_VELOCITY_EPSILON) velocity.y = 0;
+
+  const dx = velocity.x * clampedDt;
+  const dy = velocity.y * clampedDt;
   const candidateX = player.x + dx;
   const candidateY = player.y + dy;
 
   if (walkable(candidateX, player.y)) {
     player.x = clamp(candidateX, 0.5, world.width - 0.5);
+  } else {
+    velocity.x = 0;
   }
   if (walkable(player.x, candidateY)) {
     player.y = clamp(candidateY, 0.5, world.height - 0.5);
+  } else {
+    velocity.y = 0;
   }
 }
 
@@ -3841,8 +3949,7 @@ function damagePlayer(target, amount) {
     target.x = destination.x;
     target.y = destination.y;
     target.health = 0;
-    target.move.x = 0;
-    target.move.y = 0;
+  resetPlayerMotion(target);
     const ghostTarget = assignGhostObjective(target, destinationZone);
     sendTo(target, {
       type: 'ghost-event',
@@ -3916,10 +4023,14 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   const baseChargeCap = clamp(bonuses.maxCharge, 0.5, 5);
   const maxChargeTime = baseChargeCap + CHARGE_TIME_BONUS;
   const charge = clamp(chargeSeconds, 0.1, maxChargeTime);
+  const chargeRatio = Math.max(0, Math.min(1, charge / maxChargeTime));
   const potency = charge;
   const momentumStacks = getMomentumStacks(player, now);
   const damageMultiplier = 1 + momentumStacks * MOMENTUM_DAMAGE_SCALE;
   const xpMultiplier = 1 + momentumStacks * MOMENTUM_XP_SCALE;
+  const chargeDamageScale = 0.65 + Math.pow(chargeRatio, 1.35) * 1.45;
+  const chargeControlScale = 1 + chargeRatio * 0.55;
+  const chargeXpScale = 0.85 + chargeRatio * 0.55;
 
   let aim = aimVector && typeof aimVector.x === 'number' && typeof aimVector.y === 'number'
     ? normalizeVector(aimVector)
@@ -3938,26 +4049,32 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   let projectileHalfWidth = null;
   let effectLifetime = EFFECT_LIFETIME;
   let effectVariant = null;
-  const meleeKnockback = meleeItem?.knockback ?? 0.5;
+  let meleeKnockback = meleeItem?.knockback ?? 0.5;
 
   if (actionType === 'melee') {
-    xpGain = 6 * potency;
-    damageBase = 18 * potency * (player.stats.strength / 10) * (meleeItem?.damageMultiplier ?? 1);
-    range = bonuses.meleeRange ?? MELEE_BASE_RANGE;
+    xpGain = 6 * potency * chargeXpScale;
+    damageBase = 18 * potency * (player.stats.strength / 10) * (meleeItem?.damageMultiplier ?? 1) * chargeDamageScale;
+    range = (bonuses.meleeRange ?? MELEE_BASE_RANGE) * (1 + chargeRatio * 0.12);
+    meleeKnockback *= chargeControlScale;
   } else if (actionType === 'ranged') {
-    xpGain = 5 * potency;
-    damageBase = 16 * potency * (player.stats.dexterity / 10) * (rangedItem?.damageMultiplier ?? 1);
-    range = bonuses.projectileRange ?? (RANGED_BASE_RANGE + player.stats.dexterity * RANGED_RANGE_PER_DEX);
-  projectileHalfWidth = (PROJECTILE_HALF_WIDTH + potency * 0.08) * (rangedItem?.projectile?.widthScale ?? 1);
+    xpGain = 5 * potency * chargeXpScale;
+    damageBase = 16 * potency * (player.stats.dexterity / 10) * (rangedItem?.damageMultiplier ?? 1) * chargeDamageScale;
+    const baseRange = bonuses.projectileRange ?? (RANGED_BASE_RANGE + player.stats.dexterity * RANGED_RANGE_PER_DEX);
+    range = baseRange * (1 + chargeRatio * 0.08);
+    const widthScale = (rangedItem?.projectile?.widthScale ?? 1) * Math.max(0.72, 1 - chargeRatio * 0.18);
+    projectileHalfWidth = (PROJECTILE_HALF_WIDTH + potency * 0.08) * widthScale;
     effectLifetime = rangedItem?.projectile?.travelMs ?? EFFECT_LIFETIME;
     effectVariant = rangedItem?.projectile?.variant ?? null;
   } else if (actionType === 'spell') {
-    xpGain = 7 * potency;
-    damageBase = 14 * potency * (player.stats.intellect / 10) * (spellItem?.damageMultiplier ?? 1);
-    range = bonuses.spellRange ?? (SPELL_BASE_RANGE + player.stats.intellect * SPELL_RANGE_PER_INT);
-    projectileHalfWidth = (SPELL_PROJECTILE_HALF_WIDTH + potency * 0.25);
+    xpGain = 7 * potency * chargeXpScale;
+    damageBase = 14 * potency * (player.stats.intellect / 10) * (spellItem?.damageMultiplier ?? 1) * chargeDamageScale;
+    const baseRange = bonuses.spellRange ?? (SPELL_BASE_RANGE + player.stats.intellect * SPELL_RANGE_PER_INT);
+    range = baseRange * (1 + chargeRatio * 0.12);
+    projectileHalfWidth = (SPELL_PROJECTILE_HALF_WIDTH + potency * 0.25) * Math.max(0.78, 1 - chargeRatio * 0.14);
     if (spellItem?.spell?.travelMs) {
       effectLifetime = spellItem.spell.travelMs;
+    } else {
+      effectLifetime = EFFECT_LIFETIME;
     }
     effectVariant = spellItem?.spell?.variant ?? null;
     if ((spellItem?.damageMultiplier ?? 1) === 0) {
@@ -3970,11 +4087,11 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   if (projectileHalfWidth != null) {
     projectileHalfWidth = Math.max(0.12, projectileHalfWidth);
   }
+  effectLifetime = Math.max(260, effectLifetime * (0.9 + chargeRatio * 0.4));
 
   const rangeBonusFactor = CHARGE_RANGE_SCALE[actionType] ?? 0;
-  const normalizedCharge = Math.max(0, charge - 0.1);
   if (rangeBonusFactor > 0) {
-    range *= 1 + normalizedCharge * rangeBonusFactor;
+    range *= 1 + chargeRatio * rangeBonusFactor;
   }
   xpGain *= xpMultiplier;
   damageBase *= damageMultiplier;
@@ -4002,8 +4119,11 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
   };
   world.effects.push(effect);
 
-  const hitChance = clamp(bonuses.hitChance, 0.1, 0.97);
+  const baseHitChance = clamp(bonuses.hitChance, 0.1, 0.97);
+  const hitChance = Math.min(0.99, baseHitChance + chargeRatio * 0.05);
   const coneCosHalfAngle = Math.cos(MELEE_CONE_HALF_ANGLE);
+  let momentumFromHits = false;
+  let enemyKillThisAction = false;
 
   if (projectileHalfWidth != null) {
     let candidatePlayer = null;
@@ -4021,14 +4141,22 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
     }
     if (candidatePlayer && Math.random() <= hitChance) {
       if (!playerInSafeZone(candidatePlayer) && canEngageInPvp(player, candidatePlayer)) {
+        let appliedControl = false;
         if (actionType === 'spell') {
           const config = spellItem?.spell;
           if (config?.effect === 'knockback' && config.magnitude) {
-            applyKnockbackEntity(candidatePlayer, config.magnitude, aim, candidatePlayer.levelId || null);
+            const magnitude = config.magnitude * chargeControlScale;
+            appliedControl = applyKnockbackEntity(candidatePlayer, magnitude, aim, candidatePlayer.levelId || null) || appliedControl;
           }
         }
+        let dealtDamage = false;
         if (damageBase > 0) {
+          const beforeHealth = candidatePlayer.health;
           damagePlayer(candidatePlayer, damageBase);
+          dealtDamage = candidatePlayer.health < beforeHealth;
+        }
+        if (dealtDamage || appliedControl) {
+          momentumFromHits = momentumFromHits || dealtDamage || appliedControl;
           recordPvpEngagement(player);
           recordPvpEngagement(candidatePlayer);
         }
@@ -4043,13 +4171,20 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
       const within = isWithinCone(player, aim, target, range + PLAYER_HIT_RADIUS, coneCosHalfAngle, PLAYER_HIT_RADIUS);
       if (!within) continue;
       if (Math.random() <= hitChance && canEngageInPvp(player, target)) {
-        damagePlayer(target, damageBase);
+        let dealtDamage = false;
         if (damageBase > 0) {
+          const beforeHealth = target.health;
+          damagePlayer(target, damageBase);
+          dealtDamage = target.health < beforeHealth;
+        }
+        let appliedControl = false;
+        if (actionType === 'melee' && meleeKnockback > 0) {
+          appliedControl = applyKnockbackEntity(target, meleeKnockback, aim, target.levelId || null) || appliedControl;
+        }
+        if (dealtDamage || appliedControl) {
+          momentumFromHits = momentumFromHits || dealtDamage || appliedControl;
           recordPvpEngagement(player);
           recordPvpEngagement(target);
-        }
-        if (actionType === 'melee' && meleeKnockback > 0) {
-          applyKnockbackEntity(target, meleeKnockback, aim, target.levelId || null);
         }
       }
     }
@@ -4082,16 +4217,29 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
             xpApplied = true;
           }
           if (actionType === 'spell') {
-            enemyKilled = applySpellImpact(player, spellItem, enemy, damageBase, aim);
+            const impact = applySpellImpact(player, spellItem, enemy, damageBase, aim, chargeRatio);
+            enemyKilled = impact.killed;
+            if (impact.damageApplied || impact.effectApplied) {
+              momentumFromHits = true;
+            }
           } else {
+            const beforeHealth = enemy.health;
             enemyKilled = damageEnemy(enemy, damageBase);
+            if (enemy.health < beforeHealth) {
+              momentumFromHits = true;
+            }
             if (!enemyKilled) {
-              applyKnockbackEntity(enemy, 0.45 + potency * 0.25, aim, enemy.levelId || null);
+              const knockbackMagnitude = 0.45 + chargeRatio * 0.75;
+              const applied = applyKnockbackEntity(enemy, knockbackMagnitude, aim, enemy.levelId || null);
+              if (applied) {
+                momentumFromHits = true;
+              }
             }
           }
           if (enemyKilled) {
             awardKillXP(player, actionType, enemy);
             handleEnemyDeath(enemy, player);
+            enemyKillThisAction = true;
           }
         }
         if (!enemyKilled && enemy.health > 0) {
@@ -4112,13 +4260,21 @@ function resolveAction(player, actionType, aimVector, chargeSeconds) {
           if (!xpApplied && grantSkillXP(player, actionType, xpGain)) {
             xpApplied = true;
           }
+          const beforeHealth = enemy.health;
           enemyKilled = damageEnemy(enemy, damageBase);
+          if (enemy.health < beforeHealth) {
+            momentumFromHits = true;
+          }
           if (!enemyKilled && meleeKnockback > 0) {
-            applyKnockbackEntity(enemy, meleeKnockback, aim, enemy.levelId || null);
+            const applied = applyKnockbackEntity(enemy, meleeKnockback, aim, enemy.levelId || null);
+            if (applied) {
+              momentumFromHits = true;
+            }
           }
           if (enemyKilled) {
             awardKillXP(player, actionType, enemy);
             handleEnemyDeath(enemy, player);
+            enemyKillThisAction = true;
           }
         }
         if (!enemyKilled && enemy.health > 0) {
@@ -4396,6 +4552,7 @@ function handleMessage(player, message) {
       if (chargeSlow === 0) {
         player.move.x = 0;
         player.move.y = 0;
+        resetPlayerMotion(player);
       }
     } else if (payload.phase === 'cancel') {
       player.action = null;

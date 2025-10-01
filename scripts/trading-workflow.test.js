@@ -171,6 +171,25 @@ class PlayerClient {
       this.bank = message.bank || this.bank;
     }
 
+    if (message.type === 'control') {
+      const event = message.event || message.action;
+      if (event === 'character-select') {
+        this._handleCharacterSelect(message);
+      } else if (event === 'auth-error') {
+        const error = new Error(
+          `${this.label} authentication failed: ${message?.message || 'unknown error'}`
+        );
+        console.error(error.message);
+        this._failPending(error);
+      } else if (event === 'connection-rejected') {
+        const error = new Error(
+          `${this.label} connection rejected: ${message?.reason || 'unknown reason'}`
+        );
+        console.error(error.message);
+        this._failPending(error);
+      }
+    }
+
     this._dispatch(message);
   }
 
@@ -194,6 +213,34 @@ class PlayerClient {
     }
   }
 
+  _handleCharacterSelect(prompt) {
+    const characters = Array.isArray(prompt?.characters) ? prompt.characters : [];
+    const activeProfileId =
+      typeof prompt?.account?.activeProfileId === 'string' ? prompt.account.activeProfileId : null;
+    let candidate = null;
+
+    if (activeProfileId) {
+      candidate = characters.find((entry) => entry?.id === activeProfileId) || null;
+    }
+    if (!candidate) {
+      candidate = characters.find((entry) => entry && !entry.banned) || null;
+    }
+
+    if (candidate) {
+      this.send({ type: 'auth', action: 'select-profile', profileId: candidate.id });
+      return;
+    }
+
+    if (prompt?.canCreate) {
+      this.send({ type: 'auth', action: 'create-profile' });
+      return;
+    }
+
+    const error = new Error(`${this.label} cannot complete character selection.`);
+    console.error(error.message);
+    this._failPending(error);
+  }
+
   _dispatch(message) {
     for (let i = 0; i < this.waiters.length; i += 1) {
       const entry = this.waiters[i];
@@ -207,6 +254,20 @@ class PlayerClient {
     this.queue.push(message);
     if (this.queue.length > 50) {
       this.queue.shift();
+    }
+  }
+
+  _failPending(error) {
+    const err = error instanceof Error ? error : new Error(String(error || 'Unknown error'));
+    while (this.waiters.length) {
+      const entry = this.waiters.shift();
+      clearTimeout(entry.timer);
+      entry.reject(err);
+    }
+    while (this.stateWaiters.length) {
+      const entry = this.stateWaiters.shift();
+      clearTimeout(entry.timer);
+      entry.reject(err);
     }
   }
 
@@ -516,7 +577,7 @@ async function runWorkflow() {
     for (const candidate of oreCandidates) {
       if (!candidate || candidate.amount <= 0) continue;
       try {
-  await seller.moveTo(candidate.x, candidate.y, { tolerance: 0.8, maxMs: 16000 });
+        await seller.moveTo(candidate.x, candidate.y, { tolerance: 0.8, maxMs: 16000 });
         oreNode = candidate;
         break;
       } catch (err) {
@@ -533,13 +594,13 @@ async function runWorkflow() {
       await delay(120);
     }
 
-  await seller.teleportToSafeZone(seller.profileId);
+    await seller.teleportToSafeZone(seller.profileId);
     await seller.waitForState(4000);
 
-  await seller.teleportToSafeZone(buyer.profileId);
+    await seller.teleportToSafeZone(buyer.profileId);
     await buyer.waitForState(4000);
 
-  const tradingSpot = seller.tradingFacility;
+    const tradingSpot = seller.tradingFacility;
     const facilityTolerance = Math.max(1.5, (tradingSpot.radius || 2) * 0.92);
     const approachOffsets = [
       { dx: 0, dy: Math.max(1.6, (tradingSpot.radius || 2) * 1.35) },
@@ -627,7 +688,7 @@ async function runWorkflow() {
       throw new Error('Buyer could not reach the trading facility.');
     }
 
-  await seller.grantCurrency(buyer.profileId, 200);
+    await seller.grantCurrency(buyer.profileId, 200);
     await buyer.waitForInventory((inv) => Number(inv?.currency || 0) >= 200, 4000);
 
     const listingQuantity = 2;

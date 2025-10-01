@@ -4027,18 +4027,18 @@ class GameApp extends HTMLElement {
     this.tutorialSteps = [
       {
         title: 'Movement & Camera',
-  body: 'Use <strong>WASD</strong> or the <strong>arrow keys</strong> (or the left stick on touch) to explore. Aim with your mouse or right pad — the reticle shows where abilities will land.',
-        hint: 'Hold <strong>Shift</strong> to stroll carefully around the safe zone bank.',
+        body: 'Use <strong>WASD</strong> or the <strong>arrow keys</strong> (or the left stick on touch) to explore. Movement now accelerates smoothly—start moving early for speed and ease off to coast. Aim with your mouse or right pad; the reticle shows where abilities will land.',
+        hint: 'Hold <strong>Shift</strong> to stroll carefully around the bank, or feather keys to bleed speed without stopping cold.',
       },
       {
         title: 'Combat Basics',
         body: 'Left click for <strong>Melee</strong>, right click for <strong>Ranged</strong>, and press <strong>Space</strong> (or both buttons) to cast a <strong>Spell</strong>. Hold any attack to charge and release a stronger strike.',
-        hint: 'Build Strength with melee, Dexterity with ranged, and Intellect with spells.',
+        hint: 'Charge long for brutal hits, and remember every successful strike now nudges Momentum forward—stay aggressive.',
       },
       {
         title: 'Gather, Loot, & Momentum',
         body: 'Tap <strong>E</strong> near shimmering nodes to gather ores, scoop glowing drops to loot, and keep attacking to build <strong>Momentum</strong> for bigger rewards.',
-  hint: 'Momentum fades if you pause — chain fights to keep the edge.',
+        hint: 'Momentum now rises on clean hits before the kill — chain fights to keep the edge or it fades fast.',
       },
       {
         title: 'Safe Zone & Progress',
