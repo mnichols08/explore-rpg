@@ -64,7 +64,7 @@ const CHARGE_RANGE_SCALE = {
   spell: 0,
 };
 const ACTION_MOVEMENT_TUNING = {
-  melee: { chargeSlow: 0, recoveryLockMs: 220, recoverySlowMs: 420, recoverySlow: 0.45 },
+  melee: { chargeSlow: 0.35, recoveryLockMs: 220, recoverySlowMs: 420, recoverySlow: 0.45 },
   ranged: { chargeSlow: 0.4, recoveryLockMs: 140, recoverySlowMs: 300, recoverySlow: 0.6 },
   spell: { chargeSlow: 0.3, recoveryLockMs: 160, recoverySlowMs: 360, recoverySlow: 0.55 },
   default: { chargeSlow: 0.5, recoveryLockMs: 120, recoverySlowMs: 260, recoverySlow: 0.7 },
